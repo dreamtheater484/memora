@@ -5,12 +5,14 @@ This document describes how the code is organised **today**. The target architec
 ## Overview
 
 ```
-Browser (React app)  ──HTTP──▶  Fastify server  ──▶  SQLite (memora.db in /data)
-        ▲                          │
-        └──── static files ◀───────┘  (the server also serves the built web app)
+Browser (React app)  ──HTTP──────▶  Fastify server  ──▶  SQLite (memora.db in /data)
+  IndexedDB           ◀─WebSocket─     │
+  service worker                       │
+        ▲                              │
+        └──── static files ◀───────────┘  (the server also serves the built web app)
 ```
 
-In production there is **one process in one container**. The server serves both the API (`/api/...`) and the built web app. Any unknown non-API path returns `index.html`, so client-side routes such as `/p/<id>` work when you reload the page.
+In production there is **one process in one container**. The server serves both the API (`/api/...`) and the built web app. Any unknown non-API path returns `index.html`, so client-side routes such as `/p/<id>` work when you reload the page. In the browser, pages being edited live in IndexedDB first, and a service worker keeps the app itself, so both work without a connection.
 
 ## Workspace packages
 
@@ -76,7 +78,17 @@ The dev entry (`src/*.ts`, run by `tsx`) and the bundle (`dist/server.mjs`) both
 - **Soft delete.** Deleting sets `deleted_at` on the item and `deleted_root_id` on it and everything inside, so restoring the root brings back exactly what went with it, and nothing deleted earlier. A restore is refused while the parent is itself in the recycle bin; a restored item whose place was taken gets a new key at the end.
 - **Limits.** Groups nest at most four levels and pages three; moves that would go deeper, or inside themselves, are refused with `too_deep` or `invalid_move`. Moving a group or page to another notebook or section takes its subtree along, including rows already in the recycle bin.
 - **Inbox.** Each user's inbox is a section outside any notebook (`is_inbox`, at most one per owner, created on the first `GET /tree`). It can't be renamed, moved or deleted.
-- **API.** `GET /api/v1/tree` returns all page metadata (with a short snippet, never the content) in one answer. Every change answers with the rows it created or updated (`TreeChanges`), and deletes answer with what went to the recycle bin, for Undo.
+- **API.** `GET /api/v1/tree` returns all page metadata (with a short snippet, never the content) in one answer. Every change answers with the rows it created or updated (`TreeChanges`), and deletes answer with what went to the recycle bin, for Undo. `POST /pages` takes an id made by the browser, so a page created offline keeps it.
+- **Saving content** (`PUT /pages/:id/content`). Each page has an integer `revision`; a save names the `baseRevision` it started from. If that is still the page's revision, the save is taken in one transaction and the revision goes up by one. If not, the answer is `409 revision_conflict` with the server's revision and content, and the browser merges (D25). Content equal to what is stored always succeeds, so a save repeated after a lost answer is harmless.
+- **Versions** (`page_versions`). The versioning hook keeps the text a save replaces, at most every 10 minutes (`auto`), and always when a save settles a conflict. `POST /pages/:id/versions` keeps the browser's side of a conflict it couldn't merge (`conflict`). History, restore and retention come in Phase 7.
+
+## Live events (`apps/server/src/events`, `routes/events.ts`)
+
+- **Channel.** `/api/v1/events` is a WebSocket (`@fastify/websocket`), opened with the session cookie and checked for origin like any change. `events/hub.ts` keeps the open sockets per user, in memory, and only ever sends a user their own events.
+- **Messages.** Routes that change the tree declare `config.emits: 'tree'`, and an `onResponse` hook publishes `tree.changed` once they have succeeded; a content save publishes `page.updated` with the page's row and new revision. Browsers name themselves with a random id in the `x-memora-device` header (the `device` query parameter for the WebSocket), and an event is not sent back to the browser that caused it.
+- **Presence.** Each browser reports the pages it has open (at most 50); the hub sends the user's other browsers a `presence` list with a label per device, such as "Firefox on Windows".
+- **Limits.** A heartbeat every 30 s closes dead sockets and those of sessions that ended; more than 60 messages between two heartbeats closes the socket (1008). When the session ends, the socket closes with 4401, so the browser stops reconnecting.
+- **Reverse proxies** must pass WebSocket upgrades (see SETUP.md). Without them Memora still works: the browser checks for changes every 30 s instead.
 
 ## Web app (`apps/web`)
 
@@ -87,6 +99,15 @@ The dev entry (`src/*.ts`, run by `tsx`) and the bundle (`dist/server.mjs`) both
 - **Shell** (`src/shell/`). One grid whose columns follow **container queries** on the app root, not the viewport: phone (bottom navigation and drill-down), tablet (icon rail and overlays), desktop (three columns), wide (plus the inspector) and ultra-wide (plus a second note pane with a draggable split). The address says where you are (`/n/`, `/g/`, `/s/`, `/p/` plus an id); `location.ts` turns it into the open notebook, section and page, and on larger screens falls back to the last section and page you had open. Commands (`commands.ts`) are shared by buttons, context menus, the command palette and the keyboard shortcuts (`shortcuts.ts`, one table that also drives the `?` sheet).
 - **Notes data** (`src/notes/`). The tree is one TanStack Query entry; `model.ts` builds lookups and ordered lists from it once per change, and plans moves with the same rules and sort keys as the server. Every change shows at once and is then replaced by the server's answer; requests go out one at a time, in order, and each answer is laid under the changes still waiting, so an earlier answer never undoes a later change. A failure shows a toast and reloads the tree. UI state (last section and pages, expanded items) is saved a moment after it changes.
 - **Drag and drop** (`src/lib/dnd.ts`). A small pointer-events module instead of a library: drop targets are `data-drop-*` attributes found under the pointer, so rows register nothing. Touch drags start after a long press; Escape cancels. `shell/dropRules.ts` decides what may be dropped where.
+- **Saving and sync** (`src/sync/`, D24–D25). The engine starts after login, with one IndexedDB database per user (`store.ts`, through `idb`). Each page has a record: its text, the revision and text it is based on, and whether it waits to be sent; the outbox is simply the records with unsent changes, plus pages created offline.
+  - **`doc.ts`**, a page open in a tab. The editor reports every change; within 300 ms the text is in the store, and a second after the last keystroke (or every 5 s while typing goes on) the leader is asked to send it. Changes that reach the record from elsewhere come back into the editor, merged with anything not stored yet.
+  - **`engine.ts`**, one per tab. Tabs share the store and a `BroadcastChannel`; a Web Lock picks the leader, which sends and keeps the WebSocket. It also keeps the last tree and settings for starting offline, and the 100 most recently opened pages. On `pagehide`, text not yet in the store goes to local storage, and the next start puts it back.
+  - **`sender.ts`** sends the outbox: offline changes to the tree first, then content. A `revision_conflict` is merged with the text both sides started from (`merge.ts`: `node-diff3`, lines first, then word by word). What can't be merged is kept on the server as a `conflict` version and shown as a conflict; a page deleted elsewhere keeps its text as a new page in the Inbox. Retries wait 1 s, doubling to 30 s, with jitter.
+  - **`live.ts`**, the WebSocket client: after two failed connections it polls every 30 s while it keeps trying.
+  - **`hooks.ts`** turns the state into what the save indicators show. "Saved" appears only once the server has confirmed the latest text, and nothing is shown until the engine has checked what waits to be sent.
+  - If IndexedDB can't be used, a store in memory takes over, the tab saves directly, and the app warns that closing the tab could lose changes.
+- **Editor** (`src/editor/MarkdownEditor.tsx`). A minimal CodeMirror 6 Markdown editor, lazy-loaded, enough to exercise the engine; the full editor comes in Phase 5. `shell/PageEditor.tsx` adds the page's save indicator, presence ("Also open on: …") and the conflict banner with Keep mine, Keep theirs and Compare (`sync/compare.ts`, side by side per change).
+- **Service worker** (`sw/`, D26). `sw/plugin.ts` writes the list of built files into `sw.js` at build time. Navigations try the network first and fall back to the kept app after 3 s or offline; hashed assets come from the cache; the API is never touched. It is registered in production builds only.
 - **Components** (`src/components/ui/`). Shared building blocks with keyboard support and ARIA roles built in: section tabs (roving focus), the page tree (tree keyboard pattern; for long lists it builds rows as they scroll into view, behind a gap of estimated height, so a section with a thousand pages opens quickly), the command palette (combobox), the split pane (separator) and the save indicator (announces only offline and conflict).
 - **Gallery** (`gallery.html`, `src/gallery/`). Shows every component. It is served by the dev server and included only in the `vite build --mode gallery` build that the Playwright tests use, never in the production build.
-- **Tests.** Vitest with jsdom for units and components (`*.test.ts(x)` next to the code). Playwright in `e2e/` for screenshots, axe accessibility checks and behaviour in a real browser, always in the pinned Playwright image so the pixels match CI.
+- **Tests.** Vitest with jsdom for units and components (`*.test.ts(x)` next to the code; `fake-indexeddb` for the store). Playwright in `e2e/` for screenshots, axe accessibility checks and behaviour in a real browser, always in the pinned Playwright image so the pixels match CI. The tests talk to a fake server in the browser (`e2e/helpers.ts`, `e2e/notes.ts`), which can go down, lose answers, answer slowly and act as a second device. The resilience suite (`e2e/resilience.spec.ts`) runs in Chromium, Firefox and WebKit.

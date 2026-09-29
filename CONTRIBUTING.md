@@ -91,6 +91,8 @@ pnpm test:visual:update     # accept new or intended visual changes, then review
 
 `pnpm test:e2e` runs the same tests with the browsers installed on your machine. That is fine for behaviour and accessibility, but screenshots may differ slightly from the baselines.
 
+The resilience suite (`e2e/resilience.spec.ts`) checks that no keystroke is lost when the network or server fails, and also runs in Firefox and WebKit. It uses a fake server in the browser (`e2e/helpers.ts`) that can go down, lose answers, answer slowly or act as a second device. Its tests fail if a save indicator ever shows "Saved" before the server has confirmed.
+
 ## Project layout
 
 ```
