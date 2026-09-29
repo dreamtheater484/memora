@@ -6,7 +6,7 @@ import {
   type SaveContentRequest,
   type TreeChanges,
 } from '@memora/shared';
-import { ApiRequestError, api, isUnreachable, setCsrfToken } from '../lib/api';
+import { ApiRequestError, api, isUnreachable, setCsrfToken, uploadFile } from '../lib/api';
 import { absorb, newWriteId, rebase, saved, settle, type PageRecord } from './records';
 import type { Shared } from './status';
 import type { LocalStore, Op } from './store';
@@ -35,6 +35,8 @@ export interface SenderHost {
   ensureSession(): Promise<void>;
   setShared(patch: Partial<Shared>): void;
   shared(): Shared;
+  /** A file pasted into a page reached the server (or was refused): its local copy can go. */
+  uploaded(id: string): void;
   /** A page's text now lives in a new page in the Inbox. */
   recovered(title: string): void;
   failed(message: string): void;
@@ -252,6 +254,9 @@ export class Sender {
     try {
       if (op.kind === 'createPage') {
         this.host.applyTree(await api<TreeChanges>('POST', '/pages', op.body));
+      } else if (op.kind === 'uploadFile') {
+        await uploadFile(`/assets/${op.id}?name=${encodeURIComponent(op.name)}`, op.file);
+        this.host.uploaded(op.id);
       } else {
         await api('POST', `/pages/${op.pageId}/versions`, {
           reason: 'conflict',
@@ -278,6 +283,12 @@ export class Sender {
 
   /** The server won't take an op as it is: put its content somewhere it will. */
   private async refusedOp(op: Op, error: ApiRequestError) {
+    if (op.kind === 'uploadFile') {
+      // Too big, say: it never will be taken, so it is dropped and the user is told.
+      this.host.failed(`“${op.name}” couldn’t be kept: ${error.message}`);
+      this.host.uploaded(op.id);
+      return;
+    }
     if (op.kind === 'keepVersion') {
       if (error.status === 404) {
         await this.recover(op.content, 'markdown', this.host.titleOf(op.pageId));

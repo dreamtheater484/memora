@@ -103,6 +103,7 @@ beforeEach(() => {
     shared: () => shared,
     recovered: (title) => host.notices.push(`recovered ${title}`),
     failed: (message) => host.notices.push(message),
+    uploaded: (id) => host.notices.push(`uploaded ${id}`),
   };
   sender = new Sender(host);
 });

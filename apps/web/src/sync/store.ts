@@ -27,6 +27,14 @@ export type Op =
       pageId: string;
       content: string;
       baseRevision: number;
+    }
+  | {
+      seq?: number;
+      /** A file pasted or dropped into a page; the text already refers to it by `id`. */
+      kind: 'uploadFile';
+      id: string;
+      name: string;
+      file: Blob;
     };
 
 /** Changes a record inside one transaction: a new record, null to delete it, or undefined. */

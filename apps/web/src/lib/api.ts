@@ -78,9 +78,31 @@ export async function api<T>(
   body?: unknown,
   options: Options = {},
 ): Promise<T> {
-  if (method !== 'GET' && !csrfToken && csrfSource) await csrfSource().catch(() => undefined);
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
+  return send<T>(
+    method,
+    path,
+    headers,
+    body === undefined ? undefined : JSON.stringify(body),
+    options,
+  );
+}
+
+/** Sends a file as it is (`PUT /assets/:id`), answering what the server made of it. */
+export function uploadFile<T>(path: string, file: Blob): Promise<T> {
+  return send<T>('PUT', path, { 'Content-Type': file.type || 'application/octet-stream' }, file);
+}
+
+async function send<T>(
+  method: Method,
+  path: string,
+  extra: Record<string, string>,
+  body: BodyInit | undefined,
+  options: Options = {},
+): Promise<T> {
+  if (method !== 'GET' && !csrfToken && csrfSource) await csrfSource().catch(() => undefined);
+  const headers: Record<string, string> = { Accept: 'application/json', ...extra };
   if (method !== 'GET' && csrfToken) headers[CSRF_HEADER] = csrfToken;
   const device = deviceId();
   if (device) headers[DEVICE_HEADER] = device;
@@ -90,7 +112,7 @@ export async function api<T>(
     response = await fetch(`/api/v1${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body,
       credentials: 'same-origin',
       ...(options.keepalive ? { keepalive: true } : {}),
     });

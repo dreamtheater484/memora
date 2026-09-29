@@ -1,6 +1,7 @@
 import {
   markdownToText,
   snippetOf,
+  uuidv7,
   type ContentSaved,
   type CreatePageRequest,
   type PageMeta,
@@ -58,6 +59,8 @@ const UNUSED_DOC_MS = 5_000;
 const TREE_WRITE_MS = 1_000;
 /** Local storage keys of text tabs couldn't store as they went: `<prefix><user>.<tab>`. */
 const UNSTORED_PREFIX = 'memora.unstored.';
+/** The service worker's cache of files in pages (sw.js). */
+const FILES_CACHE = 'memora-files';
 
 export interface EngineOptions {
   /** The server ended the session. */
@@ -174,7 +177,13 @@ export class SyncEngine implements SenderHost, DocHost, LiveHost {
     await Promise.allSettled(closing);
     if (this.leader) await this.sender.kick();
     this.stopped = true;
-    if (forget) await this.store.forgetClean().catch(() => undefined);
+    if (forget) {
+      await this.store.forgetClean().catch(() => undefined);
+      // Files in pages, kept by the service worker for offline reading.
+      if (typeof caches !== 'undefined') await caches.delete(FILES_CACHE).catch(() => false);
+    }
+    for (const url of this.fileUrls.values()) URL.revokeObjectURL(url);
+    this.fileUrls.clear();
     this.abort.abort();
     this.releaseLead?.();
     this.live?.stop();
@@ -456,6 +465,37 @@ export class SyncEngine implements SenderHost, DocHost, LiveHost {
     const next = { ...op, body: { ...op.body, title: name }, meta: { ...op.meta, title: name } };
     await this.store.updateOp(next);
     return next.meta;
+  }
+
+  /** Pasted files not on the server yet, as addresses this tab can show them from. */
+  private readonly fileUrls = new Map<string, string>();
+
+  /**
+   * Keeps a pasted or dropped file on this device until the server has it, and answers the
+   * id the page refers to it by (`asset:<id>`), so pasting works offline too.
+   */
+  async addFile(file: Blob, name: string): Promise<string> {
+    const id = uuidv7();
+    await this.store.addOp({ kind: 'uploadFile', id, name: name.slice(0, 200) || 'file', file });
+    this.fileUrls.set(id, URL.createObjectURL(file));
+    this.kick();
+    return id;
+  }
+
+  /** Where this tab can show a file that waits to be sent; null once the server has it. */
+  async localFile(id: string): Promise<string | null> {
+    const known = this.fileUrls.get(id);
+    if (known) return known;
+    const ops = await this.store.ops().catch(() => []);
+    const op = ops.find((o) => o.kind === 'uploadFile' && o.id === id);
+    if (op?.kind !== 'uploadFile') return null;
+    const url = URL.createObjectURL(op.file);
+    this.fileUrls.set(id, url);
+    return url;
+  }
+
+  uploaded(): void {
+    // Nothing to do: a page showing the local copy keeps it, and it is the same file.
   }
 
   /** The tree changed in this tab: the other tabs reload it. */
