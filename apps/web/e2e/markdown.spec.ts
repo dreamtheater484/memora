@@ -201,7 +201,9 @@ test('each page keeps its view, and phones switch between editing and preview', 
     .poll(() =>
       api.requests.some(
         (r) =>
-          r.method === 'PATCH' && r.path === '/api/v1/pages/q4' && r.body.viewMode === 'preview',
+          r.method === 'PATCH' &&
+          r.path === '/api/v1/pages/q4' &&
+          (r.body as { viewMode?: string }).viewMode === 'preview',
       ),
     )
     .toBe(true);
