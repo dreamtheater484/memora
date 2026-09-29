@@ -71,6 +71,10 @@ jobs:
       # compiler for the server's native better-sqlite3 module.
       - run: pnpm install --frozen-lockfile --filter "@memora/web..."
       - run: pnpm --filter @memora/web test:e2e
+        # The container runs as root, but GitHub's $HOME belongs to another user,
+        # and Firefox won't start then.
+        env:
+          HOME: /root
       - name: Upload the report on failure
         if: failure()
         uses: actions/upload-artifact@v7
