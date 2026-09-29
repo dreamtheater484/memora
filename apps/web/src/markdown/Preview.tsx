@@ -414,14 +414,25 @@ function PreviewLink({ node: _node, href = '', children, className, ...props }: 
 function TaskBox({ node, ...props }: WithNode<'input'>) {
   const toggle = useContext(TaskContext);
   const line = node?.properties.dataLine as number | undefined;
+  // Ticks at once; the page's text follows, and the next rendering agrees.
+  const [checked, setChecked] = useState(!!props.checked);
+  const [rendered, setRendered] = useState(!!props.checked);
+  if (rendered !== !!props.checked) {
+    setRendered(!!props.checked);
+    setChecked(!!props.checked);
+  }
   if (props.type !== 'checkbox') return <input {...props} />;
   return (
     <input
       type="checkbox"
-      checked={!!props.checked}
+      checked={checked}
       disabled={!toggle || !line}
-      aria-label={props.checked ? 'Done' : 'Not done'}
-      onChange={() => line && toggle?.(line)}
+      aria-label={checked ? 'Done' : 'Not done'}
+      onChange={() => {
+        if (!line || !toggle) return;
+        setChecked(!checked);
+        toggle(line);
+      }}
       className="task-box"
     />
   );

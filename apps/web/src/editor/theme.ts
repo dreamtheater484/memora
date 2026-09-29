@@ -96,7 +96,9 @@ export const editorTheme = EditorView.theme({
   '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)', borderLeftWidth: '2px' },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
     { backgroundColor: 'color-mix(in oklab, var(--accent) 24%, transparent)' },
-  '.cm-activeLine': { backgroundColor: 'var(--cur-line)' },
+  // The current line only while typing: an idle editor reads like a page.
+  '.cm-activeLine': { backgroundColor: 'transparent' },
+  '&.cm-focused .cm-activeLine': { backgroundColor: 'var(--cur-line)' },
   '.cm-gutters': {
     backgroundColor: 'transparent',
     color: 'var(--fg-3)',

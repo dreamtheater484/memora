@@ -200,7 +200,12 @@ function nextRow(view: EditorView): boolean {
   let table = range.table;
   const target = Math.max(2, place.row + 1);
   if (target - 2 >= table.rows.length) table = insertRow(table, table.rows.length);
-  replaceTable(view, range, formatTable(table), { row: target, col: place.col, offset: 0 });
+  // A finished row (the cursor at its end, or the header) continues at the next row's start;
+  // from inside a row, Enter goes down the same column.
+  const line = view.state.doc.lineAt(pos);
+  const atEnd = !line.text.slice(pos - line.from).replace(/[\s|]/g, '');
+  const col = place.row <= 1 || atEnd ? 0 : place.col;
+  replaceTable(view, range, formatTable(table), { row: target, col, offset: 0 });
   return true;
 }
 
