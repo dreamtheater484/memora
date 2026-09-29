@@ -11,7 +11,7 @@ export { PasswordInput } from './PasswordInput';
 export { Kbd } from './Kbd';
 export { Logo } from './Logo';
 export * from './Menu';
-export { PageTree, type TreeNode, type TreeRowState } from './PageTree';
+export { PageTree, type SelectModifiers, type TreeNode, type TreeRowState } from './PageTree';
 export { Popover, PopoverAnchor, PopoverClose, PopoverContent, PopoverTrigger } from './Popover';
 export { SaveIndicator, type SaveState } from './SaveIndicator';
 export { SectionTabs, type SectionTab } from './SectionTabs';

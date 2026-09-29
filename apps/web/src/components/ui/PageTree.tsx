@@ -1,5 +1,14 @@
 import { ChevronRight } from 'lucide-react';
-import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type HTMLAttributes,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 import { cn } from '../../lib/cn';
 
 export interface TreeNode {
@@ -23,11 +32,21 @@ export interface TreeRowState {
   hasChildren: boolean;
 }
 
+/** Modifier keys held when a row was chosen, for multi-selection. */
+export interface SelectModifiers {
+  shiftKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+}
+
 export interface PageTreeProps<N extends TreeNode> {
   nodes: readonly N[];
   label: string;
   selectedId?: string | null;
-  onSelect?: (node: N) => void;
+  /** Several selected rows (overrides `selectedId` for the highlight). */
+  isSelected?: (node: N) => boolean;
+  multiselectable?: boolean;
+  onSelect?: (node: N, modifiers: SelectModifiers) => void;
   /** Expanded node ids (controlled). */
   expanded?: ReadonlySet<string>;
   defaultExpanded?: Iterable<string>;
@@ -36,6 +55,8 @@ export interface PageTreeProps<N extends TreeNode> {
   renderRow?: (node: N, state: TreeRowState) => ReactNode;
   /** Classes for each row, on top of the base row style. */
   rowClassName?: (node: N, state: TreeRowState) => string | undefined;
+  /** Extra attributes for each row: data attributes, pointer handlers. */
+  rowProps?: (node: N, state: TreeRowState) => HTMLAttributes<HTMLDivElement>;
   /** Left padding per level, in rem. */
   indent?: number;
   /** Rows with several lines: align to the top and add vertical padding. */
@@ -71,12 +92,15 @@ export function PageTree<N extends TreeNode>({
   nodes,
   label,
   selectedId,
+  isSelected,
+  multiselectable,
   onSelect,
   expanded,
   defaultExpanded,
   onExpandedChange,
   renderRow,
   rowClassName,
+  rowProps,
   indent = 1.25,
   multiline,
   className,
@@ -87,6 +111,12 @@ export function PageTree<N extends TreeNode>({
   const indexOf = useMemo(() => new Map(visible.map((v, i) => [v.node.id, i])), [visible]);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const refs = useRef(new Map<string, HTMLElement>());
+  // A focused row that moves under another parent remounts; this carries its focus across.
+  const refocus = useRef<string | null>(null);
+  // Runs after the rows' refs: forget a row that was removed rather than moved.
+  useLayoutEffect(() => {
+    refocus.current = null;
+  });
   const typeahead = useRef({ text: '', at: 0 });
 
   const tabStop =
@@ -113,16 +143,17 @@ export function PageTree<N extends TreeNode>({
     focus(visible[index]?.node.id);
   }
 
-  function select(node: N) {
+  function select(node: N, modifiers: SelectModifiers) {
     if (node.disabled) return;
     if (node.selectable === false) {
       if (node.children?.length) setOpen(node.id, !open.has(node.id));
-    } else onSelect?.(node);
+    } else onSelect?.(node, modifiers);
   }
 
   function onKeyDown(e: KeyboardEvent, index: number) {
     const cur = visible[index];
-    if (!cur) return;
+    // Keys with Ctrl, Alt or ⌘ are the app's shortcuts, not the tree's.
+    if (!cur || e.target !== e.currentTarget || e.altKey || e.ctrlKey || e.metaKey) return;
     const hasChildren = !!cur.node.children?.length;
     const isOpen = open.has(cur.node.id);
     let handled = true;
@@ -149,7 +180,7 @@ export function PageTree<N extends TreeNode>({
         break;
       case 'Enter':
       case ' ':
-        select(cur.node);
+        select(cur.node, e);
         break;
       default:
         handled = typeAhead(e.key, index, e.timeStamp);
@@ -161,7 +192,7 @@ export function PageTree<N extends TreeNode>({
   }
 
   function typeAhead(key: string, index: number, now: number): boolean {
-    if (key.length !== 1 || key === ' ') return false;
+    if (!/^[\p{L}\p{N}]$/u.test(key)) return false;
     const t = typeahead.current;
     t.text = now - t.at > 600 ? key.toLowerCase() : t.text + key.toLowerCase();
     t.at = now;
@@ -184,16 +215,25 @@ export function PageTree<N extends TreeNode>({
       const state: TreeRowState = {
         level,
         expanded: isOpen,
-        selected: node.id === selectedId,
+        selected: isSelected ? isSelected(node) : node.id === selectedId,
         hasChildren,
       };
+      const extra = rowProps?.(node, state);
       const index = indexOf.get(node.id) ?? 0;
       return (
         <li
           key={node.id}
           ref={(el) => {
-            if (el) refs.current.set(node.id, el);
-            else refs.current.delete(node.id);
+            if (el) {
+              refs.current.set(node.id, el);
+              if (refocus.current === node.id) {
+                refocus.current = null;
+                if (el !== document.activeElement) el.focus();
+              }
+            } else {
+              if (refs.current.get(node.id) === document.activeElement) refocus.current = node.id;
+              refs.current.delete(node.id);
+            }
           }}
           role="treeitem"
           aria-level={level}
@@ -210,18 +250,20 @@ export function PageTree<N extends TreeNode>({
           className="outline-none [&:focus-visible>div]:outline-2 [&:focus-visible>div]:-outline-offset-2 [&:focus-visible>div]:outline-focus"
         >
           <div
-            onClick={() => {
+            {...extra}
+            onClick={(e: MouseEvent<HTMLDivElement>) => {
               focus(node.id);
-              select(node);
+              select(node, e);
             }}
             style={{ paddingLeft: `${0.5 + (level - 1) * indent}rem` }}
             className={cn(
-              'flex min-h-[1.875rem] cursor-default gap-2 rounded-sm pr-2 select-none',
+              'relative flex min-h-[1.875rem] cursor-default gap-2 rounded-sm pr-2 select-none',
               multiline ? 'items-start py-2' : 'items-center',
               state.selected
                 ? 'bg-active font-semibold text-fg shadow-card'
                 : 'text-fg-2 hover:bg-hover hover:text-fg',
               rowClassName?.(node, state),
+              extra?.className,
             )}
           >
             {hasChildren ? (
@@ -255,7 +297,12 @@ export function PageTree<N extends TreeNode>({
   }
 
   return (
-    <ul role="tree" aria-label={label} className={cn('flex flex-col gap-px', className)}>
+    <ul
+      role="tree"
+      aria-label={label}
+      aria-multiselectable={multiselectable || undefined}
+      className={cn('flex flex-col gap-px', className)}
+    >
       {renderLevel(nodes, 1)}
     </ul>
   );
