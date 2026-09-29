@@ -4,7 +4,7 @@
 
 services:
   memora:
-    image: ghcr.io/<your-github-user>/memora:edge # change me: the account that publishes Memora
+    image: ghcr.io/dreamtheater484/memora:edge
     # To build from a checkout of the repository instead (keep this file in its docker/ folder):
     # build:
     #   context: ..

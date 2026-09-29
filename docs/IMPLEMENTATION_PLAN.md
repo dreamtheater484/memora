@@ -249,7 +249,7 @@ memora/
 1. **By design**
    - Code only uses relative paths or fixed container paths such as `/data`.
    - The session secret is generated on first start and stored in `/data/secrets/`. It never appears in environment files or compose files.
-   - Examples use placeholders only: `<nas-ip>`, `notes.example.com`, `<your-github-user>`.
+   - Examples use placeholders only: `<nas-ip>`, `notes.example.com`. Images point at the project's own `ghcr.io/dreamtheater484/memora`.
 2. **`.gitignore`** (§6.4) excludes data, builds, environment files and local tool configuration.
 3. **Git identity.** A repo-local `user.email` set to your GitHub **noreply** address, checked automatically by the pre-commit hook (`scripts/check-git-identity.mjs`). CI checks the author and committer of every commit. Also turn on GitHub's _"Block command line pushes that expose my email"_.
 4. **Pre-commit hook** (lefthook):
@@ -965,7 +965,7 @@ All endpoints sit under `/api/v1`. They use JSON validated by zod, return errors
 ```yaml
 services:
   memora:
-    image: ghcr.io/<your-github-user>/memora:1
+    image: ghcr.io/dreamtheater484/memora:1
     container_name: memora
     restart: unless-stopped
     ports:
