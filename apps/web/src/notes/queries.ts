@@ -1,6 +1,7 @@
 import {
   DEFAULT_EDITOR_SETTINGS,
   placeKeys,
+  tagKey,
   uuidv7,
   type EditorSettings,
   type CreateGroupRequest,
@@ -12,7 +13,9 @@ import {
   type PageMeta,
   type PlacePagesRequest,
   type Section,
+  type SetPageTagsRequest,
   type Settings,
+  type Tag,
   type TrashItem,
   type Tree,
   type TreeChanges,
@@ -20,6 +23,7 @@ import {
   type UpdateNotebookRequest,
   type UpdatePageRequest,
   type UpdateSectionRequest,
+  type UpdateTagRequest,
   type ViewMode,
 } from '@memora/shared';
 import {
@@ -140,12 +144,23 @@ export function saveUiState(queryClient: QueryClient, patch: UiState, delay = 80
   queryClient.setQueryData<Settings>(settingsKey, (old) => {
     const ui = { ...old?.ui, ...patch };
     if (patch.lastPages) ui.lastPages = { ...old?.ui.lastPages, ...patch.lastPages };
+    if (patch.sectionTemplates) {
+      // Like the server: per section, and null takes the section's template away.
+      ui.sectionTemplates = Object.fromEntries(
+        Object.entries({ ...old?.ui.sectionTemplates, ...patch.sectionTemplates }).filter(
+          ([, template]) => template !== null,
+        ),
+      );
+    }
     return { ui, editor: old?.editor ?? {} };
   });
   pendingUi = {
     ...pendingUi,
     ...patch,
     ...(patch.lastPages ? { lastPages: { ...pendingUi?.lastPages, ...patch.lastPages } } : {}),
+    ...(patch.sectionTemplates
+      ? { sectionTemplates: { ...pendingUi?.sectionTemplates, ...patch.sectionTemplates } }
+      : {}),
   };
   clearTimeout(uiTimer);
   uiTimer = setTimeout(() => flushUiState(), delay);
@@ -227,7 +242,7 @@ export function createNotesActions(queryClient: QueryClient) {
     return result;
   }
 
-  const send = (method: 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown) => () =>
+  const send = (method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown) => () =>
     api<TreeChanges>(method, path, body);
 
   /** Moves items to the recycle bin, with an Undo button. */
@@ -389,6 +404,41 @@ export function createNotesActions(queryClient: QueryClient) {
 
     restore: (items: TrashItem[]) =>
       change(null, send('POST', '/trash/restore', { items }), mergeChanges),
+
+    // Tags (§9.9): new names become tags on the server, so the page's list follows its answer.
+    setPageTags: (id: string, names: string[]) => {
+      const byName = new Map((tree()?.tags ?? []).map((t) => [tagKey(t.name), t.id]));
+      const known = names.map((n) => byName.get(tagKey(n)));
+      const shown = known.every(Boolean)
+        ? { pages: patch<PageMeta>(tree()?.pages ?? [], id, { tags: known as string[] }) }
+        : null;
+      return change(
+        shown,
+        send('PUT', `/pages/${id}/tags`, { names } satisfies SetPageTagsRequest),
+        mergeChanges,
+      );
+    },
+    updateTag: (id: string, fields: UpdateTagRequest) =>
+      change(
+        { tags: patch<Tag>(tree()?.tags ?? [], id, fields as Partial<Tag>) },
+        send('PATCH', `/tags/${id}`, fields),
+        mergeChanges,
+      ),
+    deleteTag: (id: string) =>
+      change(
+        (t: Tree) => ({
+          ...t,
+          tags: (t.tags ?? []).filter((x) => x.id !== id),
+          pages: t.pages.map((p) =>
+            p.tags?.includes(id) ? { ...p, tags: p.tags.filter((x) => x !== id) } : p,
+          ),
+        }),
+        send('DELETE', `/tags/${id}`),
+        (t: Tree, answer: TreeChanges) => ({
+          ...mergeChanges(t, answer),
+          tags: (t.tags ?? []).filter((x) => x.id !== id),
+        }),
+      ),
   };
   return actions;
 }

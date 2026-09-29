@@ -13,12 +13,10 @@ import {
   IndentIncrease,
   ListFilter,
   PanelRight,
-  Plus,
   Trash2,
 } from 'lucide-react';
 import { useMemo, useState, type HTMLAttributes } from 'react';
 import {
-  Button,
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -43,6 +41,7 @@ import { saveUiState, useNotesActions, useUiState } from '../notes/queries';
 import { hueStyle } from '../theme/sections';
 import { useCommands } from './commands';
 import { useCurrent, useGo } from './location';
+import { NewPageMenu } from './NewPageMenu';
 import { DropIndicator, InlineRename } from './parts';
 import { shortcutKeys } from './shortcuts';
 import { useShell } from './store';
@@ -192,7 +191,6 @@ function PageMenu({ pageId }: { pageId: string }) {
 /** Pages of the current section, subpages nested under their parent. */
 export function PageList({ onOpen }: { onOpen?: () => void } = {}) {
   const { index, section, page } = useCurrent();
-  const commands = useCommands();
   const go = useGo();
   const queryClient = useQueryClient();
   const ui = useUiState();
@@ -290,13 +288,7 @@ export function PageList({ onOpen }: { onOpen?: () => void } = {}) {
             </MenuItem>
           </MenuContent>
         </Menu>
-        <Button
-          size="sm"
-          variant="primary"
-          onClick={() => void commands.newPage({ sectionId: section.id })}
-        >
-          <Plus /> Page
-        </Button>
+        <NewPageMenu sectionId={section.id} />
       </div>
       <Input
         pill

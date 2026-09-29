@@ -10,7 +10,12 @@ import { useNotes, useUiState } from '../notes/queries';
  * screens always show a section and a page, the last one you had open there.
  */
 
-export type Level = 'home' | 'notebook' | 'group' | 'section' | 'page' | 'board' | 'trash';
+export type Level =
+  'home' | 'notebook' | 'group' | 'section' | 'page' | 'board' | 'trash' | 'search';
+
+/** Levels that show notes (not a board, the recycle bin or search). */
+export const isNotesLevel = (level: Level): boolean =>
+  level !== 'board' && level !== 'trash' && level !== 'search';
 
 export interface Current {
   index: NotesIndex;
@@ -33,6 +38,7 @@ interface Params {
   pageId?: string;
   boardId?: string;
   trash?: boolean;
+  search?: boolean;
 }
 
 /** The first section in reading order: the notebook's own sections, then each group's. */
@@ -73,6 +79,7 @@ export function resolveCurrent(index: NotesIndex, ui: UiState, params: Params): 
 
   if (params.boardId) return { ...base, level: 'board', boardId: params.boardId };
   if (params.trash) return { ...base, level: 'trash' };
+  if (params.search) return { ...base, level: 'search' };
   if (params.pageId) {
     const page = index.page.get(params.pageId) ?? null;
     if (!page) return { ...withSection('page', null, null), missing: true };
@@ -111,10 +118,13 @@ export function useCurrent(): Current {
   const ui = useUiState();
   const params = useParams({ strict: false }) as Params;
   const { notebookId, groupId, sectionId, pageId, boardId } = params;
-  const trash = useRouterState({ select: (s) => s.location.pathname === '/trash' });
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const trash = pathname === '/trash';
+  const search = pathname === '/search';
   return useMemo(
-    () => resolveCurrent(index, ui, { notebookId, groupId, sectionId, pageId, boardId, trash }),
-    [index, ui, notebookId, groupId, sectionId, pageId, boardId, trash],
+    () =>
+      resolveCurrent(index, ui, { notebookId, groupId, sectionId, pageId, boardId, trash, search }),
+    [index, ui, notebookId, groupId, sectionId, pageId, boardId, trash, search],
   );
 }
 
@@ -133,6 +143,7 @@ export function useGo() {
         void navigate({ to: '/p/$pageId', params: { pageId }, replace }),
       board: (boardId: string) => void navigate({ to: '/b/$boardId', params: { boardId } }),
       trash: () => void navigate({ to: '/trash' }),
+      search: (q?: string) => void navigate({ to: '/search', search: q ? { q } : {} }),
     }),
     [navigate],
   );

@@ -1,4 +1,10 @@
-import { MAX_PAGE_DEPTH, pickColor, type ColorId, type PageType } from '@memora/shared';
+import {
+  MAX_PAGE_DEPTH,
+  pickColor,
+  type ColorId,
+  type PageType,
+  type Template,
+} from '@memora/shared';
 import { useMemo } from 'react';
 import { toast } from '../components/ui';
 import {
@@ -10,7 +16,8 @@ import {
   type NotesIndex,
   type PagePlace,
 } from '../notes/model';
-import { useEditorSettings, useNotesActions } from '../notes/queries';
+import { useEditorSettings, useNotesActions, useUiState } from '../notes/queries';
+import { contentFor, useTemplates } from '../templates/templates';
 import { useCurrent, useGo, type Current } from './location';
 import { useShell, type RenameWhere } from './store';
 
@@ -39,6 +46,8 @@ export function useCommands() {
   const actions = useNotesActions();
   const go = useGo();
   const { pageType } = useEditorSettings();
+  const { sectionTemplates } = useUiState();
+  const templates = useTemplates();
 
   return useMemo(() => {
     const { index, section, page } = current;
@@ -61,8 +70,19 @@ export function useCommands() {
     };
 
     const commands = {
-      /** A new page, of the type the Editing settings name unless `type` says otherwise. */
-      async newPage(options: { subpage?: boolean; sectionId?: string; type?: PageType } = {}) {
+      /**
+       * A new page, of the type the Editing settings name unless `type` says otherwise, from
+       * `template` (null: blank), or else from the section's default template (§9.9). A
+       * template saved from a rich page makes a rich page; built-in ones follow the settings.
+       */
+      async newPage(
+        options: {
+          subpage?: boolean;
+          sectionId?: string;
+          type?: PageType;
+          template?: Template | null;
+        } = {},
+      ) {
         const sectionId = options.sectionId ?? section?.id;
         if (!sectionId) return;
         const parentPageId = options.subpage ? (page?.id ?? null) : null;
@@ -70,11 +90,14 @@ export function useCommands() {
           toast({ title: `Pages go at most ${MAX_PAGE_DEPTH} levels deep.`, tone: 'error' });
           return;
         }
-        const result = await actions.createPage({
-          sectionId,
-          parentPageId,
-          type: options.type ?? pageType,
-        });
+        const defaultId = sectionTemplates?.[sectionId];
+        const template =
+          options.template === undefined
+            ? (templates.find((t) => t.id === defaultId) ?? null)
+            : options.template;
+        const type = options.type ?? (template && !template.builtIn ? template.type : pageType);
+        const content = template ? await contentFor(template, type, '') : '';
+        const result = await actions.createPage({ sectionId, parentPageId, type, content });
         const created = result?.pages?.[0];
         if (!created) return;
         shell().select([], null);
@@ -231,7 +254,7 @@ export function useCommands() {
       },
     };
     return commands;
-  }, [current, actions, go, pageType]);
+  }, [current, actions, go, pageType, sectionTemplates, templates]);
 }
 
 export type Commands = ReturnType<typeof useCommands>;

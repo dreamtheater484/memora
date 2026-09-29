@@ -19,6 +19,14 @@ const HistoryDialog = lazy(() => import('../history/HistoryDialog'));
 const SaveVersionDialog = lazy(() =>
   import('../history/HistoryDialog').then((m) => ({ default: m.SaveVersionDialog })),
 );
+const templateDialogs = () => import('../templates/TemplateDialogs');
+const SaveTemplateDialog = lazy(() =>
+  templateDialogs().then((m) => ({ default: m.SaveTemplateDialog })),
+);
+const TemplatesDialog = lazy(() => templateDialogs().then((m) => ({ default: m.TemplatesDialog })));
+const InsertTemplateDialog = lazy(() =>
+  templateDialogs().then((m) => ({ default: m.InsertTemplateDialog })),
+);
 
 /** A group of radio buttons drawn as swatches or tiles. */
 function Choices<T extends string>({
@@ -415,6 +423,9 @@ export function ShellDialogs() {
           <HistoryDialog key={dialog.pageId} pageId={dialog.pageId} versionId={dialog.versionId} />
         )}
         {dialog?.kind === 'save-version' && <SaveVersionDialog pageId={dialog.pageId} />}
+        {dialog?.kind === 'save-template' && <SaveTemplateDialog pageId={dialog.pageId} />}
+        {dialog?.kind === 'templates' && <TemplatesDialog />}
+        {dialog?.kind === 'insert-template' && <InsertTemplateDialog onPick={dialog.onPick} />}
       </Suspense>
     </Dialog>
   );

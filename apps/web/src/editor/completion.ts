@@ -6,6 +6,7 @@ import {
 } from '@codemirror/autocomplete';
 import type { EditorView } from '@codemirror/view';
 import { fuzzyScore } from '../lib/fuzzy';
+import { contentFor, pickTemplate } from '../templates/templates';
 import {
   insertCallout,
   insertCodeBlock,
@@ -85,6 +86,17 @@ function slashCommands(host: CompletionHost): SlashCommand[] {
       run: (v) => host.pickFile(v, false),
     },
     { name: 'date', detail: 'Today’s date', keywords: 'today', run: (v) => void insertDate(v) },
+    {
+      name: 'template',
+      detail: 'Insert a template',
+      keywords: 'meeting journal todo brief decision',
+      run: (v) =>
+        pickTemplate(async (template) => {
+          const text = await contentFor(template, 'markdown', '');
+          v.dispatch(v.state.replaceSelection(text));
+          v.focus();
+        }),
+    },
     {
       name: 'h1',
       detail: 'Heading 1',

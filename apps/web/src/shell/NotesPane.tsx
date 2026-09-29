@@ -8,6 +8,7 @@ import {
   FileQuestion,
   FileText,
   FolderInput,
+  LayoutTemplate,
   Link2,
   NotebookPen,
   PenLine,
@@ -16,10 +17,10 @@ import {
   Save,
   Share2,
   Star,
-  Tag,
   Trash2,
   X,
 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import {
   Button,
@@ -36,7 +37,8 @@ import {
 import { cn } from '../lib/cn';
 import { useFocusOnMount } from '../lib/useFocusOnMount';
 import { formatDateTime, formatRelative } from '../lib/time';
-import { useNotesActions } from '../notes/queries';
+import { isFavorite, toggleFavorite } from '../notes/places';
+import { useNotesActions, useUiState } from '../notes/queries';
 import type { PageDoc } from '../sync/doc';
 import { usePageDoc } from '../sync/hooks';
 import { hueStyle } from '../theme/sections';
@@ -44,6 +46,7 @@ import { useCommands } from './commands';
 import { ConvertDialog } from './ConvertDialog';
 import { useCurrent, useGo } from './location';
 import { PageBody, PageSaveIndicator, PresenceHint } from './PageEditor';
+import { PageTags } from './PageTags';
 import { SectionBar } from './SectionBar';
 import { shortcutKeys } from './shortcuts';
 import { useShell } from './store';
@@ -81,6 +84,9 @@ function TitleEditor({ page }: { page: PageMeta }) {
 function PageHead({ page, doc }: { page: PageMeta; doc: PageDoc | null }) {
   const editing = useShell((s) => s.editingTitle === page.id);
   const commands = useCommands();
+  const queryClient = useQueryClient();
+  const ui = useUiState();
+  const favorite = isFavorite(ui.favorites ?? [], { type: 'page', id: page.id });
   const [converting, setConverting] = useState(false);
   const copyLink = () => {
     const url = `${location.origin}/p/${page.id}`;
@@ -110,7 +116,12 @@ function PageHead({ page, doc }: { page: PageMeta; doc: PageDoc | null }) {
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <PageSaveIndicator page={page} doc={doc} />
-          <IconButton label="Favourite" icon={<Star />} onClick={soon('Favourites', 8)} />
+          <IconButton
+            label={favorite ? 'Remove from favourites' : 'Add to favourites'}
+            icon={<Star className={cn(favorite && 'fill-current text-warn')} />}
+            aria-pressed={favorite}
+            onClick={() => toggleFavorite(queryClient, ui, { type: 'page', id: page.id })}
+          />
           <Menu>
             <MenuTrigger asChild>
               <IconButton label="Page actions" icon={<Ellipsis />} />
@@ -163,6 +174,15 @@ function PageHead({ page, doc }: { page: PageMeta; doc: PageDoc | null }) {
               >
                 Save version…
               </MenuItem>
+              <MenuItem
+                icon={<LayoutTemplate />}
+                disabled={!doc}
+                onSelect={() =>
+                  useShell.getState().openDialog({ kind: 'save-template', pageId: page.id })
+                }
+              >
+                Save as template…
+              </MenuItem>
               <MenuItem icon={<Share2 />} onSelect={soon('Export', 9)}>
                 Export…
               </MenuItem>
@@ -179,13 +199,7 @@ function PageHead({ page, doc }: { page: PageMeta; doc: PageDoc | null }) {
         <span title={formatDateTime(page.createdAt)}>Created {formatDateTime(page.createdAt)}</span>
         <span>{page.type === 'markdown' ? 'Markdown' : 'Rich text'}</span>
         <PresenceHint pageId={page.id} />
-        <button
-          type="button"
-          onClick={soon('Tags', 8)}
-          className="inline-flex h-[1.375rem] items-center gap-1 rounded-full border border-dashed border-line-strong px-2 font-medium text-fg-2 hover:bg-hover [&_svg]:size-3.5"
-        >
-          <Tag aria-hidden /> Add tag
-        </button>
+        <PageTags page={page} />
       </div>
       <Dialog open={converting} onOpenChange={setConverting}>
         {converting && doc && (
