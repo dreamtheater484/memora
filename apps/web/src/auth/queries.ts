@@ -21,21 +21,60 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
-import { api, setCsrfToken } from '../lib/api';
+import { api, isUnreachable, setCsrfToken } from '../lib/api';
+import { stopSync } from '../sync/engine';
 
 export const meKey = ['auth', 'me'] as const;
 
-/** "Who am I?": set up needed, signed out, or signed in (with the CSRF token). */
+// The signed-in user, remembered so the app can start without a connection (§9.6).
+const USER_KEY = 'memora.user';
+
+function rememberUser(user: CurrentUser | null) {
+  try {
+    if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+    else localStorage.removeItem(USER_KEY);
+  } catch {
+    // Blocked storage: the app just needs a connection to start.
+  }
+}
+
+function rememberedUser(): CurrentUser | null {
+  try {
+    const saved = localStorage.getItem(USER_KEY);
+    return saved ? (JSON.parse(saved) as CurrentUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * "Who am I?": set up needed, signed out, or signed in (with the CSRF token). Without a
+ * connection, the last signed-in user carries on offline; the token follows once the server
+ * can be reached.
+ */
 export const meQuery = queryOptions({
   queryKey: meKey,
-  queryFn: async () => {
-    const me = await api<MeResponse>('GET', '/auth/me');
-    setCsrfToken(me.csrfToken);
-    return me;
+  queryFn: async (): Promise<MeResponse> => {
+    try {
+      const me = await api<MeResponse>('GET', '/auth/me');
+      setCsrfToken(me.csrfToken);
+      rememberUser(me.user);
+      return me;
+    } catch (error) {
+      const user = isUnreachable(error) ? rememberedUser() : null;
+      if (!user || user.mustChangePassword) throw error;
+      return { setupRequired: false, user, csrfToken: null };
+    }
   },
   staleTime: 60_000,
   retry: 1,
 });
+
+/** Checks the session again now; answers whether it is still signed in. */
+export async function refreshSession(queryClient: QueryClient): Promise<boolean> {
+  const me = await queryClient.fetchQuery({ ...meQuery, staleTime: 0 });
+  return !!me.user;
+}
 
 /** The signed-in user. Only for screens behind the sign-in guard. */
 export function useCurrentUser(): CurrentUser {
@@ -46,6 +85,7 @@ export function useCurrentUser(): CurrentUser {
 
 export function signedIn(queryClient: QueryClient, response: SessionResponse): void {
   setCsrfToken(response.csrfToken);
+  rememberUser(response.user);
   queryClient.setQueryData<MeResponse>(meKey, {
     setupRequired: false,
     user: response.user,
@@ -53,9 +93,14 @@ export function signedIn(queryClient: QueryClient, response: SessionResponse): v
   });
 }
 
-/** Forgets the session and everything loaded with it. */
-export function signedOut(queryClient: QueryClient): void {
+/**
+ * Forgets the session and everything loaded with it. Changes not sent yet stay on this device
+ * for the next sign-in; on logging out, the rest of its copy goes too.
+ */
+export function signedOut(queryClient: QueryClient, { forget = false } = {}): void {
   setCsrfToken(null);
+  rememberUser(null);
+  void stopSync({ forget });
   queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'auth' });
   queryClient.setQueryData<MeResponse>(meKey, (old) => ({
     setupRequired: old?.setupRequired ?? false,
@@ -88,7 +133,7 @@ export function useLogout() {
     mutationFn: () => api<void>('POST', '/auth/logout'),
     // Signed out locally even if the server couldn't be told (it expires the session anyway).
     onSettled: () => {
-      signedOut(queryClient);
+      signedOut(queryClient, { forget: true });
       void router.navigate({ to: '/login' });
     },
   });

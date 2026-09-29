@@ -1,22 +1,23 @@
-import type {
-  CreateGroupRequest,
-  CreateNotebookRequest,
-  CreatePageRequest,
-  CreateSectionRequest,
-  DeleteResponse,
-  Notebook,
-  Page,
-  PageMeta,
-  PlacePagesRequest,
-  Section,
-  Settings,
-  TrashItem,
-  Tree,
-  TreeChanges,
-  UiState,
-  UpdateNotebookRequest,
-  UpdatePageRequest,
-  UpdateSectionRequest,
+import {
+  placeKeys,
+  uuidv7,
+  type CreateGroupRequest,
+  type CreateNotebookRequest,
+  type CreatePageRequest,
+  type CreateSectionRequest,
+  type DeleteResponse,
+  type Notebook,
+  type PageMeta,
+  type PlacePagesRequest,
+  type Section,
+  type Settings,
+  type TrashItem,
+  type Tree,
+  type TreeChanges,
+  type UiState,
+  type UpdateNotebookRequest,
+  type UpdatePageRequest,
+  type UpdateSectionRequest,
 } from '@memora/shared';
 import {
   queryOptions,
@@ -27,7 +28,9 @@ import {
 } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { toast } from '../components/ui';
-import { api, errorMessage } from '../lib/api';
+import { ApiRequestError, api, errorMessage, isUnreachable } from '../lib/api';
+import { currentSync, newPageMeta } from '../sync/engine';
+import { settingsKey, treeKey } from './keys';
 import {
   buildIndex,
   mergeChanges,
@@ -42,26 +45,42 @@ import {
   type SectionPlace,
 } from './model';
 
-export const treeKey = ['notes', 'tree'] as const;
-export const pageKey = (id: string) => ['notes', 'page', id] as const;
-export const settingsKey = ['settings'] as const;
+export { settingsKey, treeKey };
+
+/**
+ * Loads something the app needs to start, with a copy kept on this device: without a
+ * connection, the copy stands in (§9.6). The tree's copy is kept by the sync engine, which
+ * follows every change to it.
+ */
+async function kept<T>(key: 'tree' | 'settings', load: () => Promise<T>): Promise<T> {
+  const sync = currentSync();
+  try {
+    const value = await load();
+    sync?.reached();
+    if (key !== 'tree') void sync?.store.write(key, value).catch(() => undefined);
+    return value;
+  } catch (error) {
+    if (!isUnreachable(error)) throw error;
+    sync?.unreachable();
+    const copy = await sync?.store.read<T>(key).catch(() => undefined);
+    if (copy === undefined) throw error;
+    return copy;
+  }
+}
 
 export const treeQuery = queryOptions({
   queryKey: treeKey,
-  queryFn: () => api<Tree>('GET', '/tree'),
+  queryFn: async () => {
+    const tree = await kept('tree', () => api<Tree>('GET', '/tree'));
+    // Pages made offline show until the server has them.
+    return currentSync()?.overlay(tree) ?? tree;
+  },
   staleTime: 30_000,
 });
 
-export const pageQuery = (id: string) =>
-  queryOptions({
-    queryKey: pageKey(id),
-    queryFn: () => api<Page>('GET', `/pages/${id}`),
-    staleTime: 10_000,
-  });
-
 export const settingsQuery = queryOptions({
   queryKey: settingsKey,
-  queryFn: () => api<Settings>('GET', '/settings'),
+  queryFn: () => kept('settings', () => api<Settings>('GET', '/settings')),
   staleTime: Infinity,
 });
 
@@ -157,6 +176,8 @@ export function createNotesActions(queryClient: QueryClient) {
       (value) => {
         if (guess) pending.delete(guess);
         setTree((t) => [...pending].reduce((acc, fn) => fn(acc), apply(t, value)));
+        // The browser's other tabs load the change too.
+        currentSync()?.treeChanged();
         return value;
       },
       (error: unknown) => {
@@ -251,15 +272,51 @@ export function createNotesActions(queryClient: QueryClient) {
       remove([{ type: 'section', id }], () => api('DELETE', `/sections/${id}`)),
 
     // Pages
-    createPage: (input: CreatePageRequest) =>
-      change(null, send('POST', '/pages', input), mergeChanges),
+    /**
+     * Shows the page at once, with an id made here (D14). Without a connection it is kept on
+     * this device and created when the server can be reached (§9.6).
+     */
+    createPage: (input: CreatePageRequest) => {
+      const body = { ...input, id: input.id ?? uuidv7() };
+      const siblings = (tree()?.pages ?? []).filter(
+        (p) => p.sectionId === body.sectionId && p.parentPageId === (body.parentPageId ?? null),
+      );
+      const sortKey = placeKeys(siblings, body.beforeId ?? null)?.[0];
+      const meta = sortKey ? newPageMeta(body, sortKey, Date.now()) : null;
+      return change(
+        meta && { pages: [meta] },
+        async () => {
+          try {
+            return await api<TreeChanges>('POST', '/pages', body);
+          } catch (error) {
+            const sync = currentSync();
+            if (!meta || !sync || !isUnreachable(error)) throw error;
+            await sync.createOffline(body, meta);
+            return { pages: [meta] } satisfies TreeChanges;
+          }
+        },
+        mergeChanges,
+      );
+    },
     updatePage: (id: string, fields: UpdatePageRequest) => {
-      queryClient.setQueryData<Page>(pageKey(id), (old) => old && { ...old, ...fields });
       return change(
         fields.title === undefined
           ? null
           : { pages: patch<PageMeta>(tree()?.pages ?? [], id, { title: fields.title.trim() }) },
-        send('PATCH', `/pages/${id}`, fields),
+        async () => {
+          try {
+            return await api<TreeChanges>('PATCH', `/pages/${id}`, fields);
+          } catch (error) {
+            // Made offline and not on the server yet: the name goes with its creation.
+            const waiting =
+              fields.title !== undefined &&
+              (isUnreachable(error) || (error instanceof ApiRequestError && error.status === 404))
+                ? await currentSync()?.renamePending(id, fields.title)
+                : null;
+            if (!waiting) throw error;
+            return { pages: [waiting] } satisfies TreeChanges;
+          }
+        },
         mergeChanges,
       );
     },
@@ -284,7 +341,14 @@ export function createNotesActions(queryClient: QueryClient) {
       const items = (
         i ? ids.filter((id) => !ids.some((o) => o !== id && isBelow(i, id, o))) : ids
       ).map((id): TrashItem => ({ type: 'page', id }));
-      return remove(items, () => api('POST', '/pages/delete', { ids }));
+      return remove(items, async () => {
+        // Typed a moment ago: it goes to the recycle bin with the page.
+        const sync = currentSync();
+        await sync?.saveNow(ids);
+        const result = await api<DeleteResponse>('POST', '/pages/delete', { ids });
+        await sync?.forget(ids);
+        return result;
+      });
     },
 
     restore: (items: TrashItem[]) =>
