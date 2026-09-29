@@ -15,6 +15,7 @@ The same note can be open on several devices, and edits can happen offline. No k
   - **Markdown** pages try a 3-way merge (base, server, local). A clean merge is saved and shown without interrupting the user.
   - Otherwise, and for **rich** pages, the local version is stored as a `conflict` version. The user chooses _Keep mine_, _Keep theirs_ or _Compare_.
 - Clients keep unsynced edits in an IndexedDB outbox until the server confirms them.
+- _Phase 4:_ the merge runs in the browser, which keeps the text both edits started from; the server only answers `revision_conflict` with its own content (plan D25).
 
 ## Consequences
 
