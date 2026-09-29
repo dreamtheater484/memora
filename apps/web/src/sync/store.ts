@@ -34,8 +34,17 @@ export type Op =
       kind: 'uploadFile';
       id: string;
       name: string;
-      file: Blob;
+      /**
+       * The file, or its bytes where the browser can't keep files in IndexedDB (Safari's
+       * private windows): then `type` is the file's type.
+       */
+      file: Blob | ArrayBuffer;
+      type?: string;
     };
+
+/** A kept file as a Blob again, however it was stored. */
+export const blobOf = (op: { file: Blob | ArrayBuffer; type?: string }): Blob =>
+  op.file instanceof Blob ? op.file : new Blob([op.file], { type: op.type ?? '' });
 
 /** Changes a record inside one transaction: a new record, null to delete it, or undefined. */
 export type Change = (record: PageRecord | undefined) => PageRecord | null | undefined;

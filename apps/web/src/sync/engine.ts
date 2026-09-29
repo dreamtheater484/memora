@@ -20,7 +20,7 @@ import { Live, type LiveHost } from './live';
 import { newWriteId, restore, settle, type Unstored } from './records';
 import { Sender, type SenderHost } from './sender';
 import { initialShared, useSync, type Shared } from './status';
-import { openStore, type LocalStore } from './store';
+import { blobOf, openStore, type LocalStore } from './store';
 
 /*
  * The sync engine of one tab (§9.6). Tabs of the same browser share the store and a
@@ -476,7 +476,13 @@ export class SyncEngine implements SenderHost, DocHost, LiveHost {
    */
   async addFile(file: Blob, name: string): Promise<string> {
     const id = uuidv7();
-    await this.store.addOp({ kind: 'uploadFile', id, name: name.slice(0, 200) || 'file', file });
+    const op = { kind: 'uploadFile' as const, id, name: name.slice(0, 200) || 'file' };
+    try {
+      await this.store.addOp({ ...op, file });
+    } catch {
+      // Safari's private windows can't keep a Blob in IndexedDB, but can keep its bytes.
+      await this.store.addOp({ ...op, file: await file.arrayBuffer(), type: file.type });
+    }
     this.fileUrls.set(id, URL.createObjectURL(file));
     this.kick();
     return id;
@@ -489,7 +495,7 @@ export class SyncEngine implements SenderHost, DocHost, LiveHost {
     const ops = await this.store.ops().catch(() => []);
     const op = ops.find((o) => o.kind === 'uploadFile' && o.id === id);
     if (op?.kind !== 'uploadFile') return null;
-    const url = URL.createObjectURL(op.file);
+    const url = URL.createObjectURL(blobOf(op));
     this.fileUrls.set(id, url);
     return url;
   }

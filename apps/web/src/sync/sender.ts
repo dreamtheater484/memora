@@ -9,7 +9,7 @@ import {
 import { ApiRequestError, api, isUnreachable, setCsrfToken, uploadFile } from '../lib/api';
 import { absorb, newWriteId, rebase, saved, settle, type PageRecord } from './records';
 import type { Shared } from './status';
-import type { LocalStore, Op } from './store';
+import { blobOf, type LocalStore, type Op } from './store';
 
 /*
  * Sends what waits in the store to the server (§9.6): tree changes made offline first, then
@@ -255,7 +255,7 @@ export class Sender {
       if (op.kind === 'createPage') {
         this.host.applyTree(await api<TreeChanges>('POST', '/pages', op.body));
       } else if (op.kind === 'uploadFile') {
-        await uploadFile(`/assets/${op.id}?name=${encodeURIComponent(op.name)}`, op.file);
+        await uploadFile(`/assets/${op.id}?name=${encodeURIComponent(op.name)}`, blobOf(op));
         this.host.uploaded(op.id);
       } else {
         await api('POST', `/pages/${op.pageId}/versions`, {
