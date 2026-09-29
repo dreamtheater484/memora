@@ -10,7 +10,7 @@ export const REASON: Record<VersionReason, string> = {
   conflict: 'Kept from a conflict',
 };
 
-const time = new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit' });
+const time = new Intl.DateTimeFormat('en', { hour: 'numeric', minute: '2-digit' });
 
-/** "14:05" */
+/** "2:05 PM" */
 export const formatTime = (ms: number): string => time.format(ms);
