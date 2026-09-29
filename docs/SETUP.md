@@ -1,6 +1,6 @@
 # Installing Memora
 
-> **Draft (Phase 4).** Memora has accounts, notebook organisation and safe saving, also offline, with a basic Markdown editor; the full editor comes in Phase 5. The guide grows with each phase and is finished in Phase 13.
+> **Draft (Phase 5).** Memora has accounts, notebook organisation, safe saving (also offline) and a full Markdown editor with a live preview; rich pages come in Phase 6. The guide grows with each phase and is finished in Phase 13.
 
 ## What you need
 
@@ -126,6 +126,7 @@ Set these as environment variables (the `environment:` section of the compose fi
 | `MEMORA_SESSION_DAYS`  | `30`                             | How long "remember this device" keeps you logged in without using Memora                                        |
 | `MEMORA_SESSION_HOURS` | `12`                             | How long a session lasts without using Memora, without "remember this device"                                   |
 | `MEMORA_MAX_HEAP_MB`   | `256`                            | Maximum Node.js heap in MB. Keeps RAM use predictable.                                                          |
+| `MEMORA_MAX_UPLOAD_MB` | `25`                             | Largest image or file that can be pasted or dropped into a page, in MB                                          |
 | `MEMORA_BACKUP_DIR`    | `/data/backups`                  | Where backups are written                                                                                       |
 | `MEMORA_LOG_LEVEL`     | `info`                           | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                  |
 
