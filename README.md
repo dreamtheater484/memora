@@ -2,7 +2,7 @@
 
 A self-hosted notebook that runs in your browser. It combines OneNote-style organisation (notebooks, section tabs, page lists) with first-class Markdown, a Word-like rich editor and built-in Kanban boards. It is designed to look great on a phone, a laptop and an ultra-wide monitor.
 
-> **Status: Phase 3, notebook organisation.** Accounts, the design system and the app shell are in place, with an `:edge` image on GHCR. Notebooks, nested section groups, coloured section tabs, pages with subpages, the Inbox and quick notes can be created, arranged by dragging or from the keyboard, moved, copied and deleted with Undo, on phones as well. Pages can't be edited yet: the Markdown editor comes in Phase 5. See the [implementation plan](docs/IMPLEMENTATION_PLAN.md) for the roadmap.
+> **Status: Phase 4, the save and sync engine.** Accounts, the design system, the app shell and notebook organisation are in place, with an `:edge` image on GHCR. Pages can now be written in a basic Markdown editor, and every keystroke is kept: saved on the device within 300 ms, sent to the server in the background, and kept while offline, with a save indicator that only says "Saved" once the server has it. Edits from two devices merge by themselves when they don't overlap; otherwise both are kept and you choose. The full Markdown editor comes in Phase 5. See the [implementation plan](docs/IMPLEMENTATION_PLAN.md) for the roadmap.
 
 ## Planned highlights
 
