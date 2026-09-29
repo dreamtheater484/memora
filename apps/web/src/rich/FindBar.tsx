@@ -41,17 +41,26 @@ export function FindBar({ editor, onClose }: { editor: Editor; onClose: () => vo
     onClose();
     editor.commands.focus();
   };
-  const keys = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
+  // Escape closes the bar from anywhere but a dialog: a button that just got disabled (no
+  // matches left) drops the focus to the page.
+  const latest = useRef(close);
+  useEffect(() => {
+    latest.current = close;
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if ((e.target as Element | null)?.closest?.('[role="dialog"], [role="menu"]')) return;
       e.preventDefault();
-      close();
-    }
-  };
+      latest.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   return (
     <div
       role="search"
       aria-label="Find in page"
-      onKeyDown={keys}
       className="glass-raised flex flex-col gap-1.5 rounded-lg p-1.5 shadow-lg"
     >
       <div className="flex items-center gap-1">
