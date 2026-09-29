@@ -26,6 +26,7 @@ interface World {
     assetId: string;
     tagId: string;
     templateId: string;
+    jobId: string;
     bobSectionId: string;
     /** Alice's tree before Bob's attempts: it must stay exactly like this. */
     tree: unknown;
@@ -378,6 +379,34 @@ const RULES: Record<string, RouteRule> = {
       },
     }),
   },
+  'GET /api/v1/exports/options': { access: 'user' },
+  'POST /api/v1/exports': {
+    access: 'user',
+    foreign: probe(
+      () => '/api/v1/exports',
+      (n) => ({ format: 'memora', scope: 'notebook', id: n.notebookId }),
+    ),
+  },
+  'POST /api/v1/exports/pdf': { access: 'user' },
+  'POST /api/v1/imports': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/imports?name=notes.zip&notebookId=${n.notebookId}`),
+  },
+  'GET /api/v1/jobs': {
+    access: 'user',
+    async ownListOnly(w) {
+      const list = (await w.bob.get('/api/v1/jobs')).json() as { id: string }[];
+      expect(list.map((j) => j.id)).not.toContain(w.notes.jobId);
+    },
+  },
+  'GET /api/v1/jobs/:id': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/jobs/${n.jobId}`),
+  },
+  'GET /api/v1/jobs/:id/download': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/jobs/${n.jobId}/download`),
+  },
   // Scoped by the session itself: events.test.ts checks a user only hears their own events.
   'GET /api/v1/events': { access: 'user' },
 };
@@ -410,6 +439,9 @@ beforeAll(async () => {
   const template = (
     await alice.post('/api/v1/templates', { name: 'Private', type: 'markdown', content: 'Mine' })
   ).json();
+  const job = (
+    await alice.post('/api/v1/exports', { format: 'memora', scope: 'notebook', id: notebookId })
+  ).json();
   const assetId = uuidv7();
   await alice.put(`/api/v1/assets/${assetId}?name=note.txt`, Buffer.from('private'), {
     headers: { 'content-type': 'text/plain' },
@@ -428,6 +460,7 @@ beforeAll(async () => {
       assetId,
       tagId: tagged.tags[0].id,
       templateId: template.id,
+      jobId: job.id,
       bobSectionId: (await bob.get('/api/v1/tree')).json().inboxId,
       tree: (await alice.get('/api/v1/tree')).json(),
     },

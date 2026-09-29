@@ -311,7 +311,8 @@ export class NotesService {
     }
   }
 
-  private inbox(owner: string): SectionRow {
+  /** The user's inbox, made the first time it is needed. */
+  inbox(owner: string): SectionRow {
     const existing = this.orm
       .select()
       .from(sections)

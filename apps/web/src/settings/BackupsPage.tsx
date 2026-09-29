@@ -46,6 +46,7 @@ const KIND: Record<BackupKind, string> = {
   manual: 'Made by hand',
   'pre-migration': 'Before an update',
   'pre-restore': 'Before a restore',
+  'pre-import': 'Before an import',
 };
 
 const downloadUrl = (name: string) => `/api/v1/admin/backups/${encodeURIComponent(name)}`;
