@@ -140,7 +140,7 @@ test.describe('behaviour', () => {
     await page.goto('/settings/users');
     await expect(page).toHaveURL('/settings/account');
     const nav = page.getByRole('navigation', { name: 'Settings' });
-    await expect(nav.getByRole('link')).toHaveText(['Account']);
+    await expect(nav.getByRole('link')).toHaveText(['Account', 'Editing']);
 
     await page.goto('/');
     await page.getByRole('button', { name: 'Account' }).click();

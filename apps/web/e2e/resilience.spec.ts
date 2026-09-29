@@ -88,6 +88,10 @@ const editorText = (page: Page) =>
   );
 
 async function open(page: Page, api: FakeApi, label?: string) {
+  // The source view alone: these tests are about saving, and lines don't wrap there.
+  api.notes.tree.pages = api.notes.tree.pages.map((p) =>
+    p.id === PAGE ? { ...p, viewMode: 'source' } : p,
+  );
   await watchSaveStates(page);
   await api.install(page, label);
   await page.goto(`/p/${PAGE}`);
@@ -107,7 +111,8 @@ async function otherDevice(browser: Browser, baseURL: string | undefined) {
 
 async function typeAtEnd(page: Page, text: string) {
   await editor(page).locator('.cm-line').last().click();
-  await page.keyboard.press('End');
+  // The end of the page, not of the line on screen (a long line wraps).
+  await page.keyboard.press('ControlOrMeta+End');
   await page.keyboard.type(text);
 }
 
