@@ -1,4 +1,5 @@
 import { APP_NAME } from '@memora/shared';
+import { useNavigate } from '@tanstack/react-router';
 import {
   ChevronRight,
   FilePlus,
@@ -10,8 +11,9 @@ import {
   Search,
   Settings,
   Sun,
-  User,
+  Users,
 } from 'lucide-react';
+import { useCurrentUser, useLogout } from '../auth/queries';
 import {
   Avatar,
   IconButton,
@@ -114,19 +116,36 @@ function AppearanceMenu() {
 }
 
 function AccountMenu() {
+  const user = useCurrentUser();
+  const navigate = useNavigate();
+  const logout = useLogout();
   return (
     <Menu>
       <MenuTrigger asChild>
         <button type="button" aria-label="Account" className="rounded-full">
-          <Avatar name="Alex Morgan" decorative />
+          <Avatar name={user.displayName} decorative />
         </button>
       </MenuTrigger>
       <MenuContent align="end">
-        <MenuLabel>Alex Morgan</MenuLabel>
-        <MenuItem icon={<User />}>Profile</MenuItem>
-        <MenuItem icon={<Settings />}>Settings</MenuItem>
+        <MenuLabel>
+          {/* The label style is a small uppercase heading; a name reads better as is. */}
+          <span className="block text-sm font-semibold tracking-normal text-fg normal-case">
+            {user.displayName}
+          </span>
+          <span className="block font-normal tracking-normal normal-case">@{user.username}</span>
+        </MenuLabel>
+        <MenuItem icon={<Settings />} onSelect={() => void navigate({ to: '/settings/account' })}>
+          Account settings
+        </MenuItem>
+        {user.role === 'admin' && (
+          <MenuItem icon={<Users />} onSelect={() => void navigate({ to: '/settings/users' })}>
+            Users
+          </MenuItem>
+        )}
         <MenuSeparator />
-        <MenuItem icon={<LogOut />}>Sign out</MenuItem>
+        <MenuItem icon={<LogOut />} onSelect={() => logout.mutate()}>
+          Log out
+        </MenuItem>
       </MenuContent>
     </Menu>
   );

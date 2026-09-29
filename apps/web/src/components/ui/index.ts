@@ -7,6 +7,7 @@ export { Dialog, DialogClose, DialogContent, DialogTrigger } from './Dialog';
 export { EmptyState } from './EmptyState';
 export { IconButton } from './IconButton';
 export { Field, Input } from './Input';
+export { PasswordInput } from './PasswordInput';
 export { Kbd } from './Kbd';
 export { Logo } from './Logo';
 export * from './Menu';
