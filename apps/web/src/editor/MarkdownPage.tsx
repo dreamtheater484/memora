@@ -16,6 +16,7 @@ import { OutlineButton } from '../markdown/OutlineButton';
 import { Preview } from '../markdown/Preview';
 import { toggleTask } from '../markdown/tasks';
 import { saveViewMode, useEditorSettings, useNotes } from '../notes/queries';
+import { summaryOf } from '../notes/summary';
 import { useGo } from '../shell/location';
 import type { DocEditor, PageDoc } from '../sync/doc';
 import { currentSync } from '../sync/engine';
@@ -133,6 +134,7 @@ export default memo(function MarkdownPage({ page, doc, compact, autoFocus }: Mar
         return near ?? candidates[0] ?? null;
       },
       openPage: (id) => go.page(id),
+      summary: (id) => summaryOf(index, id),
       localFile: host.localFile,
     }),
     [go, host, index, page.sectionId],

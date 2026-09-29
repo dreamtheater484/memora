@@ -12,6 +12,7 @@ import {
   type PageMeta,
   type Section,
   type SectionGroup,
+  type Tag,
   type TrashItem,
   type Tree,
   type TreeChanges,
@@ -44,6 +45,9 @@ export interface NotesIndex {
   group: ReadonlyMap<string, SectionGroup>;
   section: ReadonlyMap<string, Section>;
   page: ReadonlyMap<string, PageMeta>;
+  /** Tags by id, and all of them by name. */
+  tag: ReadonlyMap<string, Tag>;
+  tags: Tag[];
   inbox: Section;
   /** Sections directly in a notebook (`groupId` null) or in a group, in order. */
   sectionsIn(notebookId: string, groupId: string | null): Section[];
@@ -75,6 +79,10 @@ export function buildIndex(tree: Tree): NotesIndex {
   const group = new Map(tree.groups.map((g) => [g.id, g]));
   const section = new Map(tree.sections.map((s) => [s.id, s]));
   const page = new Map(tree.pages.map((p) => [p.id, p]));
+  const tags = [...(tree.tags ?? [])].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+  );
+  const tag = new Map(tags.map((t) => [t.id, t]));
   const sectionsBy = groupBy(tree.sections, (s) => key(s.notebookId, s.groupId));
   const groupsBy = groupBy(tree.groups, (g) => key(g.notebookId, g.parentGroupId));
   const pagesBy = groupBy(tree.pages, (p) => p.sectionId);
@@ -87,6 +95,8 @@ export function buildIndex(tree: Tree): NotesIndex {
     group,
     section,
     page,
+    tag,
+    tags,
     inbox: section.get(tree.inboxId)!,
     sectionsIn: (notebookId, groupId) => sectionsBy.get(key(notebookId, groupId)) ?? [],
     groupsIn: (notebookId, parentGroupId) => groupsBy.get(key(notebookId, parentGroupId)) ?? [],
@@ -151,6 +161,7 @@ export function mergeChanges(tree: Tree, changes: TreeChanges): Tree {
     groups: upsert(tree.groups, changes.groups),
     sections: upsert(tree.sections, changes.sections),
     pages: upsert(tree.pages, changes.pages),
+    ...(changes.tags?.length ? { tags: upsert(tree.tags ?? [], changes.tags) } : {}),
   };
 }
 

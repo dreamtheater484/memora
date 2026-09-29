@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, type ReactNode } from 'react';
 import { versionsQuery } from '../history/api';
+import { backlinksQuery } from '../search/api';
 import { REASON } from '../history/labels';
 import { jumpTo } from '../editor/jumps';
 import { sectionHeading } from '../components/ui/styles';
@@ -11,7 +12,7 @@ import { headingsOf, statsOf } from '../markdown/outline';
 import { richOutline } from '../rich/outline';
 import { formatDateTime, formatRelative } from '../lib/time';
 import { useDocSnapshot, usePageDoc } from '../sync/hooks';
-import { useCurrent } from './location';
+import { useCurrent, useGo } from './location';
 import { useShell } from './store';
 
 function Block({ title, children }: { title: string; children: ReactNode }) {
@@ -26,6 +27,35 @@ function Block({ title, children }: { title: string; children: ReactNode }) {
 const Later = ({ children }: { children: ReactNode }) => (
   <p className="text-xs text-fg-3">{children}</p>
 );
+
+/** Pages that link here (§9.9). */
+function Backlinks({ pageId }: { pageId: string }) {
+  const { index } = useCurrent();
+  const go = useGo();
+  const links = useQuery(backlinksQuery(pageId));
+  if (links.isError) return <Later>Backlinks need a connection to the server.</Later>;
+  if (!links.data) return <Later>Loading…</Later>;
+  const pages = links.data.pages.map((id) => index.page.get(id)).filter((p) => !!p);
+  if (!pages.length) return <Later>No pages link here yet. Link one with [[…]].</Later>;
+  return (
+    <ul aria-label="Linked from" className="-mx-2 flex flex-col gap-px">
+      {pages.map((p) => (
+        <li key={p.id}>
+          <button
+            type="button"
+            onClick={() => go.page(p.id)}
+            className="flex w-full flex-col items-start rounded-sm px-2 py-1 text-left text-xs hover:bg-hover"
+          >
+            <span className="w-full truncate font-medium text-fg">
+              {p.title || 'Untitled page'}
+            </span>
+            {p.snippet && <span className="w-full truncate text-fg-3">{p.snippet}</span>}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /** The latest few versions; the history dialog has them all. */
 function RecentVersions({ pageId }: { pageId: string }) {
@@ -65,7 +95,7 @@ function RecentVersions({ pageId }: { pageId: string }) {
   );
 }
 
-/** Page details on wide screens: information, the outline and the history; links as they arrive. */
+/** Page details on wide screens: information, the outline, backlinks and the history. */
 export function Inspector() {
   const { page, path } = useCurrent();
   const doc = usePageDoc(page?.id ?? null);
@@ -127,7 +157,7 @@ export function Inspector() {
         )}
       </Block>
       <Block title="Backlinks">
-        <Later>Pages and cards that link here arrive in Phase 8.</Later>
+        {page ? <Backlinks pageId={page.id} /> : <Later>Pages that link here appear here.</Later>}
       </Block>
       <Block title="Version history">
         {page ? (

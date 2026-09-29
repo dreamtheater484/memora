@@ -24,6 +24,8 @@ interface World {
     pageId: string;
     deletedPageId: string;
     assetId: string;
+    tagId: string;
+    templateId: string;
     bobSectionId: string;
     /** Alice's tree before Bob's attempts: it must stay exactly like this. */
     tree: unknown;
@@ -314,6 +316,68 @@ const RULES: Record<string, RouteRule> = {
   'GET /api/v1/admin/backups/:name': { access: 'admin' },
   'DELETE /api/v1/admin/backups/:name': { access: 'admin' },
   'POST /api/v1/admin/backups/:name/restore': { access: 'admin' },
+  'GET /api/v1/search': {
+    access: 'user',
+    async ownListOnly(w) {
+      const found = (await w.bob.get('/api/v1/search?q=Diary')).json();
+      expect(found).toEqual({ hits: [], total: 0 });
+      expect((await w.bob.get('/api/v1/search?q=tag:secret')).json().hits).toEqual([]);
+    },
+  },
+  'GET /api/v1/pages/:id/backlinks': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/pages/${n.pageId}/backlinks`),
+  },
+  'PUT /api/v1/pages/:id/tags': {
+    access: 'user',
+    foreign: probe(
+      (n) => `/api/v1/pages/${n.pageId}/tags`,
+      () => ({ names: ['planted'] }),
+    ),
+  },
+  'PATCH /api/v1/tags/:id': {
+    access: 'user',
+    foreign: probe(
+      (n) => `/api/v1/tags/${n.tagId}`,
+      () => ({ name: 'Mine now' }),
+    ),
+  },
+  'DELETE /api/v1/tags/:id': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/tags/${n.tagId}`),
+  },
+  'GET /api/v1/templates': {
+    access: 'user',
+    async ownListOnly(w) {
+      const list = (await w.bob.get('/api/v1/templates')).json() as { id: string }[];
+      expect(list.map((t) => t.id)).not.toContain(w.notes.templateId);
+    },
+  },
+  'POST /api/v1/templates': { access: 'user' },
+  'PATCH /api/v1/templates/:id': {
+    access: 'user',
+    foreign: (w) => ({
+      url: `/api/v1/templates/${w.notes.templateId}`,
+      body: { name: 'Mine now' },
+      async intact() {
+        const list = (await w.alice.get('/api/v1/templates')).json() as {
+          id: string;
+          name: string;
+        }[];
+        expect(list.find((t) => t.id === w.notes.templateId)?.name).toBe('Private');
+      },
+    }),
+  },
+  'DELETE /api/v1/templates/:id': {
+    access: 'user',
+    foreign: (w) => ({
+      url: `/api/v1/templates/${w.notes.templateId}`,
+      async intact() {
+        const list = (await w.alice.get('/api/v1/templates')).json() as { id: string }[];
+        expect(list.map((t) => t.id)).toContain(w.notes.templateId);
+      },
+    }),
+  },
   // Scoped by the session itself: events.test.ts checks a user only hears their own events.
   'GET /api/v1/events': { access: 'user' },
 };
@@ -340,6 +404,12 @@ beforeAll(async () => {
   const gone = (await alice.post('/api/v1/pages', { sectionId, title: 'Gone' })).json();
   await alice.post('/api/v1/pages/delete', { ids: [gone.pages[0].id] });
   await alice.patch('/api/v1/settings', { ui: { pageListSide: 'left' } });
+  const tagged = (
+    await alice.put(`/api/v1/pages/${page.pages[0].id}/tags`, { names: ['secret'] })
+  ).json();
+  const template = (
+    await alice.post('/api/v1/templates', { name: 'Private', type: 'markdown', content: 'Mine' })
+  ).json();
   const assetId = uuidv7();
   await alice.put(`/api/v1/assets/${assetId}?name=note.txt`, Buffer.from('private'), {
     headers: { 'content-type': 'text/plain' },
@@ -356,6 +426,8 @@ beforeAll(async () => {
       pageId: page.pages[0].id,
       deletedPageId: gone.pages[0].id,
       assetId,
+      tagId: tagged.tags[0].id,
+      templateId: template.id,
       bobSectionId: (await bob.get('/api/v1/tree')).json().inboxId,
       tree: (await alice.get('/api/v1/tree')).json(),
     },

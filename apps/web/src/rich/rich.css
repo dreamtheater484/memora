@@ -398,3 +398,14 @@
 .rich-content .ProseMirror-gapcursor::after {
   border-top-color: var(--fg);
 }
+
+/* Find and replace (§9.8). */
+.rich-content .find-match {
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--warn) 28%, transparent);
+}
+
+.rich-content .find-match-current {
+  background: color-mix(in oklab, var(--warn) 60%, transparent);
+  outline: 1px solid var(--warn);
+}

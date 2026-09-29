@@ -17,6 +17,7 @@ import { dataIdOf } from './db/meta';
 import { ApiError } from './errors';
 import { EventHub } from './events/hub';
 import { NotesService } from './notes/service';
+import { TemplatesService } from './notes/templates';
 import { createOrm, createRepos } from './repo';
 import { adminRoutes } from './routes/admin';
 import { assetRoutes } from './routes/assets';
@@ -24,6 +25,8 @@ import { authRoutes, type RouteDeps } from './routes/auth';
 import { backupRoutes } from './routes/backups';
 import { eventRoutes } from './routes/events';
 import { notesRoutes } from './routes/notes';
+import { searchRoutes } from './routes/search';
+import { SearchService } from './search/service';
 
 export interface AppOptions {
   config: Config;
@@ -98,6 +101,8 @@ export async function buildApp({
   const hasher = new PasswordHasher(hashParams);
   const auth = new AuthService(db, repos, hasher, config, now);
   const notes = new NotesService(db, orm, now);
+  const search = new SearchService(db, now);
+  const templates = new TemplatesService(orm, now);
   const events = new EventHub();
   const assets = new AssetsService(db, orm, now);
   const backups = new BackupService(
@@ -115,6 +120,8 @@ export async function buildApp({
     repos,
     auth,
     notes,
+    search,
+    templates,
     assets,
     fetchPolicy,
     backups,
@@ -170,6 +177,7 @@ export async function buildApp({
   authRoutes(app, deps);
   adminRoutes(app, deps);
   notesRoutes(app, deps);
+  searchRoutes(app, deps);
   backupRoutes(app, deps);
   await assetRoutes(app, deps);
   eventRoutes(app, deps);

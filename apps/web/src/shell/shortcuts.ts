@@ -21,7 +21,10 @@ export type ShortcutId =
   | 'next-page'
   | 'prev-section'
   | 'next-section'
-  | 'shortcuts';
+  | 'shortcuts'
+  | 'search'
+  | 'back'
+  | 'forward';
 
 /**
  * Where a shortcut works: anywhere (even while typing), anywhere but in a text field, or only
@@ -59,6 +62,30 @@ export const SHORTCUTS: readonly Shortcut[] = [
       !e.altKey &&
       !e.shiftKey &&
       (letter(e, 'K') || (letter(e, 'P') && inEditor(e.target))),
+  },
+  {
+    id: 'search',
+    keys: 'Mod Shift F',
+    label: 'Search all pages',
+    group: 'General',
+    scope: 'global',
+    match: (e) => mod(e) && e.shiftKey && !e.altKey && letter(e, 'F'),
+  },
+  {
+    id: 'back',
+    keys: 'Alt ArrowLeft',
+    label: 'Back',
+    group: 'Moving around',
+    scope: 'app',
+    match: (e) => e.altKey && !mod(e) && !e.shiftKey && e.key === 'ArrowLeft',
+  },
+  {
+    id: 'forward',
+    keys: 'Alt ArrowRight',
+    label: 'Forward',
+    group: 'Moving around',
+    scope: 'app',
+    match: (e) => e.altKey && !mod(e) && !e.shiftKey && e.key === 'ArrowRight',
   },
   {
     id: 'quick-note',
@@ -213,13 +240,15 @@ export const EDITOR_KEYS: readonly { keys: string; label: string }[] = [
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 /** Keys as shown to people: "Ctrl Alt N", or "⌘ ⌥ N" on a Mac. */
-export const keysLabel = (keys: string): string =>
-  isMac
-    ? keys
+export const keysLabel = (keys: string): string => {
+  const arrows = keys.replace(/\bArrowLeft\b/g, '←').replace(/\bArrowRight\b/g, '→');
+  return isMac
+    ? arrows
         .replace(/\bMod\b/g, '⌘')
         .replace(/\bAlt\b/g, '⌥')
         .replace(/\bShift\b/g, '⇧')
-    : keys.replace(/\bMod\b/g, 'Ctrl');
+    : arrows.replace(/\bMod\b/g, 'Ctrl');
+};
 
 export const shortcutKeys = (id: ShortcutId): string =>
   keysLabel(SHORTCUTS.find((s) => s.id === id)!.keys);

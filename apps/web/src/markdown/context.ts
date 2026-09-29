@@ -1,4 +1,5 @@
 import { ASSET_SCHEME, assetPath } from '@memora/shared';
+import type { PageSummary } from '../notes/summary';
 import { createContext, useContext, useEffect, useState } from 'react';
 
 /*
@@ -13,6 +14,8 @@ export interface PreviewHost {
   openPage(id: string): void;
   /** Where to show a file from: its copy on this device while it waits to be sent. */
   localFile(id: string): Promise<string | null>;
+  /** What a link's hover preview shows of a page (none when absent). */
+  summary?(id: string): PageSummary | null;
 }
 
 const noHost: PreviewHost = {

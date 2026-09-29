@@ -1,6 +1,7 @@
 import type { UiState } from '@memora/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  Clock,
   Columns2,
   FileClock,
   FilePlus,
@@ -19,7 +20,7 @@ import {
   Sun,
   Trash2,
 } from 'lucide-react';
-import { lazy, Suspense, useEffect, useMemo, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   CommandPalette,
   EmptyState,
@@ -33,6 +34,7 @@ import { useDnd } from '../lib/dnd';
 import { formatRelative } from '../lib/time';
 import { DESKTOP_QUERY, useMediaQuery } from '../lib/useMediaQuery';
 import { useNow } from '../lib/useNow';
+import { rememberOpened, useRecent } from '../notes/places';
 import { flushUiState, saveUiState, useUiState } from '../notes/queries';
 import { applyAccent, hueStyle } from '../theme/sections';
 import { useTheme } from '../theme/theme';
@@ -41,7 +43,7 @@ import { PROJECTS } from './demo';
 import { ShellDialogs } from './dialogs';
 import { useDropRules } from './dropRules';
 import { Inspector } from './Inspector';
-import { useCurrent, useGo, type Current } from './location';
+import { isNotesLevel, useCurrent, useGo, type Current } from './location';
 import { NotesPane, SecondPane } from './NotesPane';
 import { PageList } from './PageList';
 import { ContainerList, NotebookList } from './PhoneViews';
@@ -55,6 +57,7 @@ const panel = 'glass min-h-0 overflow-hidden rounded-xl';
 
 // The recycle bin is opened now and then: loaded when it is.
 const TrashView = lazy(() => import('../history/TrashView'));
+const SearchView = lazy(() => import('../search/SearchView'));
 
 function BoardPlaceholder({ boardId }: { boardId: string | null }) {
   const project = PROJECTS.find((p) => p.boards.some((b) => b.id === boardId));
@@ -73,7 +76,6 @@ function BoardPlaceholder({ boardId }: { boardId: string | null }) {
 
 function BottomNav({ current }: { current: Current }) {
   const go = useGo();
-  const setPaletteOpen = useShell((s) => s.setPaletteOpen);
   // Home opens the last section on larger screens; on a phone it is the notebook list.
   const inbox =
     !!current.section?.isInbox && (current.level === 'section' || current.level === 'page');
@@ -96,13 +98,8 @@ function BottomNav({ current }: { current: Current }) {
       aria-label="Primary"
       className="relative z-10 flex h-[calc(3.625rem+env(safe-area-inset-bottom))] shrink-0 border-t border-(--glass-edge) bg-panel pb-[env(safe-area-inset-bottom)] [backdrop-filter:var(--glass-filter)] @tablet:hidden"
     >
-      {item(
-        'Notes',
-        <Notebook />,
-        current.level !== 'board' && current.level !== 'trash' && !inbox,
-        go.home,
-      )}
-      {item('Search', <Search />, false, () => setPaletteOpen(true))}
+      {item('Notes', <Notebook />, isNotesLevel(current.level) && !inbox, go.home)}
+      {item('Search', <Search />, current.level === 'search', () => go.search())}
       {item('Boards', <SquareKanban />, current.level === 'board', () =>
         go.board(PROJECTS[0]!.boards[0]!.id),
       )}
@@ -132,9 +129,10 @@ function DragOverlay() {
   );
 }
 
-function usePaletteItems(current: Current, commands: Commands): PaletteItem[] {
+function usePaletteItems(current: Current, commands: Commands, query: string): PaletteItem[] {
   const { index } = current;
   const go = useGo();
+  const recent = useRecent();
   const shell = useShell();
   const { setTheme, glass, setGlass } = useTheme();
   const ultra = useMediaQuery('(min-width: 200rem)');
@@ -338,8 +336,39 @@ function usePaletteItems(current: Current, commands: Commands): PaletteItem[] {
         onSelect: () => shell.setSecondPane(!shell.secondPane),
       });
     }
+    // Full-text search (§9.8), for what typing here doesn't find by name.
+    const words = query.trim();
+    items.push({
+      id: 'cmd:search',
+      title: words ? `Search all pages for “${words}”` : 'Search all pages',
+      group: 'Search',
+      icon: <Search />,
+      hint: shortcutKeys('search'),
+      keywords: `${words} find full text`,
+      onSelect: () => go.search(words || undefined),
+    });
+    // With nothing typed, recent pages come first.
+    if (!words) {
+      const opened = recent
+        .filter((r) => r.type === 'page')
+        .map((r) => index.page.get(r.id))
+        .filter((p) => !!p)
+        .slice(0, 8);
+      items.unshift(
+        ...opened.map((page) => ({
+          id: `recent:${page.id}`,
+          title: page.title || 'Untitled page',
+          subtitle: pathLabel(page.sectionId),
+          group: 'Recent',
+          icon: <Clock />,
+          onSelect: () => go.page(page.id),
+        })),
+      );
+    }
     return items;
   }, [
+    query,
+    recent,
     index,
     current.section,
     current.page,
@@ -367,12 +396,14 @@ export function AppShell() {
   const current = useCurrent();
   const { level, section, page } = current;
   const commands = useCommands();
+  const go = useGo();
   const queryClient = useQueryClient();
   const ui = useUiState();
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const tablet = useMediaQuery('(min-width: 40rem)');
   const ultra = useMediaQuery('(min-width: 200rem)');
-  const paletteItems = usePaletteItems(current, commands);
+  const [paletteQuery, setPaletteQuery] = useState('');
+  const paletteItems = usePaletteItems(current, commands, paletteQuery);
   useDropRules(commands);
 
   // The accent and the ambient glow follow the current section.
@@ -385,7 +416,7 @@ export function AppShell() {
   }, [accent]);
 
   // Remember the open section, and the open page of each section, for the next visit.
-  const sectionId = level === 'board' || level === 'trash' ? undefined : section?.id;
+  const sectionId = isNotesLevel(level) ? section?.id : undefined;
   const pageId = page?.id;
   useEffect(() => {
     if (!sectionId) return;
@@ -393,6 +424,8 @@ export function AppShell() {
     if (ui.lastSectionId !== sectionId) patch.lastSectionId = sectionId;
     if (pageId && ui.lastPages?.[sectionId] !== pageId) patch.lastPages = { [sectionId]: pageId };
     if (Object.keys(patch).length) saveUiState(queryClient, patch);
+    // Recent pages (§9.9): the one shown in the main pane.
+    if (pageId) rememberOpened(queryClient, ui, { type: 'page', id: pageId });
     // Only when the place changes, not when the stored state catches up.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sectionId, pageId]);
@@ -415,6 +448,9 @@ export function AppShell() {
 
   useShortcuts({
     palette: () => shell.setPaletteOpen(!useShell.getState().paletteOpen),
+    search: () => go.search(),
+    back: () => window.history.back(),
+    forward: () => window.history.forward(),
     'quick-note': commands.quickNote,
     shortcuts: commands.showShortcuts,
     'new-page': () => void commands.newPage(),
@@ -432,16 +468,14 @@ export function AppShell() {
     'next-section': () => commands.stepSection(1),
   });
 
-  const notes = level !== 'board' && level !== 'trash';
+  const notes = isNotesLevel(level);
   const phone = !tablet;
   const left = ui.pageListSide === 'left';
 
   let main: ReactNode;
-  if (level === 'trash') {
+  if (level === 'trash' || level === 'search') {
     main = (
-      <Suspense fallback={null}>
-        <TrashView />
-      </Suspense>
+      <Suspense fallback={null}>{level === 'trash' ? <TrashView /> : <SearchView />}</Suspense>
     );
   } else if (!notes) main = <BoardPlaceholder boardId={current.boardId} />;
   else if (phone && !current.missing && level === 'home') main = <NotebookList />;
@@ -528,7 +562,15 @@ export function AppShell() {
           <PageList />
         </SheetContent>
       </Sheet>
-      <CommandPalette open={paletteOpen} onOpenChange={shell.setPaletteOpen} items={paletteItems} />
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={(open) => {
+          shell.setPaletteOpen(open);
+          setPaletteQuery('');
+        }}
+        onQueryChange={setPaletteQuery}
+        items={paletteItems}
+      />
       <ShellDialogs />
       <DragOverlay />
     </div>

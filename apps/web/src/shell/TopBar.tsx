@@ -2,6 +2,7 @@ import { APP_NAME } from '@memora/shared';
 import { useNavigate } from '@tanstack/react-router';
 import {
   ArrowLeft,
+  ArrowRight,
   ChevronRight,
   FilePlus,
   Keyboard,
@@ -36,7 +37,7 @@ import { hueStyle } from '../theme/sections';
 import { useTheme, type ThemeMode } from '../theme/theme';
 import { useCommands } from './commands';
 import { PROJECTS } from './demo';
-import { useCurrent, useGo, type Current } from './location';
+import { isNotesLevel, useCurrent, useGo, type Current } from './location';
 import { shortcutKeys } from './shortcuts';
 import { useShell } from './store';
 import { GlobalSaveIndicator } from './SyncStatus';
@@ -228,7 +229,7 @@ export function TopBar() {
   const commands = useCommands();
   const { setNavOpen, setPagesOpen, setPaletteOpen } = useShell();
   const back = parentOf(current, go);
-  const notes = current.level !== 'board';
+  const notes = isNotesLevel(current.level);
   return (
     <header className="relative z-10 flex h-[3.375rem] shrink-0 items-center gap-1 pr-1.5 pl-1 @tablet:h-[3.625rem] @tablet:gap-2.5 @tablet:px-4">
       {/* Space is shared like this: the brand and the buttons keep their size,
@@ -245,6 +246,23 @@ export function TopBar() {
         <span>{APP_NAME}</span>
       </div>
       <div className="flex min-w-0 flex-[1_1_0%] items-center">
+        {/* In-app back and forward (§9.8), besides the browser's own. */}
+        <span className="ml-1 hidden shrink-0 items-center @desktop:flex">
+          <IconButton
+            label="Back"
+            icon={<ArrowLeft />}
+            size="sm"
+            shortcut={shortcutKeys('back')}
+            onClick={() => window.history.back()}
+          />
+          <IconButton
+            label="Forward"
+            icon={<ArrowRight />}
+            size="sm"
+            shortcut={shortcutKeys('forward')}
+            onClick={() => window.history.forward()}
+          />
+        </span>
         <Crumbs />
         <PhoneTitle />
       </div>

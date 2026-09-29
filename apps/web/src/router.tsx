@@ -13,6 +13,7 @@ import { LoginPage } from './auth/LoginPage';
 import { meQuery } from './auth/queries';
 import { SetupPage } from './auth/SetupPage';
 import { safeRedirect } from './lib/redirect';
+import { validateSearchParams } from './search/api';
 import { settingsQuery, treeQuery } from './notes/queries';
 import { RootError } from './RootError';
 import { AccountPage } from './settings/AccountPage';
@@ -112,6 +113,11 @@ const sectionRoute = createRoute({ getParentRoute: parent, path: '/s/$sectionId'
 const pageRoute = createRoute({ getParentRoute: parent, path: '/p/$pageId' });
 const boardRoute = createRoute({ getParentRoute: parent, path: '/b/$boardId' });
 const trashRoute = createRoute({ getParentRoute: parent, path: '/trash' });
+const searchRoute = createRoute({
+  getParentRoute: parent,
+  path: '/search',
+  validateSearch: validateSearchParams,
+});
 
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -181,6 +187,7 @@ const routeTree = rootRoute.addChildren([
       pageRoute,
       boardRoute,
       trashRoute,
+      searchRoute,
     ]),
     settingsRoute.addChildren([
       settingsIndexRoute,

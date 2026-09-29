@@ -1,10 +1,9 @@
-import { COLOR_IDS, type ColorId, type NotebookIcon } from '@memora/shared';
+import { COLOR_IDS, type ColorId, type NotebookIcon, type Place } from '@memora/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
   ArrowDown,
   ArrowUp,
-  Clock,
   Folder,
   FolderInput,
   FolderPlus,
@@ -19,6 +18,7 @@ import {
   SquareKanban,
   SquarePlus,
   Star,
+  StarOff,
   Trash2,
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type HTMLAttributes, type ReactNode } from 'react';
@@ -41,12 +41,14 @@ import { sectionHeading } from '../components/ui/styles';
 import { cn } from '../lib/cn';
 import { dropSpot, startDrag, type DragKind } from '../lib/dnd';
 import { shiftBefore, type NotesIndex } from '../notes/model';
+import { isFavorite, toggleFavorite } from '../notes/places';
 import { saveUiState, useNotesActions, useUiState } from '../notes/queries';
 import { hueStyle, sectionColor } from '../theme/sections';
 import { useCommands } from './commands';
 import { PROJECTS } from './demo';
-import { useCurrent, useGo } from './location';
+import { isNotesLevel, useCurrent, useGo } from './location';
 import { DropIndicator, InlineRename, NotebookTile } from './parts';
+import { FavoritePlaces, RecentPlaces } from './Places';
 import { shortcutKeys } from './shortcuts';
 import { useShell, type RenameWhere } from './store';
 
@@ -233,6 +235,7 @@ export function NavMenu({
           New section group
         </ContextMenuItem>
         <ContextMenuSeparator />
+        <FavoriteItem place={{ type: 'notebook', id: nb.id }} />
         <ContextMenuItem icon={<Pencil />} onSelect={() => commands.editNotebook(nb.id)}>
           Rename, colour and icon…
         </ContextMenuItem>
@@ -307,6 +310,21 @@ export function NavMenu({
   return null;
 }
 
+/** Stars or unstars a section or notebook (§9.9). */
+function FavoriteItem({ place }: { place: Place }) {
+  const queryClient = useQueryClient();
+  const ui = useUiState();
+  const on = isFavorite(ui.favorites ?? [], place);
+  return (
+    <ContextMenuItem
+      icon={on ? <StarOff /> : <Star />}
+      onSelect={() => toggleFavorite(queryClient, ui, place)}
+    >
+      {on ? 'Remove from favourites' : 'Add to favourites'}
+    </ContextMenuItem>
+  );
+}
+
 /** Actions for a section, shared by its navigation row and its tab. */
 export function SectionMenuItems({ sectionId, where }: { sectionId: string; where: RenameWhere }) {
   const { index } = useCurrent();
@@ -334,6 +352,7 @@ export function SectionMenuItems({ sectionId, where }: { sectionId: string; wher
       >
         New page
       </ContextMenuItem>
+      <FavoriteItem place={{ type: 'section', id: section.id }} />
       {!section.isInbox && (
         <ContextMenuItem
           icon={<Pencil />}
@@ -461,12 +480,8 @@ export function Sidebar() {
           </Row>
           <DropIndicator kind="sec" id={index.inbox.id} />
         </div>
-        <Row icon={<Clock />} onClick={soon('Recent pages', 8)}>
-          Recent
-        </Row>
-        <Row icon={<Star />} onClick={soon('Favourites', 8)}>
-          Favourites
-        </Row>
+        <RecentPlaces />
+        <FavoritePlaces />
 
         <Heading addLabel="New notebook" onAdd={commands.newNotebook}>
           Notebooks
@@ -531,7 +546,10 @@ export function Sidebar() {
         />
       </div>
       <div className="shrink-0 border-t border-line px-2 py-1.5">
-        <Row icon={<LayoutTemplate />} onClick={soon('Templates', 8)}>
+        <Row
+          icon={<LayoutTemplate />}
+          onClick={() => useShell.getState().openDialog({ kind: 'templates' })}
+        >
           Templates
         </Row>
         <Row icon={<Trash2 />} onClick={go.trash} current={level === 'trash'}>
@@ -566,12 +584,12 @@ export function Rail() {
         label="Inbox"
         icon={<Inbox />}
         tooltipSide="right"
-        active={level !== 'board' && level !== 'trash' && !notebook}
+        active={isNotesLevel(level) && !notebook}
         onClick={() => go.section(index.inbox.id)}
       />
       <span aria-hidden className="my-1 h-px w-6 shrink-0 bg-line" />
       {index.notebooks.map((nb) => {
-        const on = level !== 'board' && level !== 'trash' && nb.id === notebook?.id;
+        const on = isNotesLevel(level) && nb.id === notebook?.id;
         return (
           <button
             key={nb.id}

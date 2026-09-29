@@ -1,5 +1,13 @@
 import {
+  BUILT_IN_TEMPLATES,
+  MARK_END,
+  MARK_START,
   keysBetween,
+  linkedTitles,
+  parseSearch,
+  renameLinks,
+  tagKey,
+  titleKey,
   pickColor,
   placeKeys,
   richToText,
@@ -11,6 +19,8 @@ import {
   type Section,
   type SectionGroup,
   type Settings,
+  type Tag,
+  type Template,
   type TrashItem,
   type Tree,
   type TreeChanges,
@@ -116,7 +126,14 @@ export class FakeNotes {
     private readonly now: number,
     seed: 'demo' | 'empty' = 'demo',
   ) {
-    this.tree = { inboxId: 'inbox', notebooks: [], groups: [], sections: [], pages: [] };
+    this.tree = {
+      inboxId: 'inbox',
+      notebooks: [],
+      groups: [],
+      sections: [],
+      pages: [],
+      tags: [],
+    };
     this.settings = { ui: {}, editor: {} };
     this.tree.sections.push(this.section('inbox', 'Inbox', 'slate', null, null, 'a0'));
     if (seed === 'demo') this.seedDemo();
@@ -161,6 +178,17 @@ export class FakeNotes {
     }
     if (route === 'POST /trash/restore') return this.restore(body.items as TrashItem[]);
     if (route === 'GET /trash') return this.trashList();
+    if (route === 'GET /search') return this.search(body);
+    if (route === 'GET /templates') return { json: [...BUILT_IN_TEMPLATES, ...this.templates] };
+    if (route === 'POST /templates') return this.createTemplate(body);
+    const tagRoute = path.match(/\/tags\/([^/]+)$/);
+    if (tagRoute && !path.includes('/pages/')) {
+      return method === 'DELETE'
+        ? this.deleteTag(tagRoute[1]!)
+        : this.updateTag(tagRoute[1]!, body);
+    }
+    const templateRoute = path.match(/\/templates\/([^/]+)$/);
+    if (templateRoute) return this.changeTemplate(method, templateRoute[1]!, body);
     if (route === 'POST /trash/restore-to') return this.restoreTo(body);
     if (route === 'POST /trash/delete') return this.deleteForever(body.items as TrashItem[]);
     if (route === 'POST /trash/empty') {
@@ -186,6 +214,10 @@ export class FakeNotes {
       return this.saveContent(id, body, origin);
     }
     if (method === 'GET' && type === 'page' && action === 'versions') return this.listVersions(id);
+    if (method === 'GET' && type === 'page' && action === 'backlinks') return this.backlinks(id);
+    if (method === 'PUT' && type === 'page' && action === 'tags') {
+      return this.setTags(id, body.names as string[]);
+    }
     if (method === 'POST' && type === 'page' && action === 'versions') {
       return this.keepVersion(id, body);
     }
@@ -472,7 +504,130 @@ export class FakeNotes {
     const next: Record<string, unknown> = { ...row, ...fields, updatedAt: this.now };
     if (type === 'page' && next.type === 'markdown')
       next.snippet = snippetOf(this.content.get(id) ?? '');
-    return this.apply({ [list]: [next] });
+    const answer = this.apply({ [list]: [next] });
+    // Renaming a page rewrites the links to it, as the server does.
+    const before = row as { title?: string };
+    if (type === 'page' && typeof fields.title === 'string' && before.title !== fields.title) {
+      const changed: PageMeta[] = [];
+      for (const page of this.tree.pages) {
+        const text = this.content.get(page.id) ?? '';
+        const renamed = renameLinks(page.type, text, before.title ?? '', fields.title);
+        if (renamed !== null) changed.push(this.edit(page.id, renamed));
+      }
+      return { json: { pages: [next, ...changed] } };
+    }
+    return answer;
+  }
+
+  // Search, tags, links and templates (§9.8, §9.9)
+
+  readonly templates: Template[] = [];
+
+  private search(query: Record<string, unknown>): Reply {
+    const parsed = parseSearch(String(query.q ?? ''));
+    const words = [...parsed.words, ...parsed.phrases].map((w) => w.toLowerCase());
+    const tagIds = new Set([
+      ...(query.tagId ? [String(query.tagId)] : []),
+      ...parsed.tags.flatMap((name) =>
+        (this.tree.tags ?? []).filter((t) => tagKey(t.name) === tagKey(name)).map((t) => t.id),
+      ),
+    ]);
+    if (!words.length && !tagIds.size && !query.type) return { json: { hits: [], total: 0 } };
+    const mark = (text: string) =>
+      words.reduce(
+        (acc, w) =>
+          acc.replace(
+            new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
+            (m) => `${MARK_START}${m}${MARK_END}`,
+          ),
+        text,
+      );
+    const hits = this.tree.pages
+      .filter((p) => {
+        const text = `${p.title} ${snippetFor(p.type, this.content.get(p.id) ?? '')}`.toLowerCase();
+        if (!words.every((w) => text.includes(w))) return false;
+        if ([...tagIds].some((t) => !p.tags?.includes(t))) return false;
+        return !query.type || p.type === query.type;
+      })
+      .map((p) => ({
+        id: p.id,
+        title: mark(p.title),
+        snippet: mark(snippetFor(p.type, this.content.get(p.id) ?? '')),
+        sectionId: p.sectionId,
+        type: p.type,
+        tags: p.tags ?? [],
+        updatedAt: p.updatedAt,
+      }));
+    return { json: { hits, total: hits.length } };
+  }
+
+  private backlinks(id: string): Reply {
+    const page = this.tree.pages.find((p) => p.id === id);
+    if (!page) return notFound;
+    const pages = this.tree.pages
+      .filter(
+        (p) =>
+          p.id !== id &&
+          linkedTitles(p.type, this.content.get(p.id) ?? '').some(
+            (t) => titleKey(t) === titleKey(page.title),
+          ),
+      )
+      .map((p) => p.id);
+    return { json: { pages } };
+  }
+
+  private setTags(id: string, names: string[]): Reply {
+    const page = this.tree.pages.find((p) => p.id === id);
+    if (!page) return notFound;
+    const created: Tag[] = [];
+    const ids = names.map((name) => {
+      const known = (this.tree.tags ?? []).find((t) => tagKey(t.name) === tagKey(name));
+      if (known) return known.id;
+      const tag: Tag = { id: this.id('tag'), name: name.trim(), color: null, createdAt: this.now };
+      created.push(tag);
+      return tag.id;
+    });
+    return this.apply({ pages: [{ ...page, tags: [...new Set(ids)].sort() }], tags: created });
+  }
+
+  private updateTag(id: string, body: Record<string, unknown>): Reply {
+    const tag = (this.tree.tags ?? []).find((t) => t.id === id);
+    if (!tag) return notFound;
+    return this.apply({ tags: [{ ...tag, ...(body as Partial<Tag>) }] });
+  }
+
+  private deleteTag(id: string): Reply {
+    const pages = this.tree.pages
+      .filter((p) => p.tags?.includes(id))
+      .map((p) => ({ ...p, tags: p.tags!.filter((t) => t !== id) }));
+    this.apply({ pages });
+    this.tree = { ...this.tree, tags: (this.tree.tags ?? []).filter((t) => t.id !== id) };
+    return { json: { pages } };
+  }
+
+  private createTemplate(body: Record<string, unknown>): Reply {
+    const template: Template = {
+      id: this.id('template'),
+      name: String(body.name),
+      type: body.type as PageType,
+      content: String(body.content),
+      builtIn: false,
+      createdAt: this.now,
+      updatedAt: this.now,
+    };
+    this.templates.push(template);
+    return { status: 201, json: template };
+  }
+
+  private changeTemplate(method: string, id: string, body: Record<string, unknown>): Reply {
+    const at = this.templates.findIndex((t) => t.id === id);
+    if (at < 0) return notFound;
+    if (method === 'DELETE') {
+      this.templates.splice(at, 1);
+      return { status: 204 };
+    }
+    this.templates[at] = { ...this.templates[at]!, ...(body as Partial<Template>) };
+    return { json: this.templates[at] };
   }
 
   private move(type: TrashItem['type'], id: string, body: Record<string, unknown>): Reply {

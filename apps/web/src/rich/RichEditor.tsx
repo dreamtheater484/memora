@@ -15,7 +15,9 @@ import type { RichHost } from './host';
 import { richExtensions } from './schema';
 import { slashItems } from './slashItems';
 import { pageLinks, slashCommands } from './suggestions';
+import { Find } from './find';
 import { FileView, ImageView } from './views';
+import { WikiLinks } from './wikiLinks';
 import '../markdown/markdown.css';
 import './rich.css';
 
@@ -109,6 +111,13 @@ function editorExtensions(bridge: Bridge, extra?: AnyExtension): AnyExtension[] 
     TrailingNode,
     CodeHighlight,
     DragHandle,
+    Find,
+    WikiLinks.configure({
+      exists: (title) => {
+        const wanted = title.trim().toLowerCase();
+        return bridge.pages().some((p) => p.title.trim().toLowerCase() === wanted);
+      },
+    }),
     ...(extra ? [extra] : []),
     slashCommands(() => slashItems(bridge)),
     pageLinks(

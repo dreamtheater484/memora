@@ -17,6 +17,7 @@ import { cn } from '../lib/cn';
 import { resolvedTheme, useTheme } from '../theme/theme';
 import { useFileSrc, usePreviewHost } from './context';
 import { ImageViewer } from './ImageViewer';
+import { PageHoverCard } from './PageCard';
 import { highlight } from './highlight';
 import './markdown.css';
 import { createRenderer, type Renderer } from './renderer';
@@ -323,19 +324,21 @@ function PreviewLink({ node: _node, href = '', children, className, ...props }: 
       );
     }
     return (
-      <a
-        {...props}
-        href={`/p/${page.id}`}
-        className={className}
-        title={heading ? `${page.title} › ${decodeURIComponent(heading)}` : page.title}
-        onClick={(e) => {
-          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-          e.preventDefault();
-          host.openPage(page.id);
-        }}
-      >
-        {children}
-      </a>
+      <PageHoverCard summary={host.summary?.(page.id) ?? null}>
+        <a
+          {...props}
+          href={`/p/${page.id}`}
+          className={className}
+          data-heading={heading ? decodeURIComponent(heading) : undefined}
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+            e.preventDefault();
+            host.openPage(page.id);
+          }}
+        >
+          {children}
+        </a>
+      </PageHoverCard>
     );
   }
   if (href.startsWith(ASSET_SCHEME)) {

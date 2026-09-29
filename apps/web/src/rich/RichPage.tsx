@@ -46,6 +46,10 @@ import { useSettled } from '../lib/useSettled';
 import { PreviewHostContext, type PreviewHost } from '../markdown/context';
 import { OutlineButton } from '../markdown/OutlineButton';
 import { saveEditorSettings, useEditorSettings, useNotes } from '../notes/queries';
+import { summaryOf } from '../notes/summary';
+import { FindBar } from './FindBar';
+import { LinkPreview } from './LinkPreview';
+import { wikiLinksKey } from './wikiLinks';
 import { useGo } from '../shell/location';
 import type { PageDoc } from '../sync/doc';
 import { currentSync } from '../sync/engine';
@@ -88,6 +92,7 @@ export default memo(function RichPage({ page, doc, compact, autoFocus }: RichPag
   const [dialog, setDialog] = useState<DialogState>(null);
   const [tableMenu, setTableMenu] = useState<{ x: number; y: number } | null>(null);
   const [focused, setFocused] = useState(false);
+  const [finding, setFinding] = useState(false);
   const inset = useKeyboardInset();
 
   const pages = useMemo(
@@ -157,10 +162,29 @@ export default memo(function RichPage({ page, doc, compact, autoFocus }: RichPag
   );
 
   const previewHost = useMemo<PreviewHost>(
-    () => ({ findPage, openPage: (id) => go.page(id), localFile }),
-    [findPage, go, localFile],
+    () => ({
+      findPage,
+      openPage: (id) => go.page(id),
+      localFile,
+      summary: (id) => summaryOf(index, id),
+    }),
+    [findPage, go, localFile, index],
   );
   const viewHost = useMemo<RichViewHost>(() => ({ downloadImage }), []);
+  const linkSummary = useCallback(
+    (title: string) => {
+      const target = findPage(title);
+      return target ? summaryOf(index, target.id) : null;
+    },
+    [findPage, index],
+  );
+
+  // Links to pages that are gone (or came) show as such once the pages change.
+  useEffect(() => {
+    if (editor && !editor.isDestroyed) {
+      editor.view.dispatch(editor.state.tr.setMeta(wikiLinksKey, true));
+    }
+  }, [editor, index]);
 
   // Outline and word count, once typing pauses.
   const [version, setVersion] = useState(0);
@@ -221,6 +245,11 @@ export default memo(function RichPage({ page, doc, compact, autoFocus }: RichPag
         addKeyboardShortcuts: () => ({
           'Mod-k': () => {
             setDialog({ kind: 'link' });
+            return true;
+          },
+          // Find and replace (§9.8), rather than the browser's find.
+          'Mod-f': () => {
+            setFinding(true);
             return true;
           },
         }),
@@ -301,27 +330,39 @@ export default memo(function RichPage({ page, doc, compact, autoFocus }: RichPag
       >
         <RichToolbar editor={editor} host={host} end={end} />
       </div>
-      <div
-        data-rich-scroll
-        className="min-h-0 flex-1 overflow-auto [contain:strict]"
-        onContextMenu={openTableMenu}
-      >
+      <div className="relative min-h-0 flex-1">
+        {finding && editor && (
+          <div className="absolute top-2 right-(--page-pad) z-20">
+            <FindBar editor={editor} onClose={() => setFinding(false)} />
+          </div>
+        )}
         <div
-          className={cn('rich-sheet', view !== 'off' && `rich-sheet-${view}`, compact && 'text-sm')}
+          data-rich-scroll
+          className="h-full overflow-auto [contain:strict]"
+          onContextMenu={openTableMenu}
         >
-          <PreviewHostContext.Provider value={previewHost}>
-            <RichViewHostContext.Provider value={viewHost}>
-              <RichEditor
-                doc={doc}
-                label={compact ? 'Page content, second pane' : 'Page content'}
-                settings={settings}
-                host={host}
-                autoFocus={autoFocus}
-                onEditor={setEditor}
-                extra={shortcuts}
-              />
-            </RichViewHostContext.Provider>
-          </PreviewHostContext.Provider>
+          <div
+            className={cn(
+              'rich-sheet',
+              view !== 'off' && `rich-sheet-${view}`,
+              compact && 'text-sm',
+            )}
+          >
+            <PreviewHostContext.Provider value={previewHost}>
+              <RichViewHostContext.Provider value={viewHost}>
+                <RichEditor
+                  doc={doc}
+                  label={compact ? 'Page content, second pane' : 'Page content'}
+                  settings={settings}
+                  host={host}
+                  autoFocus={autoFocus}
+                  onEditor={setEditor}
+                  extra={shortcuts}
+                />
+                <LinkPreview editor={editor} summaryOf={linkSummary} />
+              </RichViewHostContext.Provider>
+            </PreviewHostContext.Provider>
+          </div>
         </div>
       </div>
       {editor && <SelectionMenu editor={editor} host={host} />}

@@ -1,4 +1,4 @@
-import type { Editor, Range } from '@tiptap/core';
+import type { Editor, JSONContent, Range } from '@tiptap/core';
 import {
   Calendar,
   CheckSquare,
@@ -9,6 +9,7 @@ import {
   Heading3,
   ImagePlus,
   Info,
+  LayoutTemplate,
   Link2,
   List,
   ListOrdered,
@@ -20,6 +21,7 @@ import {
   Table,
   TriangleAlert,
 } from 'lucide-react';
+import { contentFor, pickTemplate } from '../templates/templates';
 import { insertFiles } from './files';
 import type { RichHost } from './host';
 import type { MenuItem } from './suggestions';
@@ -177,6 +179,22 @@ export function slashItems(host: RichHost): MenuItem[] {
             }),
           )
           .run(),
+      ),
+    },
+    {
+      title: 'Template',
+      keywords: 'meeting journal todo brief decision',
+      icon: <LayoutTemplate />,
+      run: run((e) =>
+        pickTemplate(async (template) => {
+          const doc = JSON.parse(await contentFor(template, 'rich', '')) as {
+            content?: JSONContent[];
+          };
+          e.chain()
+            .focus()
+            .insertContent(doc.content ?? [])
+            .run();
+        }),
       ),
     },
   ];
