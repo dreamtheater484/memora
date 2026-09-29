@@ -1,4 +1,7 @@
+import { useQuery } from '@tanstack/react-query';
 import { useMemo, type ReactNode } from 'react';
+import { versionsQuery } from '../history/api';
+import { REASON } from '../history/labels';
 import { jumpTo } from '../editor/jumps';
 import { sectionHeading } from '../components/ui/styles';
 import { cn } from '../lib/cn';
@@ -6,9 +9,10 @@ import { useSettled } from '../lib/useSettled';
 import { OutlineList } from '../markdown/OutlineList';
 import { headingsOf, statsOf } from '../markdown/outline';
 import { richOutline } from '../rich/outline';
-import { formatDateTime } from '../lib/time';
+import { formatDateTime, formatRelative } from '../lib/time';
 import { useDocSnapshot, usePageDoc } from '../sync/hooks';
 import { useCurrent } from './location';
+import { useShell } from './store';
 
 function Block({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -23,7 +27,45 @@ const Later = ({ children }: { children: ReactNode }) => (
   <p className="text-xs text-fg-3">{children}</p>
 );
 
-/** Page details on wide screens: information and the outline; links and history as they arrive. */
+/** The latest few versions; the history dialog has them all. */
+function RecentVersions({ pageId }: { pageId: string }) {
+  const versions = useQuery({ ...versionsQuery(pageId), retry: false });
+  const open = (versionId?: string) =>
+    useShell.getState().openDialog({ kind: 'history', pageId, versionId });
+  if (versions.isError) return <Later>The history needs a connection to the server.</Later>;
+  if (!versions.data) return <Later>Loading…</Later>;
+  if (!versions.data.length) return <Later>No versions yet: they’re kept as you edit.</Later>;
+  return (
+    <div className="flex flex-col gap-1">
+      <ul className="-mx-2 flex flex-col gap-px">
+        {versions.data.slice(0, 4).map((v) => (
+          <li key={v.id}>
+            <button
+              type="button"
+              onClick={() => open(v.id)}
+              title={formatDateTime(v.createdAt)}
+              className="flex w-full items-baseline gap-2 rounded-sm px-2 py-1 text-left text-xs text-fg-2 hover:bg-hover"
+            >
+              <span className="min-w-0 flex-1 truncate font-medium text-fg">
+                {v.name ?? REASON[v.reason]}
+              </span>
+              <span className="shrink-0">{formatRelative(v.createdAt)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        onClick={() => open()}
+        className="self-start rounded-sm text-xs font-medium text-accent hover:underline"
+      >
+        {versions.data.length > 4 ? `All ${versions.data.length} versions` : 'Open the history'}
+      </button>
+    </div>
+  );
+}
+
+/** Page details on wide screens: information, the outline and the history; links as they arrive. */
 export function Inspector() {
   const { page, path } = useCurrent();
   const doc = usePageDoc(page?.id ?? null);
@@ -88,7 +130,11 @@ export function Inspector() {
         <Later>Pages and cards that link here arrive in Phase 8.</Later>
       </Block>
       <Block title="Version history">
-        <Later>Versions to compare and restore arrive in Phase 7.</Later>
+        {page ? (
+          <RecentVersions pageId={page.id} />
+        ) : (
+          <Later>Versions to compare and restore appear here.</Later>
+        )}
       </Block>
     </aside>
   );

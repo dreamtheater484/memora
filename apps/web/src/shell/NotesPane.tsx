@@ -13,6 +13,7 @@ import {
   PenLine,
   Plus,
   Repeat,
+  Save,
   Share2,
   Star,
   Tag,
@@ -146,8 +147,21 @@ function PageHead({ page, doc }: { page: PageMeta; doc: PageDoc | null }) {
               <MenuItem icon={<Repeat />} disabled={!doc} onSelect={() => setConverting(true)}>
                 {page.type === 'markdown' ? 'Convert to rich text…' : 'Convert to Markdown…'}
               </MenuItem>
-              <MenuItem icon={<FileClock />} onSelect={soon('Version history', 7)}>
+              <MenuItem
+                icon={<FileClock />}
+                onSelect={() =>
+                  useShell.getState().openDialog({ kind: 'history', pageId: page.id })
+                }
+              >
                 History
+              </MenuItem>
+              <MenuItem
+                icon={<Save />}
+                onSelect={() =>
+                  useShell.getState().openDialog({ kind: 'save-version', pageId: page.id })
+                }
+              >
+                Save version…
               </MenuItem>
               <MenuItem icon={<Share2 />} onSelect={soon('Export', 9)}>
                 Export…

@@ -1,16 +1,16 @@
 import type { Notebook, PageMeta, Section, SectionGroup, UiState } from '@memora/shared';
-import { useNavigate, useParams } from '@tanstack/react-router';
+import { useNavigate, useParams, useRouterState } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import type { NotesIndex, SectionPath } from '../notes/model';
 import { useNotes, useUiState } from '../notes/queries';
 
 /*
  * Where you are comes from the URL: /p/<page>, /s/<section>, /g/<group>, /n/<notebook>,
- * /b/<board>, or / for home. Phones show exactly that level (drill-down navigation); larger
+ * /b/<board>, /trash for the recycle bin, or / for home. Phones show exactly that level (drill-down navigation); larger
  * screens always show a section and a page, the last one you had open there.
  */
 
-export type Level = 'home' | 'notebook' | 'group' | 'section' | 'page' | 'board';
+export type Level = 'home' | 'notebook' | 'group' | 'section' | 'page' | 'board' | 'trash';
 
 export interface Current {
   index: NotesIndex;
@@ -32,6 +32,7 @@ interface Params {
   sectionId?: string;
   pageId?: string;
   boardId?: string;
+  trash?: boolean;
 }
 
 /** The first section in reading order: the notebook's own sections, then each group's. */
@@ -71,6 +72,7 @@ export function resolveCurrent(index: NotesIndex, ui: UiState, params: Params): 
   const remembered = ui.lastSectionId ? index.section.get(ui.lastSectionId) : undefined;
 
   if (params.boardId) return { ...base, level: 'board', boardId: params.boardId };
+  if (params.trash) return { ...base, level: 'trash' };
   if (params.pageId) {
     const page = index.page.get(params.pageId) ?? null;
     if (!page) return { ...withSection('page', null, null), missing: true };
@@ -109,9 +111,10 @@ export function useCurrent(): Current {
   const ui = useUiState();
   const params = useParams({ strict: false }) as Params;
   const { notebookId, groupId, sectionId, pageId, boardId } = params;
+  const trash = useRouterState({ select: (s) => s.location.pathname === '/trash' });
   return useMemo(
-    () => resolveCurrent(index, ui, { notebookId, groupId, sectionId, pageId, boardId }),
-    [index, ui, notebookId, groupId, sectionId, pageId, boardId],
+    () => resolveCurrent(index, ui, { notebookId, groupId, sectionId, pageId, boardId, trash }),
+    [index, ui, notebookId, groupId, sectionId, pageId, boardId, trash],
   );
 }
 
@@ -129,6 +132,7 @@ export function useGo() {
       page: (pageId: string, replace = false) =>
         void navigate({ to: '/p/$pageId', params: { pageId }, replace }),
       board: (boardId: string) => void navigate({ to: '/b/$boardId', params: { boardId } }),
+      trash: () => void navigate({ to: '/trash' }),
     }),
     [navigate],
   );

@@ -1,19 +1,24 @@
 import { COLOR_IDS, NOTEBOOK_ICONS, type ColorId, type NotebookIcon } from '@memora/shared';
-import { Folder, Inbox, Search } from 'lucide-react';
-import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Button, Dialog, DialogContent, Field, Input, Kbd, toast } from '../components/ui';
-import { cn } from '../lib/cn';
-import { fuzzyFilter } from '../lib/fuzzy';
-import { checkGroupMove, type NotesIndex } from '../notes/model';
+import { checkGroupMove } from '../notes/model';
 import { useNotes, useNotesActions } from '../notes/queries';
 import { hueStyle, sectionColor } from '../theme/sections';
 import { useCommands } from './commands';
+import { DestinationPicker } from './DestinationPicker';
+import { destinations } from './destinations';
 import { useGo } from './location';
 import { NOTEBOOK_ICON } from './icons';
 import { EDITOR_KEYS, LIST_KEYS, SHORTCUTS, keysLabel } from './shortcuts';
 import { useShell } from './store';
 
 const close = () => useShell.getState().closeDialog();
+
+// The history is opened now and then: loaded when it is.
+const HistoryDialog = lazy(() => import('../history/HistoryDialog'));
+const SaveVersionDialog = lazy(() =>
+  import('../history/HistoryDialog').then((m) => ({ default: m.SaveVersionDialog })),
+);
 
 /** A group of radio buttons drawn as swatches or tiles. */
 function Choices<T extends string>({
@@ -162,81 +167,11 @@ function NotebookDialog({ notebookId }: { notebookId?: string }) {
   );
 }
 
-interface Destination {
-  id: string;
-  kind: 'notebook' | 'group' | 'section';
-  label: string;
-  path: string;
-  color: ColorId;
-  notebookId: string | null;
-  groupId: string | null;
-}
-
-function destinations(index: NotesIndex, type: 'pages' | 'section' | 'group'): Destination[] {
-  const out: Destination[] = [];
-  if (type === 'pages') {
-    out.push({
-      id: index.inbox.id,
-      kind: 'section',
-      label: 'Inbox',
-      path: '',
-      color: index.inbox.color,
-      notebookId: null,
-      groupId: null,
-    });
-  }
-  for (const nb of index.notebooks) {
-    if (type !== 'pages') {
-      out.push({
-        id: nb.id,
-        kind: 'notebook',
-        label: nb.name,
-        path: '',
-        color: nb.color,
-        notebookId: nb.id,
-        groupId: null,
-      });
-    }
-    const walk = (groupId: string | null, trail: string[]) => {
-      if (type === 'pages') {
-        for (const s of index.sectionsIn(nb.id, groupId)) {
-          out.push({
-            id: s.id,
-            kind: 'section',
-            label: s.name,
-            path: trail.join(' › '),
-            color: s.color,
-            notebookId: nb.id,
-            groupId,
-          });
-        }
-      }
-      for (const g of index.groupsIn(nb.id, groupId)) {
-        if (type !== 'pages') {
-          out.push({
-            id: g.id,
-            kind: 'group',
-            label: g.name,
-            path: trail.join(' › '),
-            color: nb.color,
-            notebookId: nb.id,
-            groupId: g.id,
-          });
-        }
-        walk(g.id, [...trail, g.name]);
-      }
-    };
-    walk(null, [nb.name]);
-  }
-  return out;
-}
-
 function MoveDialog({ type, ids }: { type: 'pages' | 'section' | 'group'; ids: string[] }) {
   const index = useNotes();
   const actions = useNotesActions();
   const commands = useCommands();
   const go = useGo();
-  const [query, setQuery] = useState('');
   const all = useMemo(() => {
     const list = destinations(index, type);
     if (type !== 'group') return list;
@@ -249,10 +184,6 @@ function MoveDialog({ type, ids }: { type: 'pages' | 'section' | 'group'; ids: s
         }),
     );
   }, [index, type, ids]);
-  const shown = useMemo(
-    () => (query.trim() ? fuzzyFilter(all, query, (d) => `${d.label} ${d.path}`) : all),
-    [all, query],
-  );
   const [picked, setPicked] = useState<string | null>(null);
   const target = all.find((d) => d.id === picked) ?? null;
 
@@ -327,63 +258,13 @@ function MoveDialog({ type, ids }: { type: 'pages' | 'section' | 'group'; ids: s
         </>
       }
     >
-      <div className="flex flex-col gap-3">
-        <Input
-          pill
-          icon={<Search />}
-          aria-label="Search destinations"
-          placeholder={type === 'pages' ? 'Search sections' : 'Search notebooks and groups'}
-          value={query}
-          autoFocus
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <div
-          role="radiogroup"
-          aria-label="Destination"
-          className="flex max-h-[45vh] flex-col gap-px overflow-y-auto"
-        >
-          {shown.length === 0 && (
-            <p className="px-2 py-6 text-center text-sm text-fg-3">Nothing matches.</p>
-          )}
-          {shown.map((d) => (
-            <label
-              key={d.id}
-              className={cn(
-                'hue flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-1.5 text-base',
-                picked === d.id
-                  ? 'bg-active font-semibold text-fg shadow-card'
-                  : 'text-fg-2 hover:bg-hover',
-              )}
-              style={hueStyle(d.color)}
-            >
-              <input
-                type="radio"
-                name="destination"
-                value={d.id}
-                checked={picked === d.id}
-                onChange={() => setPicked(d.id)}
-                onDoubleClick={move}
-                className="sr-only"
-              />
-              {d.kind === 'section' && d.label === 'Inbox' && !d.notebookId ? (
-                <Inbox className="size-4 shrink-0 text-fg-3" />
-              ) : d.kind === 'group' ? (
-                <Folder className="size-4 shrink-0 text-fg-3" />
-              ) : d.kind === 'notebook' ? (
-                <span aria-hidden className="size-3 shrink-0 rounded-[4px] bg-sec" />
-              ) : (
-                <span aria-hidden className="size-2.5 shrink-0 rounded-full bg-sec" />
-              )}
-              <span className="min-w-0 truncate">{d.label}</span>
-              {d.path && (
-                <span className="ml-auto min-w-0 truncate text-xs font-normal text-fg-3">
-                  {d.path}
-                </span>
-              )}
-            </label>
-          ))}
-        </div>
-      </div>
+      <DestinationPicker
+        all={all}
+        picked={picked}
+        onPick={setPicked}
+        onChoose={move}
+        placeholder={type === 'pages' ? 'Search sections' : 'Search notebooks and groups'}
+      />
     </DialogContent>
   );
 }
@@ -529,6 +410,12 @@ export function ShellDialogs() {
       {dialog?.kind === 'move' && <MoveDialog type={dialog.type} ids={dialog.ids} />}
       {dialog?.kind === 'quick-note' && <QuickNoteDialog />}
       {dialog?.kind === 'shortcuts' && <ShortcutsDialog />}
+      <Suspense fallback={null}>
+        {dialog?.kind === 'history' && (
+          <HistoryDialog key={dialog.pageId} pageId={dialog.pageId} versionId={dialog.versionId} />
+        )}
+        {dialog?.kind === 'save-version' && <SaveVersionDialog pageId={dialog.pageId} />}
+      </Suspense>
     </Dialog>
   );
 }

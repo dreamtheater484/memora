@@ -2,6 +2,7 @@ import type { UiState } from '@memora/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Columns2,
+  FileClock,
   FilePlus,
   FileText,
   FolderInput,
@@ -16,8 +17,9 @@ import {
   SquareKanban,
   SquarePlus,
   Sun,
+  Trash2,
 } from 'lucide-react';
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, type ReactNode } from 'react';
 import {
   CommandPalette,
   EmptyState,
@@ -50,6 +52,9 @@ import { SyncBanner } from './SyncStatus';
 import { TopBar } from './TopBar';
 
 const panel = 'glass min-h-0 overflow-hidden rounded-xl';
+
+// The recycle bin is opened now and then: loaded when it is.
+const TrashView = lazy(() => import('../history/TrashView'));
 
 function BoardPlaceholder({ boardId }: { boardId: string | null }) {
   const project = PROJECTS.find((p) => p.boards.some((b) => b.id === boardId));
@@ -91,7 +96,12 @@ function BottomNav({ current }: { current: Current }) {
       aria-label="Primary"
       className="relative z-10 flex h-[calc(3.625rem+env(safe-area-inset-bottom))] shrink-0 border-t border-(--glass-edge) bg-panel pb-[env(safe-area-inset-bottom)] [backdrop-filter:var(--glass-filter)] @tablet:hidden"
     >
-      {item('Notes', <Notebook />, current.level !== 'board' && !inbox, go.home)}
+      {item(
+        'Notes',
+        <Notebook />,
+        current.level !== 'board' && current.level !== 'trash' && !inbox,
+        go.home,
+      )}
       {item('Search', <Search />, false, () => setPaletteOpen(true))}
       {item('Boards', <SquareKanban />, current.level === 'board', () =>
         go.board(PROJECTS[0]!.boards[0]!.id),
@@ -229,6 +239,15 @@ function usePaletteItems(current: Current, commands: Commands): PaletteItem[] {
                 hint: shortcutKeys('move'),
                 onSelect: () => commands.movePages(),
               },
+              {
+                id: 'cmd:history',
+                title: 'Page history',
+                group: 'Commands',
+                icon: <FileClock />,
+                keywords: 'versions restore',
+                onSelect: () =>
+                  useShell.getState().openDialog({ kind: 'history', pageId: current.page!.id }),
+              },
             ]
           : []),
       );
@@ -261,6 +280,14 @@ function usePaletteItems(current: Current, commands: Commands): PaletteItem[] {
             },
           ]
         : []),
+      {
+        id: 'cmd:trash',
+        title: 'Recycle bin',
+        group: 'Commands',
+        icon: <Trash2 />,
+        keywords: 'deleted restore trash',
+        onSelect: go.trash,
+      },
       {
         id: 'cmd:shortcuts',
         title: 'Keyboard shortcuts',
@@ -358,7 +385,7 @@ export function AppShell() {
   }, [accent]);
 
   // Remember the open section, and the open page of each section, for the next visit.
-  const sectionId = level === 'board' ? undefined : section?.id;
+  const sectionId = level === 'board' || level === 'trash' ? undefined : section?.id;
   const pageId = page?.id;
   useEffect(() => {
     if (!sectionId) return;
@@ -405,12 +432,18 @@ export function AppShell() {
     'next-section': () => commands.stepSection(1),
   });
 
-  const notes = level !== 'board';
+  const notes = level !== 'board' && level !== 'trash';
   const phone = !tablet;
   const left = ui.pageListSide === 'left';
 
   let main: ReactNode;
-  if (!notes) main = <BoardPlaceholder boardId={current.boardId} />;
+  if (level === 'trash') {
+    main = (
+      <Suspense fallback={null}>
+        <TrashView />
+      </Suspense>
+    );
+  } else if (!notes) main = <BoardPlaceholder boardId={current.boardId} />;
   else if (phone && !current.missing && level === 'home') main = <NotebookList />;
   else if (phone && !current.missing && (level === 'notebook' || level === 'group')) {
     main = <ContainerList current={current} />;
