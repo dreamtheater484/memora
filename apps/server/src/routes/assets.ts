@@ -1,5 +1,13 @@
-import { assetUploadQuerySchema, idSchema, isInlineImage } from '@memora/shared';
+import {
+  assetUploadQuerySchema,
+  fetchAssetSchema,
+  idSchema,
+  isInlineImage,
+  uuidv7,
+  type FetchFailedDetails,
+} from '@memora/shared';
 import type { FastifyInstance } from 'fastify';
+import { FetchError, Limiter, fetchImage } from '../assets/fetch';
 import { ApiError, parse } from '../errors';
 import { authOf, type RouteDeps } from './auth';
 
@@ -11,17 +19,42 @@ function disposition(kind: 'inline' | 'attachment', name: string): string {
   return `${kind}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
 
+/** Remote images downloaded at once, across all users: each is held in memory until stored. */
+const MAX_DOWNLOADS = 2;
+
 /**
  * Files in pages (§9.5, §10): `PUT /assets/:id?name=…` with the file as the body, and
  * `GET /assets/:id` to load it. Only real images are shown inline; everything else is a
- * download, sandboxed, so a file can never run as a page of Memora's.
+ * download, sandboxed, so a file can never run as a page of Memora's. `POST /assets/fetch`
+ * downloads an image from the web, for images in pasted HTML.
  */
 export async function assetRoutes(
   app: FastifyInstance,
-  { assets, config }: RouteDeps,
+  { assets, config, fetchPolicy, now }: RouteDeps,
 ): Promise<void> {
   const access = { access: 'user' as const };
   const limit = config.maxUploadBytes;
+  const downloads = new Limiter(MAX_DOWNLOADS);
+
+  app.post('/api/v1/assets/fetch', { config: access }, async (request, reply) => {
+    const { user } = authOf(request);
+    const { url } = parse(fetchAssetSchema, request.body);
+    const policy = { ...fetchPolicy, maxBytes: Math.min(fetchPolicy.maxBytes, limit) };
+    const fetched = await downloads
+      .run(() => fetchImage(url, policy))
+      .catch((error: unknown) => {
+        if (!(error instanceof FetchError)) throw error;
+        throw new ApiError(422, 'fetch_failed', error.message, {
+          reason: error.reason,
+        } satisfies FetchFailedDetails);
+      });
+    const { meta } = assets.put(user.id, uuidv7(now()), {
+      name: fetched.name,
+      claimedType: fetched.image.mime,
+      data: fetched.data,
+    });
+    return reply.code(201).send(meta);
+  });
 
   await app.register(async (scope) => {
     // The body is the file as it is, whatever its type (JSON and text files included).

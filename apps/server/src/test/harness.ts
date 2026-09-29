@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance, InjectOptions, LightMyRequestResponse } from 'fastify';
 import type { WebSocket } from 'ws';
-import { buildApp } from '../app';
+import { buildApp, type AppOptions } from '../app';
 import { loadConfig } from '../config';
 import { openDatabase, type SqliteDatabase } from '../db/client';
 import { runMigrations } from '../db/migrate';
@@ -32,7 +32,10 @@ export interface TestApp {
   close(): Promise<void>;
 }
 
-export async function createTestApp(env: Record<string, string> = {}): Promise<TestApp> {
+export async function createTestApp(
+  env: Record<string, string> = {},
+  options: Pick<AppOptions, 'fetchPolicy'> = {},
+): Promise<TestApp> {
   const dir = mkdtempSync(join(tmpdir(), 'memora-test-'));
   const config = loadConfig({ MEMORA_DATA_DIR: dir, MEMORA_WEB_DIR: join(dir, 'web'), ...env });
   const db = openDatabase(config.databaseFile);
@@ -46,6 +49,7 @@ export async function createTestApp(env: Record<string, string> = {}): Promise<T
     now: clock.now,
     // Cheap hashing keeps the tests fast; the real parameters are tested in password.test.ts.
     hashParams: { memoryCost: 256, timeCost: 1, parallelism: 1 },
+    ...options,
   });
   await app.ready();
 

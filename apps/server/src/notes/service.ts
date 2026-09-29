@@ -7,10 +7,12 @@ import {
   childrenByParent,
   depthOf,
   heightOf,
+  isRichContent,
   isWithin,
   markdownToText,
   pickColor,
   placeKeys,
+  richToText,
   snippetOf,
   subtreeOf,
   uuidv7,
@@ -28,6 +30,7 @@ import {
   type TrashItem,
   type Tree,
   type TreeChanges,
+  type convertPageSchema,
   type createGroupSchema,
   type createNotebookSchema,
   type createPageSchema,
@@ -158,7 +161,14 @@ const toVersionMeta = (r: PageVersionRow): PageVersionMeta => ({
 });
 
 const textOf = (type: PageRow['type'], content: string) =>
-  type === 'markdown' ? markdownToText(content) : '';
+  type === 'markdown' ? markdownToText(content) : richToText(content);
+
+/** Rich pages hold a document (§8.3): anything else would leave the page unreadable. */
+function checkContent(type: PageRow['type'], content: string): void {
+  if (type === 'rich' && !isRichContent(content)) {
+    throw new ApiError(400, 'invalid_content', 'This isn’t a rich text document.');
+  }
+}
 
 /** Splits long id lists, well under SQLite's limit on bound parameters. */
 const chunks = <T>(items: readonly T[], size = 500): T[][] =>
@@ -689,6 +699,7 @@ export class NotesService {
           type: row.type,
         } satisfies ContentConflict);
       }
+      checkContent(row.type, input.content);
       // The versioning hook (§9.7): keep what this save replaces, now and then, and always
       // when a conflict is being settled.
       const now = this.now();
@@ -701,6 +712,50 @@ export class NotesService {
         .set({
           content: input.content,
           contentText: textOf(row.type, input.content),
+          revision: row.revision + 1,
+          updatedAt: now,
+        })
+        .where(eq(pages.id, row.id))
+        .returning()
+        .get()!;
+      return {
+        revision: saved.revision,
+        pages: [toPageMeta({ ...saved, text: saved.contentText })],
+      };
+    });
+  }
+
+  /**
+   * Turns a page into the other type (§9.4), with the content the browser converted. The
+   * content it replaces is always kept as a version first, so a conversion can be undone.
+   */
+  convertPage(
+    owner: string,
+    id: string,
+    input: In<typeof convertPageSchema>,
+    deviceLabel: string,
+  ): ContentSaved {
+    return this.tx(() => {
+      const row = this.livePage(owner, id);
+      if (row.type === input.type) {
+        throw new ApiError(409, 'conflict', 'The page already has this type.');
+      }
+      if (input.baseRevision !== row.revision) {
+        throw new ApiError(409, 'revision_conflict', 'This page was changed elsewhere.', {
+          revision: row.revision,
+          content: row.content,
+          type: row.type,
+        } satisfies ContentConflict);
+      }
+      checkContent(input.type, input.content);
+      const now = this.now();
+      this.keepVersion(row, 'conversion', deviceLabel, now);
+      const saved = this.orm
+        .update(pages)
+        .set({
+          type: input.type,
+          content: input.content,
+          contentText: textOf(input.type, input.content),
           revision: row.revision + 1,
           updatedAt: now,
         })
@@ -871,6 +926,7 @@ export class NotesService {
         if (existing) throw new ApiError(409, 'conflict', 'That id is taken.');
       }
       this.liveSection(owner, sectionId);
+      checkContent(type, content);
       const nodes = this.pageNodes(owner, [sectionId]);
       const byId = new Map(nodes.map((n) => [n.id, n]));
       if (parentPageId !== null && !byId.has(parentPageId)) {

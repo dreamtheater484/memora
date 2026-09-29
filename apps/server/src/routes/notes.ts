@@ -2,6 +2,7 @@ import {
   createGroupSchema,
   createNotebookSchema,
   MAX_CONTENT,
+  convertPageSchema,
   createPageSchema,
   createSectionSchema,
   createVersionSchema,
@@ -147,6 +148,24 @@ export function notesRoutes(app: FastifyInstance, { notes, repos, events }: Rout
           origin: deviceOf(request),
         });
       }
+      return saved;
+    },
+  );
+
+  // Conversion (§9.4): other browsers take the page's new type and content from the event.
+  app.post<Id>(
+    '/api/v1/pages/:id/convert',
+    { config, bodyLimit: MAX_CONTENT * 4 },
+    async (request) => {
+      const { user, session } = authOf(request);
+      const body = parse(convertPageSchema, request.body);
+      const saved = notes.convertPage(user.id, request.params.id, body, session.deviceLabel);
+      events.publish(user.id, {
+        type: 'page.updated',
+        page: saved.pages[0],
+        revision: saved.revision,
+        origin: deviceOf(request),
+      });
       return saved;
     },
   );

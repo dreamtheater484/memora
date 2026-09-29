@@ -13,6 +13,7 @@ import { requestMeta } from '../auth/plugin';
 import { toCurrentUser, type AuthContext, type AuthService } from '../auth/service';
 import { csrfTokenFor } from '../auth/tokens';
 import type { Config } from '../config';
+import type { FetchPolicy } from '../assets/fetch';
 import type { AssetsService } from '../assets/service';
 import type { SqliteDatabase } from '../db/client';
 import type { EventHub } from '../events/hub';
@@ -23,6 +24,8 @@ import type { Repos } from '../repo';
 export interface RouteDeps {
   db: SqliteDatabase;
   assets: AssetsService;
+  /** How remote images are downloaded (tests allow their local server). */
+  fetchPolicy: FetchPolicy;
   repos: Repos;
   auth: AuthService;
   notes: NotesService;
