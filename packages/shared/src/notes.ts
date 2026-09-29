@@ -311,9 +311,46 @@ export const uiStateSchema = z
   .partial();
 export type UiState = z.infer<typeof uiStateSchema>;
 
+/** How the Markdown editor behaves (§9.16, Editing); unset fields take the defaults below. */
+export const editorSettingsSchema = z
+  .object({
+    /** The view a Markdown page opens in until it has one of its own. */
+    viewMode: z.enum(VIEW_MODES),
+    lineNumbers: z.boolean(),
+    wordWrap: z.boolean(),
+    /** The browser's own spellcheck. */
+    spellcheck: z.boolean(),
+    tabSize: z.number().int().min(1).max(8),
+    whitespace: z.boolean(),
+    /** Small previews of images under their `![]()` lines in the source. */
+    imageThumbnails: z.boolean(),
+    /** Tables line up while you type in them. */
+    formatTables: z.boolean(),
+    /** Every table on the page lines up when you press Ctrl/Cmd+S. */
+    formatTablesOnSave: z.boolean(),
+  })
+  .partial();
+export type EditorSettings = z.infer<typeof editorSettingsSchema>;
+
+export const DEFAULT_EDITOR_SETTINGS: Required<EditorSettings> = {
+  viewMode: 'split',
+  lineNumbers: false,
+  wordWrap: true,
+  spellcheck: true,
+  tabSize: 4,
+  whitespace: false,
+  imageThumbnails: true,
+  formatTables: true,
+  formatTablesOnSave: false,
+};
+
 export interface Settings {
   ui: UiState;
+  editor: EditorSettings;
 }
 
-export const updateSettingsSchema = z.object({ ui: uiStateSchema });
+export const updateSettingsSchema = z
+  .object({ ui: uiStateSchema, editor: editorSettingsSchema })
+  .partial()
+  .refine((v) => Object.keys(v).length > 0, 'Nothing to change.');
 export type UpdateSettingsRequest = z.input<typeof updateSettingsSchema>;
