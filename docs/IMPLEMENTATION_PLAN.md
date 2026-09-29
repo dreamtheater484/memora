@@ -957,7 +957,7 @@ All endpoints sit under `/api/v1`. They use JSON validated by zod, return errors
 - A `HEALTHCHECK` is built in, calling `/api/health`, so compose files don't need to define one.
 - Built for `linux/amd64` and `linux/arm64`.
 - Tags: `:1.2.3`, `:1.2`, `:1`, `:latest`, plus `:edge` built from the main branch for testing.
-- Image size (measured in Phase 0): about 220 MB unpacked, about 84 MB compressed download.
+- Image size: about 220 MB unpacked and 84 MB compressed in Phase 0; about 300 MB unpacked in Phase 2.
 
 ### 12.2 Compose example (`docker/docker-compose.example.yml`)
 
@@ -989,25 +989,26 @@ services:
 
 No secrets are passed as plain environment variables. Anything secret uses a `*_FILE` variable that points to a Docker secret or a file on the host.
 
-| Variable                      | Default         | Purpose                                                                                                                                          |
-| ----------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `PORT`                        | `3000`          | Port inside the container                                                                                                                        |
-| `PUID` / `PGID`               | `1000` / `1000` | User and group the app runs as. Must match the owner of the data folder.                                                                         |
-| `TZ`                          | `Etc/UTC`       | Timezone for schedules                                                                                                                           |
-| `MEMORA_BASE_URL`             | —               | Public URL. Used for origin checks, secure cookies and links.                                                                                    |
-| `MEMORA_TRUST_PROXY`          | `private`       | Which reverse proxies' `X-Forwarded-*` headers to trust (`private` means any on the private network, `false` means none, or a list of IPs/CIDRs) |
-| `MEMORA_DATA_DIR`             | `/data`         | Database, secrets, temporary files                                                                                                               |
-| `MEMORA_BACKUP_DIR`           | `/data/backups` | Where backups are written                                                                                                                        |
-| `MEMORA_BACKUP_SCHEDULE`      | `0 3 * * *`     | Cron schedule for backups                                                                                                                        |
-| `MEMORA_BACKUP_RETENTION`     | `7d,4w,12m`     | How many daily, weekly and monthly backups to keep                                                                                               |
-| `MEMORA_BACKUP_PASSWORD_FILE` | —               | Turns on encrypted backups                                                                                                                       |
-| `MEMORA_TRASH_RETENTION_DAYS` | `30`            | Days before the recycle bin is purged automatically                                                                                              |
-| `MEMORA_MAX_UPLOAD_MB`        | `25`            | Maximum upload size                                                                                                                              |
-| `MEMORA_SESSION_TTL_DAYS`     | `30`            | Session length with "remember this device"                                                                                                       |
-| `MEMORA_GOTENBERG_URL`        | —               | Turns on one-click PDF export                                                                                                                    |
-| `MEMORA_DB_KEY_FILE`          | —               | (Phase 12) Turns on database encryption at rest                                                                                                  |
-| `MEMORA_LOG_LEVEL`            | `info`          | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                                                   |
-| `MEMORA_MAX_HEAP_MB`          | `256`           | Node.js heap cap in MB. Keeps RAM use predictable.                                                                                               |
+| Variable                      | Default                          | Purpose                                                                                                                                                   |
+| ----------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                        | `3000`                           | Port inside the container                                                                                                                                 |
+| `PUID` / `PGID`               | `1000` / `1000`                  | User and group the app runs as. Must match the owner of the data folder.                                                                                  |
+| `TZ`                          | `Etc/UTC`                        | Timezone for schedules                                                                                                                                    |
+| `MEMORA_BASE_URL`             | —                                | Public URL. Used for origin checks, secure cookies and links.                                                                                             |
+| `MEMORA_TRUST_PROXY`          | `loopback,linklocal,uniquelocal` | Which reverse proxies' `X-Forwarded-*` headers to trust (the default means this machine and private networks; `false` means none; or a list of IPs/CIDRs) |
+| `MEMORA_DATA_DIR`             | `/data`                          | Database, secrets, temporary files                                                                                                                        |
+| `MEMORA_BACKUP_DIR`           | `/data/backups`                  | Where backups are written                                                                                                                                 |
+| `MEMORA_BACKUP_SCHEDULE`      | `0 3 * * *`                      | Cron schedule for backups                                                                                                                                 |
+| `MEMORA_BACKUP_RETENTION`     | `7d,4w,12m`                      | How many daily, weekly and monthly backups to keep                                                                                                        |
+| `MEMORA_BACKUP_PASSWORD_FILE` | —                                | Turns on encrypted backups                                                                                                                                |
+| `MEMORA_TRASH_RETENTION_DAYS` | `30`                             | Days before the recycle bin is purged automatically                                                                                                       |
+| `MEMORA_MAX_UPLOAD_MB`        | `25`                             | Maximum upload size                                                                                                                                       |
+| `MEMORA_SESSION_DAYS`         | `30`                             | Idle session length with "remember this device"                                                                                                           |
+| `MEMORA_SESSION_HOURS`        | `12`                             | Idle session length without it                                                                                                                            |
+| `MEMORA_GOTENBERG_URL`        | —                                | Turns on one-click PDF export                                                                                                                             |
+| `MEMORA_DB_KEY_FILE`          | —                                | (Phase 12) Turns on database encryption at rest                                                                                                           |
+| `MEMORA_LOG_LEVEL`            | `info`                           | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                                                            |
+| `MEMORA_MAX_HEAP_MB`          | `256`                            | Node.js heap cap in MB. Keeps RAM use predictable.                                                                                                        |
 
 ### 12.4 Synology specifics (DSM 7.2+, Container Manager)
 
@@ -1162,24 +1163,24 @@ Long lists (pages, search results, cards) render only what is visible on screen.
 
 ### Phase 2 — Authentication & users · M
 
-- [ ] `users`, `sessions`, `audit_log`, `recovery_codes` tables; Argon2id
-- [ ] First-run setup code in the logs, and the setup wizard
-- [ ] Login and logout, "remember this device", sliding session renewal, expiry
-- [ ] CSRF protection, `Origin` checks, rate limiting with growing delays
-- [ ] Account page: password, display name, sessions list with revoke
-- [ ] Admin page: user list, create, disable, delete, reset password (forced change), roles
-- [ ] `memora-admin` command-line tool (reset-password, list-users)
-- [ ] Owner-scoped repository layer, with cross-user access tests as a CI gate
-- [ ] CI publishes an `:edge` image to GHCR (amd64 primary, plus arm64)
-- [ ] Local certificate authority and certificate for the NAS; HTTPS through the Synology reverse proxy; root certificate installed on Windows 11, Ubuntu, Android and iOS (documented step by step)
-- [ ] **First deployment to the Synology NAS** using the draft `SETUP.md`, reached over the LAN and over WireGuard
+- [x] `users`, `sessions`, `audit_log`, `recovery_codes` tables; Argon2id
+- [x] First-run setup code in the logs, and the setup wizard
+- [x] Login and logout, "remember this device", sliding session renewal, expiry
+- [x] CSRF protection, `Origin` checks, rate limiting with growing delays
+- [x] Account page: password, display name, sessions list with revoke
+- [x] Admin page: user list, create, disable, delete, reset password (forced change), roles. _Plus the audit log viewer._
+- [x] `memora-admin` command-line tool (reset-password, list-users). _Plus `hash-benchmark`, to check the password hashing cost on the NAS._
+- [x] Owner-scoped repository layer, with cross-user access tests as a CI gate. _The gate lists every API route and fails for one without a rule; the notes tables join it in Phase 3._
+- [x] CI publishes an `:edge` image to GHCR (amd64 primary, plus arm64). _Built natively on both architectures after CI passes on `main`. Still to do by you: make the package public, or log in on the NAS with a read-only token._
+- [ ] Local certificate authority and certificate for the NAS; HTTPS through the Synology reverse proxy; root certificate installed on Windows 11, Ubuntu, Android and iOS (documented step by step). _The guide is in `SETUP.md` and the OpenSSL commands are tested. Still to do by you on the NAS and devices._
+- [ ] **First deployment to the Synology NAS** using the draft `SETUP.md`, reached over the LAN and over WireGuard. _Still to do by you, with the checklist in `SETUP.md`._
 
 **Acceptance:**
 
-- The setup code cannot be skipped.
-- Brute-force attempts slow down.
-- A second test user cannot reach the first user's data.
-- The app runs on the NAS over HTTPS.
+- The setup code cannot be skipped. _Covered by server tests and the Docker smoke test._
+- Brute-force attempts slow down. _Covered by server tests: per username, per address and for the setup code._
+- A second test user cannot reach the first user's data. _Covered for sessions and accounts by the access tests; notes follow in Phase 3._
+- The app runs on the NAS over HTTPS. _Waiting for the first deployment._
 
 ### Phase 3 — Notebook organisation · L
 

@@ -13,10 +13,15 @@ Memora is in early development (pre-1.0). Only the latest version on the `main` 
 The full description is in [section 11 of the implementation plan](IMPLEMENTATION_PLAN.md#11-security). The main points:
 
 - **Self-hosted, no third parties.** Memora makes no telemetry, CDN or font requests at runtime.
-- **Accounts** (from Phase 2):
-  - Argon2id password hashing.
-  - Revocable server-side sessions in `HttpOnly`/`Secure` cookies.
-  - CSRF protection and login rate limiting.
+- **Accounts:**
+  - Passwords are hashed with Argon2id (19 MiB, 8 passes). At least 12 characters; common passwords and ones containing the username are refused.
+  - The first administrator can only be created with a one-time setup code printed in the server log.
+  - Sessions live on the server and can be revoked from **Settings → Account → Devices**. The browser holds a random token in an `HttpOnly`, `SameSite=Lax` cookie (`__Host-` and `Secure` over HTTPS); the database stores only its SHA-256 hash. Sessions expire after 12 hours of inactivity, or 30 days with "remember this device", and after 90 days in any case.
+  - Every change needs a CSRF token tied to the session, and must come from Memora's own origin (`Origin` / `Sec-Fetch-Site` checks).
+  - Failed logins and setup attempts slow down per username and per address, doubling up to 15 minutes. The API also limits requests per address.
+  - Every API route declares who may call it (anyone, signed-in users, or administrators). The server refuses to start if one doesn't, and tests check every route. A user asking for someone else's data gets "not found".
+  - Logins, failed logins and account changes go to an audit log, kept for a year.
+  - Locked out: `memora-admin reset-password` inside the container.
   - Optional 2FA (Phase 12).
 - **HTTPS is required** for real use. Browsers only enable offline mode, secure cookies and clipboard access over HTTPS. See [SETUP.md](SETUP.md).
 - **Container hardening:**
