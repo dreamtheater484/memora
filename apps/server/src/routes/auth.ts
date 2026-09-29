@@ -14,12 +14,14 @@ import { toCurrentUser, type AuthContext, type AuthService } from '../auth/servi
 import { csrfTokenFor } from '../auth/tokens';
 import type { SqliteDatabase } from '../db/client';
 import { notFound, parse } from '../errors';
+import type { NotesService } from '../notes/service';
 import type { Repos } from '../repo';
 
 export interface RouteDeps {
   db: SqliteDatabase;
   repos: Repos;
   auth: AuthService;
+  notes: NotesService;
   hasher: PasswordHasher;
   now: () => number;
 }

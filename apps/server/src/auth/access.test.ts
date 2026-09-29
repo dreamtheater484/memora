@@ -16,7 +16,28 @@ interface World {
   /** Regular user. */
   bob: Client;
   aliceSessionId: string;
+  /** Alice's notes, which Bob must not reach; and a section of Bob's own to aim at. */
+  notes: {
+    notebookId: string;
+    groupId: string;
+    sectionId: string;
+    pageId: string;
+    deletedPageId: string;
+    bobSectionId: string;
+    /** Alice's tree before Bob's attempts: it must stay exactly like this. */
+    tree: unknown;
+  };
 }
+
+/** Bob aims at one of Alice's notes; her tree must be unchanged afterwards. */
+const probe =
+  (url: (n: World['notes']) => string, body?: (n: World['notes']) => unknown) => (w: World) => ({
+    url: url(w.notes),
+    body: body?.(w.notes),
+    async intact() {
+      expect((await w.alice.get('/api/v1/tree')).json()).toEqual(w.notes.tree);
+    },
+  });
 
 interface RouteRule {
   access: Access;
@@ -62,6 +83,142 @@ const RULES: Record<string, RouteRule> = {
   'POST /api/v1/admin/users/:id/reset-password': { access: 'admin' },
   'DELETE /api/v1/admin/users/:id': { access: 'admin' },
   'GET /api/v1/admin/audit': { access: 'admin' },
+  'GET /api/v1/tree': {
+    access: 'user',
+    async ownListOnly(w) {
+      const tree = (await w.bob.get('/api/v1/tree')).json();
+      const ids = [...tree.notebooks, ...tree.groups, ...tree.sections, ...tree.pages].map(
+        (x: { id: string }) => x.id,
+      );
+      const { notebookId, groupId, sectionId, pageId } = w.notes;
+      for (const id of [notebookId, groupId, sectionId, pageId]) expect(ids).not.toContain(id);
+      expect(tree.inboxId).toBe(w.notes.bobSectionId);
+    },
+  },
+  'POST /api/v1/notebooks': { access: 'user' },
+  'PATCH /api/v1/notebooks/:id': {
+    access: 'user',
+    foreign: probe(
+      (n) => `/api/v1/notebooks/${n.notebookId}`,
+      () => ({ name: 'Mine now' }),
+    ),
+  },
+  'POST /api/v1/notebooks/:id/move': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/notebooks/${n.notebookId}/move`),
+  },
+  'DELETE /api/v1/notebooks/:id': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/notebooks/${n.notebookId}`),
+  },
+  'POST /api/v1/groups': {
+    access: 'user',
+    foreign: probe(
+      () => '/api/v1/groups',
+      (n) => ({ notebookId: n.notebookId, name: 'Planted' }),
+    ),
+  },
+  'PATCH /api/v1/groups/:id': {
+    access: 'user',
+    foreign: probe(
+      (n) => `/api/v1/groups/${n.groupId}`,
+      () => ({ name: 'Mine now' }),
+    ),
+  },
+  'POST /api/v1/groups/:id/move': {
+    access: 'user',
+    foreign: probe(
+      (n) => `/api/v1/groups/${n.groupId}/move`,
+      (n) => ({ notebookId: n.notebookId }),
+    ),
+  },
+  'DELETE /api/v1/groups/:id': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/groups/${n.groupId}`),
+  },
+  'POST /api/v1/sections': {
+    access: 'user',
+    foreign: probe(
+      () => '/api/v1/sections',
+      (n) => ({ notebookId: n.notebookId, name: 'Planted', color: 'blue' }),
+    ),
+  },
+  'PATCH /api/v1/sections/:id': {
+    access: 'user',
+    foreign: probe(
+      (n) => `/api/v1/sections/${n.sectionId}`,
+      () => ({ name: 'Mine now' }),
+    ),
+  },
+  'POST /api/v1/sections/:id/move': {
+    access: 'user',
+    foreign: probe(
+      (n) => `/api/v1/sections/${n.sectionId}/move`,
+      (n) => ({ notebookId: n.notebookId }),
+    ),
+  },
+  'DELETE /api/v1/sections/:id': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/sections/${n.sectionId}`),
+  },
+  'POST /api/v1/pages': {
+    access: 'user',
+    foreign: probe(
+      () => '/api/v1/pages',
+      (n) => ({ sectionId: n.sectionId, title: 'Planted' }),
+    ),
+  },
+  'GET /api/v1/pages/:id': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/pages/${n.pageId}`),
+  },
+  'PATCH /api/v1/pages/:id': {
+    access: 'user',
+    foreign: probe(
+      (n) => `/api/v1/pages/${n.pageId}`,
+      () => ({ title: 'Mine now' }),
+    ),
+  },
+  'POST /api/v1/pages/move': {
+    access: 'user',
+    // Alice's page into Bob's own section.
+    foreign: probe(
+      () => '/api/v1/pages/move',
+      (n) => ({ ids: [n.pageId], sectionId: n.bobSectionId }),
+    ),
+  },
+  'POST /api/v1/pages/copy': {
+    access: 'user',
+    foreign: probe(
+      () => '/api/v1/pages/copy',
+      (n) => ({ ids: [n.pageId], sectionId: n.bobSectionId }),
+    ),
+  },
+  'POST /api/v1/pages/:id/duplicate': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/pages/${n.pageId}/duplicate`),
+  },
+  'POST /api/v1/pages/delete': {
+    access: 'user',
+    foreign: probe(
+      () => '/api/v1/pages/delete',
+      (n) => ({ ids: [n.pageId] }),
+    ),
+  },
+  'POST /api/v1/trash/restore': {
+    access: 'user',
+    foreign: probe(
+      () => '/api/v1/trash/restore',
+      (n) => ({ items: [{ type: 'page', id: n.deletedPageId }] }),
+    ),
+  },
+  'GET /api/v1/settings': {
+    access: 'user',
+    async ownListOnly(w) {
+      expect((await w.bob.get('/api/v1/settings')).json()).toEqual({ ui: {} });
+    },
+  },
+  'PATCH /api/v1/settings': { access: 'user' },
 };
 
 let w: World;
@@ -77,7 +234,30 @@ beforeAll(async () => {
     newPassword: STRONG_PASSWORD,
   });
   const sessions = (await alice.get('/api/v1/auth/sessions')).json();
-  w = { t, alice, bob, aliceSessionId: sessions[0].id };
+
+  const nb = (await alice.post('/api/v1/notebooks', { name: 'Private', color: 'blue' })).json();
+  const notebookId = nb.notebooks[0].id;
+  const sectionId = nb.sections[0].id;
+  const group = (await alice.post('/api/v1/groups', { notebookId, name: 'Group' })).json();
+  const page = (await alice.post('/api/v1/pages', { sectionId, title: 'Diary' })).json();
+  const gone = (await alice.post('/api/v1/pages', { sectionId, title: 'Gone' })).json();
+  await alice.post('/api/v1/pages/delete', { ids: [gone.pages[0].id] });
+  await alice.patch('/api/v1/settings', { ui: { pageListSide: 'left' } });
+  w = {
+    t,
+    alice,
+    bob,
+    aliceSessionId: sessions[0].id,
+    notes: {
+      notebookId,
+      groupId: group.groups[0].id,
+      sectionId,
+      pageId: page.pages[0].id,
+      deletedPageId: gone.pages[0].id,
+      bobSectionId: (await bob.get('/api/v1/tree')).json().inboxId,
+      tree: (await alice.get('/api/v1/tree')).json(),
+    },
+  };
 });
 
 afterAll(async () => {

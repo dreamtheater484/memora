@@ -9,9 +9,11 @@ import { AuthService } from './auth/service';
 import type { Config } from './config';
 import type { SqliteDatabase } from './db/client';
 import { ApiError } from './errors';
+import { NotesService } from './notes/service';
 import { createOrm, createRepos } from './repo';
 import { adminRoutes } from './routes/admin';
 import { authRoutes, type RouteDeps } from './routes/auth';
+import { notesRoutes } from './routes/notes';
 
 export interface AppOptions {
   config: Config;
@@ -71,10 +73,12 @@ export async function buildApp({
     bodyLimit: 1024 * 1024,
   });
 
-  const repos = createRepos(createOrm(db), now);
+  const orm = createOrm(db);
+  const repos = createRepos(orm, now);
   const hasher = new PasswordHasher(hashParams);
   const auth = new AuthService(db, repos, hasher, config, now);
-  const deps: RouteDeps = { db, repos, auth, hasher, now };
+  const notes = new NotesService(db, orm, now);
+  const deps: RouteDeps = { db, repos, auth, notes, hasher, now };
   app.decorate('authService', auth);
 
   app.setErrorHandler((error, request, reply) => {
@@ -115,6 +119,7 @@ export async function buildApp({
 
   authRoutes(app, deps);
   adminRoutes(app, deps);
+  notesRoutes(app, deps);
 
   const hasWebApp = existsSync(join(config.webDir, 'index.html'));
   if (hasWebApp) {
