@@ -42,5 +42,11 @@ export default defineConfig(
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
+  {
+    files: ['apps/web/sw/sw.js'],
+    languageOptions: {
+      globals: { ...globals.serviceworker },
+    },
+  },
   prettier,
 );
