@@ -4,10 +4,11 @@ import type {
   AuditEntry,
   CurrentUser,
   MeResponse,
+  ServerEvent,
   SessionInfo,
   SessionResponse,
 } from '@memora/shared';
-import { expect, type Page, type Route } from '@playwright/test';
+import { expect, type Page, type Route, type WebSocketRoute } from '@playwright/test';
 import { FakeNotes } from './notes';
 
 export const THEMES = ['light', 'dark'] as const;
@@ -138,6 +139,14 @@ export interface RecordedRequest {
   body: unknown;
 }
 
+/** A browser connected to the fake event channel. */
+interface Channel {
+  ws: WebSocketRoute;
+  device: string | null;
+  label: string;
+  pages: string[];
+}
+
 const error = (status: number, code: string, message: string, fields?: Record<string, string>) => ({
   status,
   json: { error: { code, message, ...(fields ? { details: { fields } } : {}) } },
@@ -158,13 +167,96 @@ export class FakeApi {
   /** Notebooks, sections and pages; replace before `install` for other content. */
   notes = new FakeNotes(NOW);
 
+  // Network control, for the resilience tests.
+  /** Nothing answers: requests fail as if the server were gone, live channels close. */
+  down = false;
+  /** Every answer takes this long (a slow network). */
+  latency = 0;
+  /** Answers every request with this error, as a proxy does while the server restarts. */
+  errorStatus: number | null = null;
+  /** Content saves are taken, but their answers are lost (the server died right after). */
+  loseAnswers = false;
+  private held: Promise<void> | null = null;
+  private readonly channels = new Set<Channel>();
+
   constructor(me: Partial<MeResponse> = { user: ADMIN }) {
     const user = me.user ?? null;
     this.me = { setupRequired: false, user, csrfToken: user ? 'csrf-1' : null, ...me };
   }
 
-  async install(page: Page) {
+  async install(page: Page, label = 'Chrome on Linux') {
+    this.notes.onChange = (changed, origin) =>
+      this.publish({ type: 'page.updated', page: changed, revision: changed.revision, origin });
     await page.route('**/api/**', (route) => this.handle(route));
+    await page.routeWebSocket(/\/api\/v1\/events/, (ws) => this.connect(ws, label));
+  }
+
+  /** Content saves wait (in flight) until the returned function is called. */
+  holdSaves(): () => void {
+    let release!: () => void;
+    this.held = new Promise((resolve) => (release = resolve));
+    return () => {
+      this.held = null;
+      release();
+    };
+  }
+
+  /** The server stops answering until `comeBack`. */
+  goDown() {
+    this.down = true;
+    for (const channel of this.channels) void channel.ws.close({ code: 1001 });
+  }
+
+  comeBack() {
+    this.down = false;
+  }
+
+  /** The content saves sent, whether or not the server was there to take them. */
+  saves() {
+    return this.requests.filter((r) => r.method === 'PUT' && r.path.endsWith('/content'));
+  }
+
+  private connect(ws: WebSocketRoute, label: string) {
+    if (this.down) {
+      void ws.close({ code: 1001 });
+      return;
+    }
+    const channel: Channel = {
+      ws,
+      device: new URL(ws.url()).searchParams.get('device'),
+      label,
+      pages: [],
+    };
+    this.channels.add(channel);
+    ws.onMessage((message) => {
+      const data = JSON.parse(String(message)) as { type: string; pages?: string[] };
+      if (data.type === 'presence') {
+        channel.pages = data.pages ?? [];
+        this.sendPresence();
+      }
+    });
+    ws.onClose(() => {
+      this.channels.delete(channel);
+      this.sendPresence();
+    });
+    this.sendPresence();
+  }
+
+  /** Like the server's hub: to every browser but the one the change came from. */
+  private publish(event: ServerEvent) {
+    const origin = 'origin' in event ? event.origin : null;
+    for (const channel of this.channels) {
+      if (origin === null || channel.device !== origin) channel.ws.send(JSON.stringify(event));
+    }
+  }
+
+  private sendPresence() {
+    for (const channel of this.channels) {
+      const devices = [...this.channels]
+        .filter((other) => other.device !== channel.device && other.pages.length > 0)
+        .map((other) => ({ label: other.label, pages: other.pages }));
+      channel.ws.send(JSON.stringify({ type: 'presence', devices }));
+    }
   }
 
   private signIn(user: CurrentUser): SessionResponse {
@@ -172,7 +264,12 @@ export class FakeApi {
     return { user, csrfToken: 'csrf-2' };
   }
 
-  private respond(method: string, path: string, body: Record<string, unknown>) {
+  private respond(
+    method: string,
+    path: string,
+    body: Record<string, unknown>,
+    origin: string | null,
+  ) {
     const route = `${method} ${path}`;
     switch (route) {
       case 'GET /api/health':
@@ -225,18 +322,34 @@ export class FakeApi {
         return { json: { entries: this.audit, nextCursor: null } };
       default:
         return (
-          this.notes.respond(method, path, body) ?? error(404, 'not_found', `No fake for ${route}.`)
+          this.notes.respond(method, path, body, origin) ??
+          error(404, 'not_found', `No fake for ${route}.`)
         );
     }
   }
 
   private async handle(route: Route) {
     const request = route.request();
+    const method = request.method();
     const path = new URL(request.url()).pathname;
     const body = (request.postDataJSON() as Record<string, unknown> | null) ?? {};
-    this.requests.push({ method: request.method(), path, headers: request.headers(), body });
-    const { status = 200, json } = this.respond(request.method(), path, body);
-    await (json === undefined ? route.fulfill({ status }) : route.fulfill({ status, json }));
+    const headers = request.headers();
+    this.requests.push({ method, path, headers, body });
+    const save = method === 'PUT' && path.endsWith('/content');
+    if (this.latency) await new Promise((resolve) => setTimeout(resolve, this.latency));
+    if (save && this.held) await this.held;
+    // The page may have closed meanwhile: nobody waits for the answer then.
+    if (this.down) return route.abort('connectionrefused').catch(() => undefined);
+    if (this.errorStatus) {
+      const failed = error(this.errorStatus, 'unavailable', 'The server is restarting.');
+      return route.fulfill({ status: failed.status, json: failed.json }).catch(() => undefined);
+    }
+    const origin = headers['x-memora-device'] ?? null;
+    const { status = 200, json } = this.respond(method, path, body, origin);
+    if (save && this.loseAnswers) return route.abort('connectionreset').catch(() => undefined);
+    await (json === undefined ? route.fulfill({ status }) : route.fulfill({ status, json })).catch(
+      () => undefined,
+    );
   }
 }
 
@@ -267,6 +380,8 @@ export async function openShell(page: Page, theme: Theme, api = new FakeApi()) {
   await page.goto('/');
   await expect(page.getByRole('main')).not.toBeEmpty();
   await expect(page.getByRole('banner').getByText('Saved', { exact: true })).toBeAttached();
+  // The page's editor loads on its own; nothing is still loading in the shot.
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
   await fontsReady(page);
 }
 

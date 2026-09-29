@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { FakeApi, NOW, THEMES, expectNoA11yViolations, mockApi, openShell } from './helpers';
+import { FakeApi, NOW, THEMES, expectNoA11yViolations, openShell } from './helpers';
 import { FakeNotes } from './notes';
 
 // The three sizes from the mockups plus the wide breakpoint (§9.12).
@@ -97,7 +97,7 @@ test.describe('behaviour', () => {
     await page.getByRole('treeitem', { name: /^Pricing experiments/ }).click();
     await page.getByRole('treeitem', { name: /^Open questions/ }).click({ modifiers: ['Shift'] });
     await page.keyboard.press('Delete');
-    await expect(page.getByText('Moved 2 pages to the recycle bin')).toBeVisible();
+    await expect(page.getByText('Moved 2 pages to the recycle bin', { exact: true })).toBeVisible();
     await expect(pageList(page).getByRole('treeitem', { name: /^Open questions/ })).toHaveCount(0);
     expect(api.requests.some((r) => r.path === '/api/v1/pages/delete')).toBe(true);
 
@@ -229,16 +229,6 @@ test.describe('behaviour', () => {
       })
       .toBe(1000);
     await expect(pageList(page).getByRole('treeitem', { name: /^Note 1000/ })).toBeInViewport();
-  });
-
-  test('shows offline when the server does not answer', async ({ page }) => {
-    await mockApi(page);
-    // Registered last, so it answers before the fake server does.
-    await page.route('**/api/health', (route) => route.abort());
-    await page.goto('/');
-    await expect(page.getByRole('banner').getByText('Offline', { exact: true })).toBeVisible({
-      timeout: 15_000,
-    });
   });
 });
 

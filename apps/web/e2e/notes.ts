@@ -60,10 +60,22 @@ const notFound: Reply = {
   json: { error: { code: 'not_found', message: 'Not found.' } },
 };
 
+/** A version the fake server kept: a conflict copy, or what "Keep mine" replaced. */
+export interface KeptVersion {
+  pageId: string;
+  content: string;
+  reason: string;
+}
+
 export class FakeNotes {
   tree: Tree;
   settings: Settings;
   readonly content = new Map<string, string>();
+  readonly versions: KeptVersion[] = [];
+  /** Every content change, with the (real) time it happened. */
+  private readonly history: { at: number; id: string; before: string; after: string }[] = [];
+  /** Told about every content change, with the device that made it (null: elsewhere). */
+  onChange: ((page: PageMeta, origin: string | null) => void) | null = null;
   private readonly trash = new Map<string, Tree>();
   private nextId = 1;
 
@@ -90,7 +102,12 @@ export class FakeNotes {
     }
   }
 
-  respond(method: string, path: string, body: Record<string, unknown>): Reply | null {
+  respond(
+    method: string,
+    path: string,
+    body: Record<string, unknown>,
+    origin: string | null = null,
+  ): Reply | null {
     const route = `${method} ${path.replace(/^\/api\/v1/, '')}`;
     const [, kind, id, action] = path.replace(/^\/api\/v1/, '').split('/');
     if (route === 'GET /tree') return { json: this.tree };
@@ -116,6 +133,12 @@ export class FakeNotes {
     )[kind as 'notebooks' | 'groups' | 'sections' | 'pages'];
     if (!type) return null;
     if (method === 'GET' && type === 'page') return this.getPage(id);
+    if (method === 'PUT' && type === 'page' && action === 'content') {
+      return this.saveContent(id, body, origin);
+    }
+    if (method === 'POST' && type === 'page' && action === 'versions') {
+      return this.keepVersion(id, body);
+    }
     if (method === 'PATCH') return this.update(type, id, body);
     if (method === 'DELETE') return this.remove([{ type, id }]);
     if (method === 'POST' && action === 'move') return this.move(type, id, body);
@@ -127,8 +150,72 @@ export class FakeNotes {
   private getPage(id: string): Reply {
     const meta = this.tree.pages.find((p) => p.id === id);
     if (!meta) return notFound;
+    return { json: { ...meta, content: this.content.get(id) ?? '', viewMode: 'edit' } };
+  }
+
+  // Content
+
+  /** Changes a page's text as a save does: a new revision (another device, when `origin` is null). */
+  edit(id: string, content: string, origin: string | null = null): PageMeta {
+    const page = this.tree.pages.find((p) => p.id === id);
+    if (!page) throw new Error(`No page ${id}`);
+    this.history.push({ at: Date.now(), id, before: this.content.get(id) ?? '', after: content });
+    this.content.set(id, content);
+    const next: PageMeta = {
+      ...page,
+      revision: page.revision + 1,
+      snippet: page.type === 'markdown' ? snippetOf(content) : '',
+      updatedAt: this.now,
+    };
+    this.apply({ pages: [next] });
+    this.onChange?.(next, origin);
+    return next;
+  }
+
+  /** The page's text as it was at `at` (a `Date.now()` time). */
+  contentAt(id: string, at: number): string {
+    const changes = this.history.filter((h) => h.id === id);
+    const last = changes.findLast((h) => h.at <= at);
+    return last ? last.after : (changes[0]?.before ?? this.content.get(id) ?? '');
+  }
+
+  private saveContent(id: string, body: Record<string, unknown>, origin: string | null): Reply {
+    const page = this.tree.pages.find((p) => p.id === id);
+    if (!page) return notFound;
+    const current = this.content.get(id) ?? '';
+    const content = String(body.content);
+    if (content === current) return { json: { revision: page.revision, pages: [page] } };
+    if (body.baseRevision !== page.revision) {
+      return {
+        status: 409,
+        json: {
+          error: {
+            code: 'revision_conflict',
+            message: 'This page was changed elsewhere.',
+            details: { revision: page.revision, content: current, type: page.type },
+          },
+        },
+      };
+    }
+    if (body.resolving) this.versions.push({ pageId: id, content: current, reason: 'conflict' });
+    const saved = this.edit(id, content, origin);
+    return { json: { revision: saved.revision, pages: [saved] } };
+  }
+
+  private keepVersion(id: string, body: Record<string, unknown>): Reply {
+    if (!this.tree.pages.some((p) => p.id === id)) return notFound;
+    const reason = String(body.reason);
+    this.versions.push({ pageId: id, content: String(body.content), reason });
     return {
-      json: { ...meta, content: this.content.get(id) ?? '', revision: 1, viewMode: 'edit' },
+      status: 201,
+      json: {
+        id: `version-${this.versions.length}`,
+        pageId: id,
+        revision: Number(body.baseRevision),
+        reason,
+        deviceLabel: 'Chrome on Linux',
+        createdAt: this.now,
+      },
     };
   }
 
@@ -209,7 +296,11 @@ export class FakeNotes {
       .map((r) => r.page)
       .filter((p) => p.parentPageId === parentPageId);
     const [sortKey] = placeKeys(siblings, null)!;
-    const id = this.id('page');
+    // Made by the browser; one created offline may be sent again after a lost answer.
+    const given = typeof body.id === 'string' ? body.id : null;
+    const existing = given && this.tree.pages.find((p) => p.id === given);
+    if (existing) return { json: { pages: [existing] } };
+    const id = given ?? this.id('page');
     const text = String(body.content ?? '');
     this.content.set(id, text);
     const page = this.meta(

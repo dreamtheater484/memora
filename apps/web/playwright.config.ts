@@ -2,9 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 /*
  * Visual snapshots and accessibility checks for the component gallery and the
- * app shell (decision D22). Screenshots depend on fonts and rendering, so the
- * committed baselines come from the pinned Playwright image: run
- * `pnpm test:visual` (Docker) locally, and CI uses the same image.
+ * app shell (decision D22), behaviour tests, and the resilience suite (§13.1).
+ * Screenshots depend on fonts and rendering, so the committed baselines come
+ * from the pinned Playwright image: run `pnpm test:visual` (Docker) locally,
+ * and CI uses the same image.
  */
 const port = 4173;
 
@@ -28,8 +29,16 @@ export default defineConfig({
     locale: 'en-US',
     timezoneId: 'UTC',
     trace: 'retain-on-failure',
+    // The fake server answers from the page's routes, which a service worker would get
+    // around. The offline test lets it in.
+    serviceWorkers: 'block',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    // Not losing a keystroke is proven in every engine (§13.1); the rest runs in Chromium.
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] }, testMatch: 'resilience.spec.ts' },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] }, testMatch: 'resilience.spec.ts' },
+  ],
   webServer: {
     // The gallery build contains both index.html and gallery.html.
     command: `vite build --mode gallery && vite preview --mode gallery --host 127.0.0.1 --port ${port} --strictPort`,
