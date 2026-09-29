@@ -1,11 +1,11 @@
 import { Link, Outlet } from '@tanstack/react-router';
-import { ArrowLeft, ScrollText, UserRound, Users } from 'lucide-react';
+import { ArrowLeft, PenLine, ScrollText, UserRound, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCurrentUser } from '../auth/queries';
 import { cn } from '../lib/cn';
 
 interface NavItem {
-  to: '/settings/account' | '/settings/users' | '/settings/audit';
+  to: '/settings/account' | '/settings/editing' | '/settings/users' | '/settings/audit';
   label: string;
   icon: ReactNode;
   admin?: boolean;
@@ -13,13 +13,14 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: '/settings/account', label: 'Account', icon: <UserRound /> },
+  { to: '/settings/editing', label: 'Editing', icon: <PenLine /> },
   { to: '/settings/users', label: 'Users', icon: <Users />, admin: true },
   { to: '/settings/audit', label: 'Audit log', icon: <ScrollText />, admin: true },
 ];
 
 /**
  * Settings (§9.16): a navigation list beside the content on larger screens, tabs across the
- * top on phones. More groups (appearance, editing, data) join as their phases arrive.
+ * top on phones. More groups (appearance, data) join as their phases arrive.
  */
 export function SettingsLayout() {
   const user = useCurrentUser();

@@ -1,4 +1,5 @@
 import { join, resolve } from 'node:path';
+import { DEFAULT_MAX_UPLOAD_MB } from '@memora/shared';
 import { z } from 'zod';
 import { defaultWebDir } from './paths';
 
@@ -21,6 +22,7 @@ const envSchema = z.object({
     .max(24 * 30)
     .default(12),
   MEMORA_TRUST_PROXY: z.string().default('loopback,linklocal,uniquelocal'),
+  MEMORA_MAX_UPLOAD_MB: z.coerce.number().int().min(1).max(1024).default(DEFAULT_MAX_UPLOAD_MB),
 });
 
 export interface Config {
@@ -44,6 +46,8 @@ export interface Config {
    * reverse proxy). Needed for correct client IPs in rate limits and sessions.
    */
   trustProxy: boolean | number | string[];
+  /** Largest file a user can paste or upload into a page, in bytes. */
+  maxUploadBytes: number;
 }
 
 export class ConfigError extends Error {
@@ -80,6 +84,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     sessionRememberMs: e.MEMORA_SESSION_DAYS * 24 * 3_600_000,
     sessionMs: e.MEMORA_SESSION_HOURS * 3_600_000,
     trustProxy: parseTrustProxy(e.MEMORA_TRUST_PROXY),
+    maxUploadBytes: e.MEMORA_MAX_UPLOAD_MB * 1024 * 1024,
   };
 }
 

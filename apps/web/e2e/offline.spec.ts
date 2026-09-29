@@ -31,7 +31,7 @@ test('the app starts offline, with the page and the changes not sent yet', async
   await expect(page.getByRole('status').filter({ hasText: 'You’re offline' })).toBeVisible();
 
   await editor(page).locator('.cm-line').last().click();
-  await page.keyboard.press('End');
+  await page.keyboard.press('ControlOrMeta+End');
   await page.keyboard.type(' Written offline.');
   await expect(pageState(page)).toHaveAttribute('data-save-state', 'local');
   // Closed and opened again, still offline: the change is still there, and still waiting.

@@ -4,12 +4,16 @@
  *
  * - Pages (navigations): network first, the kept app after 3 s or when offline.
  * - Built files (/assets/…, content-hashed): from the cache, fetched once otherwise.
- * - The API: untouched.
+ * - Images and files in pages (/api/v1/assets/…): kept once loaded, since an id always
+ *   names the same bytes; the app empties this cache when the user signs out.
+ * - The rest of the API: untouched.
  *
  * The build fills in PRECACHE: the files of this version, and a version string.
  */
 const PRECACHE = self.__MEMORA_PRECACHE__;
 const CACHE = `memora-${PRECACHE.version}`;
+/** Kept across app versions: the files belong to the user, not to a version. */
+const FILES = 'memora-files';
 const SHELL = '/';
 const NETWORK_TIMEOUT_MS = 3000;
 
@@ -25,7 +29,9 @@ self.addEventListener('activate', (event) => {
       .keys()
       .then((keys) =>
         Promise.all(
-          keys.filter((k) => k.startsWith('memora-') && k !== CACHE).map((k) => caches.delete(k)),
+          keys
+            .filter((k) => k.startsWith('memora-') && k !== CACHE && k !== FILES)
+            .map((k) => caches.delete(k)),
         ),
       )
       .then(() => self.clients.claim()),
@@ -36,7 +42,12 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/v1/assets/')) {
+    event.respondWith(keptFile(request));
+    return;
+  }
+  if (url.pathname.startsWith('/api/')) return;
   if (request.mode === 'navigate') {
     event.respondWith(navigate(request));
   } else if (url.pathname.startsWith('/assets/') || PRECACHE.urls.includes(url.pathname)) {
@@ -66,6 +77,15 @@ async function cacheFirst(request) {
   if (hit) return hit;
   const response = await fetch(request);
   if (response.ok) await cache.put(request, response.clone());
+  return response;
+}
+
+async function keptFile(request) {
+  const cache = await caches.open(FILES);
+  const hit = await cache.match(request);
+  if (hit) return hit;
+  const response = await fetch(request);
+  if (response.status === 200) await cache.put(request, response.clone());
   return response;
 }
 

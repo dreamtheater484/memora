@@ -4,6 +4,7 @@ import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import type { HealthResponse } from '@memora/shared';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { AssetsService } from './assets/service';
 import { DEFAULT_HASH_PARAMS, PasswordHasher, type HashParams } from './auth/password';
 import { registerAuth } from './auth/plugin';
 import { AuthService } from './auth/service';
@@ -14,6 +15,7 @@ import { EventHub } from './events/hub';
 import { NotesService } from './notes/service';
 import { createOrm, createRepos } from './repo';
 import { adminRoutes } from './routes/admin';
+import { assetRoutes } from './routes/assets';
 import { authRoutes, type RouteDeps } from './routes/auth';
 import { eventRoutes } from './routes/events';
 import { notesRoutes } from './routes/notes';
@@ -83,7 +85,8 @@ export async function buildApp({
   const auth = new AuthService(db, repos, hasher, config, now);
   const notes = new NotesService(db, orm, now);
   const events = new EventHub();
-  const deps: RouteDeps = { db, repos, auth, notes, events, config, hasher, now };
+  const assets = new AssetsService(db, orm, now);
+  const deps: RouteDeps = { db, repos, auth, notes, assets, events, config, hasher, now };
   app.decorate('authService', auth);
   app.decorate('events', events);
 
@@ -129,6 +132,7 @@ export async function buildApp({
   authRoutes(app, deps);
   adminRoutes(app, deps);
   notesRoutes(app, deps);
+  await assetRoutes(app, deps);
   eventRoutes(app, deps);
 
   const hasWebApp = existsSync(join(config.webDir, 'index.html'));

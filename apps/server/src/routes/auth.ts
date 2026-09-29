@@ -13,6 +13,7 @@ import { requestMeta } from '../auth/plugin';
 import { toCurrentUser, type AuthContext, type AuthService } from '../auth/service';
 import { csrfTokenFor } from '../auth/tokens';
 import type { Config } from '../config';
+import type { AssetsService } from '../assets/service';
 import type { SqliteDatabase } from '../db/client';
 import type { EventHub } from '../events/hub';
 import { notFound, parse } from '../errors';
@@ -21,6 +22,7 @@ import type { Repos } from '../repo';
 
 export interface RouteDeps {
   db: SqliteDatabase;
+  assets: AssetsService;
   repos: Repos;
   auth: AuthService;
   notes: NotesService;

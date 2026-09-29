@@ -13,7 +13,7 @@ import { useSync } from '../sync/status';
  * its save state, a conflict to settle, and other devices that have it open.
  */
 
-const MarkdownEditor = lazy(() => import('../editor/MarkdownEditor'));
+const MarkdownPage = lazy(() => import('../editor/MarkdownPage'));
 
 const note = (text: string) => (
   <p className="mt-2 flex gap-2.5 rounded-sm border border-accent/25 bg-accent/7 px-3.5 py-3 text-sm text-fg-2">
@@ -23,14 +23,14 @@ const note = (text: string) => (
 );
 
 const loading = (
-  <div className="flex max-w-[47.5rem] flex-col gap-2.5" aria-busy="true">
+  <div className="flex max-w-[47.5rem] flex-col gap-2.5 px-4 pt-4 @tablet:px-7" aria-busy="true">
     <Skeleton className="h-4 w-11/12" />
     <Skeleton className="h-4 w-9/12" />
     <Skeleton className="h-4 w-10/12" />
   </div>
 );
 
-/** The page's content: the Markdown editor (rich pages arrive in Phase 6). */
+/** The page's content: the Markdown editor and preview (rich pages arrive in Phase 6). */
 export function PageBody({
   page,
   doc,
@@ -41,7 +41,10 @@ export function PageBody({
   compact?: boolean;
 }) {
   const snapshot = useDocSnapshot(doc);
-  if (page.type === 'rich') return note('Rich text editing arrives in Phase 6.');
+  const pad = 'px-4 pt-3 @tablet:px-7 @wide:px-9';
+  if (page.type === 'rich') {
+    return <div className={pad}>{note('Rich text editing arrives in Phase 6.')}</div>;
+  }
   if (!doc || !snapshot || snapshot.state === 'loading') return loading;
   if (snapshot.state !== 'ready') {
     const message = {
@@ -51,14 +54,20 @@ export function PageBody({
         'This page isn’t on the server any more. It may have been deleted on another device.',
       error: 'This page couldn’t be loaded. Try again in a moment.',
     }[snapshot.state];
-    return <p className="text-sm text-fg-2">{message}</p>;
+    return <p className={cn(pad, 'text-sm text-fg-2')}>{message}</p>;
   }
   return (
-    <div className={cn('max-w-[47.5rem]', compact && 'text-sm')}>
-      {snapshot.record?.conflict && <ConflictBanner doc={doc} />}
-      <Suspense fallback={loading}>
-        <MarkdownEditor doc={doc} label={compact ? 'Page content, second pane' : 'Page content'} />
-      </Suspense>
+    <div className="flex h-full min-h-0 flex-col">
+      {snapshot.record?.conflict && (
+        <div className={cn(pad, 'pb-0')}>
+          <ConflictBanner doc={doc} />
+        </div>
+      )}
+      <div className="min-h-0 flex-1">
+        <Suspense fallback={loading}>
+          <MarkdownPage page={page} doc={doc} compact={compact} />
+        </Suspense>
+      </div>
     </div>
   );
 }
@@ -113,7 +122,7 @@ function ConflictBanner({ doc }: { doc: PageDoc }) {
   return (
     <div
       role="alert"
-      className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2.5 rounded-md border border-warn/45 bg-warn/10 px-3.5 py-3 text-sm"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2.5 rounded-md border border-warn/45 bg-warn/10 px-3.5 py-3 text-sm"
     >
       <TriangleAlert aria-hidden className="size-4 shrink-0 text-warn" />
       <p className="min-w-[14rem] flex-1 text-fg">

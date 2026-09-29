@@ -16,6 +16,7 @@ import { safeRedirect } from './lib/redirect';
 import { settingsQuery, treeQuery } from './notes/queries';
 import { RootError } from './RootError';
 import { AccountPage } from './settings/AccountPage';
+import { EditingPage } from './settings/EditingPage';
 import { SettingsLayout } from './settings/SettingsLayout';
 import { AppShell } from './shell/AppShell';
 
@@ -131,6 +132,12 @@ const accountRoute = createRoute({
   component: AccountPage,
 });
 
+const editingRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: 'editing',
+  component: EditingPage,
+});
+
 const adminRoute = createRoute({
   getParentRoute: () => settingsRoute,
   id: 'admin',
@@ -170,6 +177,7 @@ const routeTree = rootRoute.addChildren([
     settingsRoute.addChildren([
       settingsIndexRoute,
       accountRoute,
+      editingRoute,
       adminRoute.addChildren([usersRoute, auditRoute]),
     ]),
   ]),

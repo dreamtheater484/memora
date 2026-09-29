@@ -127,6 +127,7 @@ const pageMetaColumns = {
   type: pages.type,
   sortKey: pages.sortKey,
   revision: pages.revision,
+  viewMode: pages.viewMode,
   createdAt: pages.createdAt,
   updatedAt: pages.updatedAt,
   text: sql<string>`substr(${pages.contentText}, 1, ${SNIPPET_LENGTH * 2})`,
@@ -142,6 +143,7 @@ const toPageMeta = ({ text, ...row }: Omit<PageMeta, 'snippet'> & { text: string
     sortKey: row.sortKey,
     snippet: snippetOf(text),
     revision: row.revision,
+    viewMode: row.viewMode ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }) satisfies PageMeta;

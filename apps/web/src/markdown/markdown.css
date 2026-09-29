@@ -1,0 +1,337 @@
+/*
+ * The rendered page (§9.3, §9.13): readable type, Aurora colours, and every part of the
+ * dialect (alerts, tasks, footnotes, maths, diagrams, highlighted code).
+ */
+
+.markdown-body {
+  color: var(--fg);
+  font-size: 1rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.markdown-body > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body
+  :where(
+    p,
+    ul,
+    ol,
+    blockquote,
+    table,
+    .code-block,
+    .math-display,
+    .mermaid-diagram,
+    .markdown-alert,
+    details,
+    dl
+  ) {
+  margin: 0 0 1rem;
+}
+
+.markdown-body :where(h1, h2, h3, h4, h5, h6) {
+  margin: 1.6em 0 0.6em;
+  font-family: var(--font-display);
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.markdown-body h1 {
+  font-size: 1.85em;
+}
+.markdown-body h2 {
+  font-size: 1.45em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--line);
+}
+.markdown-body h3 {
+  font-size: 1.2em;
+}
+.markdown-body h4 {
+  font-size: 1.05em;
+}
+.markdown-body :where(h5, h6) {
+  font-size: 0.95em;
+  color: var(--fg-2);
+}
+
+.markdown-body a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--accent) 40%, transparent);
+  text-underline-offset: 0.18em;
+}
+.markdown-body a:hover {
+  text-decoration-color: currentColor;
+}
+
+.markdown-body .wiki-link {
+  text-decoration-style: dotted;
+}
+.markdown-body .wiki-link-missing {
+  color: var(--danger);
+  text-decoration: underline dashed;
+  text-underline-offset: 0.18em;
+  cursor: help;
+}
+
+.markdown-body :where(ul, ol) {
+  padding-left: 1.6em;
+}
+.markdown-body ul {
+  list-style: disc;
+}
+.markdown-body ol {
+  list-style: decimal;
+}
+.markdown-body li + li {
+  margin-top: 0.25em;
+}
+.markdown-body li > :where(ul, ol) {
+  margin: 0.25em 0 0;
+}
+.markdown-body li > p {
+  margin-bottom: 0.4em;
+}
+
+.markdown-body .contains-task-list {
+  list-style: none;
+  padding-left: 0.4em;
+}
+.markdown-body .task-list-item .task-box {
+  margin: 0 0.5em 0 -0.1em;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.12em;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.markdown-body .task-list-item .task-box:disabled {
+  cursor: default;
+}
+.markdown-body .task-list-item:has(> .task-box:checked),
+.markdown-body .task-list-item:has(> p > .task-box:checked) {
+  color: var(--fg-3);
+}
+
+.markdown-body blockquote {
+  padding: 0.1em 1em;
+  border-left: 3px solid var(--line-strong);
+  color: var(--fg-2);
+}
+
+.markdown-body hr {
+  margin: 1.8em 0;
+  border: 0;
+  border-top: 1px solid var(--line-strong);
+}
+
+.markdown-body :not(pre) > code {
+  padding: 0.12em 0.36em;
+  border-radius: 0.3em;
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+
+.markdown-body kbd {
+  padding: 0.1em 0.4em;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 0.3em;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+.markdown-body mark {
+  background: var(--mark);
+  color: inherit;
+  border-radius: 0.2em;
+}
+
+/* Code blocks, with Shiki's colours following the theme. */
+.markdown-body .code-block {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--code-bg);
+}
+.markdown-body .code-block pre {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1.6;
+}
+.markdown-body .shiki span {
+  color: light-dark(var(--shiki-light), var(--shiki-dark));
+  font-style: light-dark(var(--shiki-light-font-style), var(--shiki-dark-font-style));
+  font-weight: light-dark(var(--shiki-light-font-weight), var(--shiki-dark-font-weight));
+}
+.markdown-body .code-language {
+  position: absolute;
+  top: 0.35rem;
+  right: 2.6rem;
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  color: var(--fg-3);
+  pointer-events: none;
+}
+.markdown-body .code-copy {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.4rem;
+  color: var(--fg-2);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.markdown-body .code-copy svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+.markdown-body .code-block:hover .code-copy,
+.markdown-body .code-copy:focus-visible {
+  opacity: 1;
+}
+.markdown-body .code-copy:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+@media (hover: none) {
+  .markdown-body .code-copy {
+    opacity: 1;
+  }
+}
+
+/* Tables. */
+.markdown-body table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.94em;
+}
+.markdown-body :where(th, td) {
+  padding: 0.4em 0.8em;
+  border: 1px solid var(--line-strong);
+}
+.markdown-body th {
+  font-weight: 650;
+  background: var(--hover);
+}
+.markdown-body tr:nth-child(2n) td {
+  background: color-mix(in oklab, var(--hover) 50%, transparent);
+}
+
+/* Images open full size on click. */
+.markdown-body .image-button {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0;
+  border-radius: 0.5rem;
+  cursor: zoom-in;
+  vertical-align: bottom;
+}
+.markdown-body .image-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.markdown-body img {
+  max-width: 100%;
+  border-radius: 0.5rem;
+}
+.markdown-body .file-link::before {
+  content: '📎 ';
+}
+
+/* Alerts: > [!NOTE] and friends. */
+.markdown-body .markdown-alert {
+  --alert: var(--accent);
+  padding: 0.6em 1em;
+  border-left: 3px solid var(--alert);
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: color-mix(in oklab, var(--alert) 8%, transparent);
+}
+.markdown-body .markdown-alert > :last-child {
+  margin-bottom: 0;
+}
+.markdown-body .markdown-alert-title {
+  margin-bottom: 0.3em;
+  font-weight: 650;
+  color: var(--alert);
+}
+.markdown-body .markdown-alert-tip {
+  --alert: var(--ok);
+}
+.markdown-body .markdown-alert-important {
+  --alert: oklch(0.58 0.2 300);
+}
+.markdown-body .markdown-alert-warning {
+  --alert: var(--warn);
+}
+.markdown-body .markdown-alert-caution {
+  --alert: var(--danger);
+}
+
+/* Maths and diagrams. */
+.markdown-body .math-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+}
+.markdown-body .mermaid-diagram {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+}
+.markdown-body .mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+.markdown-body .mermaid-error {
+  margin: 0;
+  padding: 0.5rem 1rem 0;
+  font-size: 0.8rem;
+  color: var(--danger);
+}
+
+/* Footnotes. */
+.markdown-body .footnotes {
+  margin-top: 2.5em;
+  padding-top: 1em;
+  border-top: 1px solid var(--line);
+  font-size: 0.88em;
+  color: var(--fg-2);
+}
+.markdown-body .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.markdown-body sup a {
+  text-decoration: none;
+}
+
+.markdown-body details {
+  padding: 0.5em 0.9em;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+}
+.markdown-body summary {
+  cursor: pointer;
+  font-weight: 600;
+}

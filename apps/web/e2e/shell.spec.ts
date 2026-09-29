@@ -147,7 +147,9 @@ test.describe('behaviour', () => {
     await expect(dialog).toBeHidden();
     await page.getByRole('button', { name: 'Open' }).click();
     await expect(title(page)).toHaveText('Book the dentist');
-    await expect(page.getByRole('main').getByText('Before the end of October.')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Page content', exact: true })).toContainText(
+      'Before the end of October.',
+    );
   });
 
   test('? shows the keyboard shortcuts', async ({ page }) => {

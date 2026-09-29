@@ -483,7 +483,7 @@ describe('recycle bin', () => {
 
 describe('settings', () => {
   it('keep UI state per user, merging changes', async () => {
-    expect((await me.get('/api/v1/settings')).json()).toEqual({ ui: {} });
+    expect((await me.get('/api/v1/settings')).json()).toEqual({ ui: {}, editor: {} });
     const s1 = uuidv7();
     const s2 = uuidv7();
     const p1 = uuidv7();
@@ -501,5 +501,19 @@ describe('settings', () => {
     expect((await refused('PATCH', '/api/v1/settings', { ui: { pageListSide: 'up' } })).code).toBe(
       'invalid_request',
     );
+  });
+
+  it('keep editor preferences apart from UI state', async () => {
+    await ok('PATCH', '/api/v1/settings', { ui: { pageListSide: 'left' } });
+    await ok('PATCH', '/api/v1/settings', { editor: { lineNumbers: true, viewMode: 'source' } });
+    const res = await ok<{ ui: unknown; editor: unknown }>('PATCH', '/api/v1/settings', {
+      editor: { tabSize: 2 },
+    });
+    expect(res.editor).toEqual({ lineNumbers: true, viewMode: 'source', tabSize: 2 });
+    expect(res.ui).toMatchObject({ pageListSide: 'left' });
+    expect((await refused('PATCH', '/api/v1/settings', { editor: { tabSize: 0 } })).code).toBe(
+      'invalid_request',
+    );
+    expect((await refused('PATCH', '/api/v1/settings', {})).code).toBe('invalid_request');
   });
 });

@@ -84,7 +84,7 @@ export class FakeNotes {
     seed: 'demo' | 'empty' = 'demo',
   ) {
     this.tree = { inboxId: 'inbox', notebooks: [], groups: [], sections: [], pages: [] };
-    this.settings = { ui: {} };
+    this.settings = { ui: {}, editor: {} };
     this.tree.sections.push(this.section('inbox', 'Inbox', 'slate', null, null, 'a0'));
     if (seed === 'demo') this.seedDemo();
   }
@@ -114,8 +114,12 @@ export class FakeNotes {
     if (route === 'GET /settings') return { json: this.settings };
     if (route === 'PATCH /settings') {
       const ui = (body.ui ?? {}) as Settings['ui'];
+      const editor = (body.editor ?? {}) as Settings['editor'];
       const lastPages = { ...this.settings.ui.lastPages, ...ui.lastPages };
-      this.settings = { ui: { ...this.settings.ui, ...ui, lastPages } };
+      this.settings = {
+        ui: { ...this.settings.ui, ...ui, lastPages },
+        editor: { ...this.settings.editor, ...editor },
+      };
       return { json: this.settings };
     }
     if (route === 'POST /pages/move') return this.movePages(body);
@@ -150,7 +154,7 @@ export class FakeNotes {
   private getPage(id: string): Reply {
     const meta = this.tree.pages.find((p) => p.id === id);
     if (!meta) return notFound;
-    return { json: { ...meta, content: this.content.get(id) ?? '', viewMode: 'edit' } };
+    return { json: { ...meta, content: this.content.get(id) ?? '' } };
   }
 
   // Content
@@ -319,7 +323,7 @@ export class FakeNotes {
   // Changing
 
   private update(type: TrashItem['type'], id: string, body: Record<string, unknown>): Reply {
-    const { content, viewMode: _, ...fields } = body;
+    const { content, ...fields } = body;
     if (typeof fields.title === 'string') fields.title = fields.title.trim();
     if (typeof content === 'string') this.content.set(id, content);
     const list = LISTS[type];
@@ -560,6 +564,7 @@ export class FakeNotes {
         expanded: ['work'],
         pageListSide: 'right',
       },
+      editor: {},
     };
   }
 }

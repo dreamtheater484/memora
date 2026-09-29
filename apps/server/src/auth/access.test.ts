@@ -23,6 +23,7 @@ interface World {
     sectionId: string;
     pageId: string;
     deletedPageId: string;
+    assetId: string;
     bobSectionId: string;
     /** Alice's tree before Bob's attempts: it must stay exactly like this. */
     tree: unknown;
@@ -237,10 +238,16 @@ const RULES: Record<string, RouteRule> = {
   'GET /api/v1/settings': {
     access: 'user',
     async ownListOnly(w) {
-      expect((await w.bob.get('/api/v1/settings')).json()).toEqual({ ui: {} });
+      expect((await w.bob.get('/api/v1/settings')).json()).toEqual({ ui: {}, editor: {} });
     },
   },
   'PATCH /api/v1/settings': { access: 'user' },
+  // assets.test.ts checks that an id taken by another user is refused and left unchanged.
+  'PUT /api/v1/assets/:id': { access: 'user' },
+  'GET /api/v1/assets/:id': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/assets/${n.assetId}`),
+  },
   // Scoped by the session itself: events.test.ts checks a user only hears their own events.
   'GET /api/v1/events': { access: 'user' },
 };
@@ -267,6 +274,10 @@ beforeAll(async () => {
   const gone = (await alice.post('/api/v1/pages', { sectionId, title: 'Gone' })).json();
   await alice.post('/api/v1/pages/delete', { ids: [gone.pages[0].id] });
   await alice.patch('/api/v1/settings', { ui: { pageListSide: 'left' } });
+  const assetId = uuidv7();
+  await alice.put(`/api/v1/assets/${assetId}?name=note.txt`, Buffer.from('private'), {
+    headers: { 'content-type': 'text/plain' },
+  });
   w = {
     t,
     alice,
@@ -278,6 +289,7 @@ beforeAll(async () => {
       sectionId,
       pageId: page.pages[0].id,
       deletedPageId: gone.pages[0].id,
+      assetId,
       bobSectionId: (await bob.get('/api/v1/tree')).json().inboxId,
       tree: (await alice.get('/api/v1/tree')).json(),
     },

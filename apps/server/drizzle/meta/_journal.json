@@ -29,6 +29,13 @@
       "when": 1790702264716,
       "tag": "0003_versions",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790712000995,
+      "tag": "0004_assets",
+      "breakpoints": true
     }
   ]
 }

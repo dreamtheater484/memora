@@ -328,12 +328,17 @@ export class FakeApi {
     }
   }
 
+  /** Files pasted into pages, by id. */
+  readonly files = new Map<string, { data: Buffer; type: string; name: string }>();
+
   private async handle(route: Route) {
     const request = route.request();
     const method = request.method();
-    const path = new URL(request.url()).pathname;
-    const body = (request.postDataJSON() as Record<string, unknown> | null) ?? {};
+    const url = new URL(request.url());
+    const path = url.pathname;
     const headers = request.headers();
+    if (path.startsWith('/api/v1/assets/')) return this.file(route, path.split('/').pop()!, url);
+    const body = (request.postDataJSON() as Record<string, unknown> | null) ?? {};
     this.requests.push({ method, path, headers, body });
     const save = method === 'PUT' && path.endsWith('/content');
     if (this.latency) await new Promise((resolve) => setTimeout(resolve, this.latency));
@@ -350,6 +355,43 @@ export class FakeApi {
     await (json === undefined ? route.fulfill({ status }) : route.fulfill({ status, json })).catch(
       () => undefined,
     );
+  }
+
+  /** `PUT /assets/:id` keeps the file; `GET` gives it back. */
+  private async file(route: Route, id: string, url: URL) {
+    const request = route.request();
+    this.requests.push({
+      method: request.method(),
+      path: url.pathname,
+      headers: request.headers(),
+      body: {},
+    });
+    if (this.down) return route.abort('connectionrefused').catch(() => undefined);
+    if (request.method() === 'PUT') {
+      const data = request.postDataBuffer() ?? Buffer.alloc(0);
+      const type = request.headers()['content-type'] ?? 'application/octet-stream';
+      const name = url.searchParams.get('name') ?? 'file';
+      this.files.set(id, { data, type, name });
+      const meta = {
+        id,
+        mime: type,
+        size: data.length,
+        width: null,
+        height: null,
+        name,
+        createdAt: NOW,
+      };
+      return route.fulfill({ status: 201, json: meta }).catch(() => undefined);
+    }
+    const file = this.files.get(id);
+    if (!file)
+      return route.fulfill({
+        status: 404,
+        json: { error: { code: 'not_found', message: 'File not found.' } },
+      });
+    return route
+      .fulfill({ status: 200, body: file.data, contentType: file.type })
+      .catch(() => undefined);
   }
 }
 

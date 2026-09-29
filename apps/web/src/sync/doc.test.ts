@@ -51,6 +51,7 @@ class TestHost implements DocHost {
       shared: () => this.shared,
       recovered: () => {},
       failed: () => {},
+      uploaded: () => {},
     });
   }
 

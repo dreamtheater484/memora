@@ -233,7 +233,7 @@ export function NotesPane() {
         {page ? (
           <>
             <PageHead key={page.id} page={page} doc={doc} />
-            <div className="min-h-0 flex-1 overflow-auto px-4 pb-14 @tablet:px-7 @wide:px-9">
+            <div className="min-h-0 flex-1">
               <PageBody key={page.id} page={page} doc={doc} />
             </div>
           </>
@@ -290,14 +290,18 @@ export function SecondPane() {
         <IconButton label="Close pane" icon={<X />} onClick={() => setSecondPane(false, null)} />
       </div>
       {page ? (
-        <div className="min-h-0 flex-1 overflow-auto px-11 pt-7 pb-14">
-          <h2 className="font-display text-[1.75rem] leading-tight font-semibold tracking-tight">
-            {page.title || 'Untitled page'}
-          </h2>
-          <p className="mb-4 text-sm text-fg-3">
-            {section?.name} · edited {formatRelative(page.updatedAt)}
-          </p>
-          <PageBody key={page.id} page={page} doc={doc} compact />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="shrink-0 px-5 pt-5 pb-2">
+            <h2 className="font-display text-[1.75rem] leading-tight font-semibold tracking-tight">
+              {page.title || 'Untitled page'}
+            </h2>
+            <p className="text-sm text-fg-3">
+              {section?.name} · edited {formatRelative(page.updatedAt)}
+            </p>
+          </div>
+          <div className="min-h-0 flex-1">
+            <PageBody key={page.id} page={page} doc={doc} compact />
+          </div>
         </div>
       ) : (
         <EmptyState

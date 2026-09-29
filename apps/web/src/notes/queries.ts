@@ -1,6 +1,8 @@
 import {
+  DEFAULT_EDITOR_SETTINGS,
   placeKeys,
   uuidv7,
+  type EditorSettings,
   type CreateGroupRequest,
   type CreateNotebookRequest,
   type CreatePageRequest,
@@ -18,6 +20,7 @@ import {
   type UpdateNotebookRequest,
   type UpdatePageRequest,
   type UpdateSectionRequest,
+  type ViewMode,
 } from '@memora/shared';
 import {
   queryOptions,
@@ -95,6 +98,39 @@ export function useUiState(): UiState {
 }
 const EMPTY_UI: UiState = {};
 
+const editorSettingsQuery = { ...settingsQuery, select: (s: Settings) => s.editor };
+
+/** The Markdown editor's preferences, with the defaults filled in. */
+export function useEditorSettings(): Required<EditorSettings> {
+  const stored = useQuery(editorSettingsQuery).data;
+  return useMemo(() => ({ ...DEFAULT_EDITOR_SETTINGS, ...stored }), [stored]);
+}
+
+/** Changes editor preferences at once, and on the server. */
+export async function saveEditorSettings(
+  queryClient: QueryClient,
+  patch: EditorSettings,
+): Promise<void> {
+  queryClient.setQueryData<Settings>(settingsKey, (old) => ({
+    ui: old?.ui ?? {},
+    editor: { ...old?.editor, ...patch },
+  }));
+  await api('PATCH', '/settings', { editor: patch });
+}
+
+/**
+ * Remembers how a page is shown (§9.3). Only a preference: shown at once, sent quietly, and
+ * never worth an error message when the server can't be reached.
+ */
+export function saveViewMode(queryClient: QueryClient, pageId: string, viewMode: ViewMode): void {
+  queryClient.setQueryData<Tree>(
+    treeKey,
+    (tree) =>
+      tree && { ...tree, pages: tree.pages.map((p) => (p.id === pageId ? { ...p, viewMode } : p)) },
+  );
+  api('PATCH', `/pages/${pageId}`, { viewMode }).catch(() => undefined);
+}
+
 // UI state is saved a moment after it changes, in one request.
 
 let pendingUi: UiState | null = null;
@@ -104,7 +140,7 @@ export function saveUiState(queryClient: QueryClient, patch: UiState, delay = 80
   queryClient.setQueryData<Settings>(settingsKey, (old) => {
     const ui = { ...old?.ui, ...patch };
     if (patch.lastPages) ui.lastPages = { ...old?.ui.lastPages, ...patch.lastPages };
-    return { ui };
+    return { ui, editor: old?.editor ?? {} };
   });
   pendingUi = {
     ...pendingUi,

@@ -27,6 +27,8 @@ export const API_ERROR_CODES = [
   'invalid_move',
   'too_deep',
   'revision_conflict',
+  'asset_exists',
+  'file_too_large',
   'internal',
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
