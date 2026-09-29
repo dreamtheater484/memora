@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import fastifyStatic from '@fastify/static';
+import fastifyWebsocket from '@fastify/websocket';
 import type { HealthResponse } from '@memora/shared';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { DEFAULT_HASH_PARAMS, PasswordHasher, type HashParams } from './auth/password';
@@ -9,10 +10,12 @@ import { AuthService } from './auth/service';
 import type { Config } from './config';
 import type { SqliteDatabase } from './db/client';
 import { ApiError } from './errors';
+import { EventHub } from './events/hub';
 import { NotesService } from './notes/service';
 import { createOrm, createRepos } from './repo';
 import { adminRoutes } from './routes/admin';
 import { authRoutes, type RouteDeps } from './routes/auth';
+import { eventRoutes } from './routes/events';
 import { notesRoutes } from './routes/notes';
 
 export interface AppOptions {
@@ -30,6 +33,7 @@ export interface AppOptions {
 declare module 'fastify' {
   interface FastifyInstance {
     authService: AuthService;
+    events: EventHub;
   }
 }
 
@@ -78,8 +82,10 @@ export async function buildApp({
   const hasher = new PasswordHasher(hashParams);
   const auth = new AuthService(db, repos, hasher, config, now);
   const notes = new NotesService(db, orm, now);
-  const deps: RouteDeps = { db, repos, auth, notes, hasher, now };
+  const events = new EventHub();
+  const deps: RouteDeps = { db, repos, auth, notes, events, config, hasher, now };
   app.decorate('authService', auth);
+  app.decorate('events', events);
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ApiError) {
@@ -117,9 +123,13 @@ export async function buildApp({
     },
   );
 
+  // Browsers send presence updates only: small messages.
+  await app.register(fastifyWebsocket, { options: { maxPayload: 16 * 1024 } });
+
   authRoutes(app, deps);
   adminRoutes(app, deps);
   notesRoutes(app, deps);
+  eventRoutes(app, deps);
 
   const hasWebApp = existsSync(join(config.webDir, 'index.html'));
   if (hasWebApp) {

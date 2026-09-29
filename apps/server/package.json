@@ -18,8 +18,10 @@
   },
   "devDependencies": {
     "@fastify/static": "^10.1.5",
+    "@fastify/websocket": "^11.3.1",
     "@memora/shared": "workspace:*",
     "@types/better-sqlite3": "^9.6.0",
+    "@types/ws": "^8.18.2",
     "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.3",
     "esbuild": "^0.28.2",

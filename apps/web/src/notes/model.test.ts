@@ -89,6 +89,7 @@ function page(
     title: id,
     type: 'markdown',
     snippet: '',
+    revision: 1,
     createdAt: at,
     updatedAt: at,
   };

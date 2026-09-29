@@ -339,6 +339,7 @@ export class FakeNotes {
       type,
       sortKey,
       snippet: type === 'markdown' ? snippetOf(text) : '',
+      revision: 1,
       createdAt: this.now - ago - 7 * DAY,
       updatedAt: this.now - ago,
     };

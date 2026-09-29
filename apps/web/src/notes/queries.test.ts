@@ -36,6 +36,7 @@ const page = (id: string, sortKey: string): PageMeta => ({
   type: 'markdown',
   sortKey,
   snippet: '',
+  revision: 1,
   createdAt: 1,
   updatedAt: 1,
 });

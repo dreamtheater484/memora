@@ -15,11 +15,14 @@ import {
   subtreeOf,
   uuidv7,
   type ColorId,
+  type ContentConflict,
+  type ContentSaved,
   type DeleteResponse,
   type Notebook,
   type NotebookIcon,
   type Page,
   type PageMeta,
+  type PageVersionMeta,
   type Section,
   type SectionGroup,
   type TrashItem,
@@ -29,23 +32,27 @@ import {
   type createNotebookSchema,
   type createPageSchema,
   type createSectionSchema,
+  type createVersionSchema,
   type moveGroupSchema,
   type moveSectionSchema,
   type placePagesSchema,
+  type saveContentSchema,
   type updateNotebookSchema,
   type updatePageSchema,
   type updateSectionSchema,
 } from '@memora/shared';
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { SqliteDatabase } from '../db/client';
 import {
   notebooks,
+  pageVersions,
   pages,
   sectionGroups,
   sections,
   type NotebookRow,
   type PageRow,
+  type PageVersionRow,
   type SectionGroupRow,
   type SectionRow,
 } from '../db/schema';
@@ -75,6 +82,9 @@ const groupParent = (g: SectionGroupRow) => g.parentGroupId;
 const invalidMove = (message: string) => new ApiError(400, 'invalid_move', message);
 const tooDeep = (message: string) => new ApiError(400, 'too_deep', message);
 const inBin = (message: string) => new ApiError(409, 'conflict', message);
+
+/** A save keeps the content it replaces when the page's last version is older than this (§9.7). */
+const VERSION_INTERVAL_MS = 10 * 60_000;
 
 const toNotebook = (r: NotebookRow): Notebook => ({
   id: r.id,
@@ -116,6 +126,7 @@ const pageMetaColumns = {
   title: pages.title,
   type: pages.type,
   sortKey: pages.sortKey,
+  revision: pages.revision,
   createdAt: pages.createdAt,
   updatedAt: pages.updatedAt,
   text: sql<string>`substr(${pages.contentText}, 1, ${SNIPPET_LENGTH * 2})`,
@@ -129,10 +140,20 @@ const toPageMeta = ({ text, ...row }: Omit<PageMeta, 'snippet'> & { text: string
     title: row.title,
     type: row.type,
     sortKey: row.sortKey,
+    snippet: snippetOf(text),
+    revision: row.revision,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-    snippet: snippetOf(text),
   }) satisfies PageMeta;
+
+const toVersionMeta = (r: PageVersionRow): PageVersionMeta => ({
+  id: r.id,
+  pageId: r.pageId,
+  revision: r.revision,
+  reason: r.reason,
+  deviceLabel: r.deviceLabel,
+  createdAt: r.createdAt,
+});
 
 const textOf = (type: PageRow['type'], content: string) =>
   type === 'markdown' ? markdownToText(content) : '';
@@ -635,18 +656,132 @@ export class NotesService {
   // Pages
 
   getPage(owner: string, id: string): Page {
+    const row = this.livePage(owner, id);
+    return {
+      ...toPageMeta({ ...row, text: row.contentText.slice(0, SNIPPET_LENGTH * 2) }),
+      content: row.content,
+      viewMode: row.viewMode,
+    };
+  }
+
+  /**
+   * Saves a page's content if `baseRevision` is still its revision (D9); otherwise throws
+   * `revision_conflict` with the current content, for the browser to merge. Content equal to
+   * what is stored is never a conflict: a save repeated after a lost answer just succeeds.
+   */
+  saveContent(
+    owner: string,
+    id: string,
+    input: In<typeof saveContentSchema>,
+    deviceLabel: string,
+  ): ContentSaved {
+    return this.tx(() => {
+      const row = this.livePage(owner, id);
+      if (input.content === row.content) {
+        return { revision: row.revision, pages: [toPageMeta({ ...row, text: row.contentText })] };
+      }
+      if (input.baseRevision !== row.revision) {
+        throw new ApiError(409, 'revision_conflict', 'This page was changed elsewhere.', {
+          revision: row.revision,
+          content: row.content,
+          type: row.type,
+        } satisfies ContentConflict);
+      }
+      // The versioning hook (§9.7): keep what this save replaces, now and then, and always
+      // when a conflict is being settled.
+      const now = this.now();
+      if (input.resolving) this.keepVersion(row, 'conflict', deviceLabel, now);
+      else if (row.content !== '' && this.lastVersionAt(row.id) <= now - VERSION_INTERVAL_MS) {
+        this.keepVersion(row, 'auto', deviceLabel, now);
+      }
+      const saved = this.orm
+        .update(pages)
+        .set({
+          content: input.content,
+          contentText: textOf(row.type, input.content),
+          revision: row.revision + 1,
+          updatedAt: now,
+        })
+        .where(eq(pages.id, row.id))
+        .returning()
+        .get()!;
+      return {
+        revision: saved.revision,
+        pages: [toPageMeta({ ...saved, text: saved.contentText })],
+      };
+    });
+  }
+
+  /** Keeps the browser's side of a conflict it couldn't merge, so nothing is lost (§9.6). */
+  createVersion(
+    owner: string,
+    id: string,
+    input: In<typeof createVersionSchema>,
+    deviceLabel: string,
+  ): PageVersionMeta {
+    const row = this.livePage(owner, id);
+    return toVersionMeta(
+      this.orm
+        .insert(pageVersions)
+        .values({
+          id: uuidv7(this.now()),
+          ownerId: owner,
+          pageId: row.id,
+          revision: input.baseRevision,
+          type: row.type,
+          title: row.title,
+          content: input.content,
+          reason: input.reason,
+          deviceLabel,
+          createdAt: this.now(),
+        })
+        .returning()
+        .get(),
+    );
+  }
+
+  private livePage(owner: string, id: string): PageRow {
     const row = this.orm
       .select()
       .from(pages)
       .where(and(eq(pages.id, id), eq(pages.ownerId, owner), isNull(pages.deletedAt)))
       .get();
     if (!row) throw notFound('Page not found.');
-    return {
-      ...toPageMeta({ ...row, text: row.contentText.slice(0, SNIPPET_LENGTH * 2) }),
-      content: row.content,
-      revision: row.revision,
-      viewMode: row.viewMode,
-    };
+    return row;
+  }
+
+  private lastVersionAt(pageId: string): number {
+    const last = this.orm
+      .select({ createdAt: pageVersions.createdAt })
+      .from(pageVersions)
+      .where(eq(pageVersions.pageId, pageId))
+      .orderBy(desc(pageVersions.createdAt))
+      .limit(1)
+      .get();
+    return last?.createdAt ?? 0;
+  }
+
+  private keepVersion(
+    row: PageRow,
+    reason: PageVersionRow['reason'],
+    deviceLabel: string,
+    now: number,
+  ): void {
+    this.orm
+      .insert(pageVersions)
+      .values({
+        id: uuidv7(now),
+        ownerId: row.ownerId,
+        pageId: row.id,
+        revision: row.revision,
+        type: row.type,
+        title: row.title,
+        content: row.content,
+        reason,
+        deviceLabel,
+        createdAt: now,
+      })
+      .run();
   }
 
   /** The page structure of some sections: enough to check and plan moves. */
@@ -724,7 +859,15 @@ export class NotesService {
 
   createPage(owner: string, input: In<typeof createPageSchema>): TreeChanges {
     return this.tx(() => {
-      const { sectionId, parentPageId, beforeId, title, type, content } = input;
+      const { id, sectionId, parentPageId, beforeId, title, type, content } = input;
+      if (id !== undefined) {
+        // A browser that created the page offline may send it again after a lost answer.
+        const existing = this.orm.select().from(pages).where(eq(pages.id, id)).get();
+        if (existing?.ownerId === owner) {
+          return { pages: [toPageMeta({ ...existing, text: existing.contentText })] };
+        }
+        if (existing) throw new ApiError(409, 'conflict', 'That id is taken.');
+      }
       this.liveSection(owner, sectionId);
       const nodes = this.pageNodes(owner, [sectionId]);
       const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -741,7 +884,7 @@ export class NotesService {
       const row = this.orm
         .insert(pages)
         .values({
-          id: uuidv7(now),
+          id: id ?? uuidv7(now),
           ownerId: owner,
           sectionId,
           parentPageId,
