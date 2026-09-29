@@ -1,6 +1,6 @@
 # Installing Memora
 
-> **Draft (Phase 2).** Memora has accounts now, but doesn't store notes yet: that starts in Phase 3. The guide grows with each phase and is finished in Phase 13.
+> **Draft (Phase 3).** Memora has accounts and notebook organisation now; editing pages starts in Phase 5. The guide grows with each phase and is finished in Phase 13.
 
 ## What you need
 

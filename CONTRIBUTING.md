@@ -70,7 +70,8 @@ The interface follows the Aurora design (decision D21 in the plan). Its building
 | `styles/`        | Design tokens (`tokens.css`: colours with `light-dark()`, glass, elevation, motion) and the Tailwind theme (`index.css`) |
 | `theme/`         | The 12 section colours and the appearance store (theme, glass effects)                                                   |
 | `components/ui/` | Core components (buttons, menus, dialogs, section tabs, page tree, command palette, save indicator, split pane, …)       |
-| `shell/`         | The responsive app shell (currently with placeholder content)                                                            |
+| `shell/`         | The responsive app shell: navigation, section tabs, page list, dialogs, commands and keyboard shortcuts                  |
+| `notes/`         | The notes tree from the API: lookups, move planning, and the actions that change it                                      |
 | `gallery/`       | The component gallery                                                                                                    |
 
 Some rules of thumb:
