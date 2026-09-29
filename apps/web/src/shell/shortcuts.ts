@@ -40,6 +40,8 @@ export interface Shortcut {
 }
 
 const mod = (e: KeyboardEvent) => e.ctrlKey || e.metaKey;
+const inEditor = (target: EventTarget | null) =>
+  !!(target as HTMLElement | null)?.closest?.('.cm-editor');
 const plain = (e: KeyboardEvent) => !e.ctrlKey && !e.metaKey && !e.altKey;
 // Letters by physical key: Alt changes the character on some layouts (and on a Mac).
 const letter = (e: KeyboardEvent, l: string) => e.code === `Key${l}`;
@@ -48,10 +50,15 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     id: 'palette',
     keys: 'Mod K',
-    label: 'Search and commands',
+    label: 'Search and commands (Mod P in the Markdown editor)',
     group: 'General',
     scope: 'global',
-    match: (e) => mod(e) && !e.altKey && !e.shiftKey && letter(e, 'K'),
+    // In the Markdown editor Mod K makes a link (§9.3), so search is Mod P there.
+    match: (e) =>
+      mod(e) &&
+      !e.altKey &&
+      !e.shiftKey &&
+      (letter(e, 'K') || (letter(e, 'P') && inEditor(e.target))),
   },
   {
     id: 'quick-note',
@@ -183,6 +190,24 @@ export const LIST_KEYS: readonly { keys: string; label: string }[] = [
   { keys: 'Shift Click', label: 'Select a range of pages' },
   { keys: 'Mod Click', label: 'Add a page to the selection' },
   { keys: 'Shift F10', label: 'Open the context menu' },
+];
+
+/** The Markdown editor's own keys (CodeMirror handles them), for the reference sheet. */
+export const EDITOR_KEYS: readonly { keys: string; label: string }[] = [
+  { keys: 'Mod B', label: 'Bold' },
+  { keys: 'Mod I', label: 'Italic' },
+  { keys: 'Mod K', label: 'Link' },
+  { keys: 'Mod 1…6', label: 'Heading 1 to 6' },
+  { keys: 'Mod Shift 7', label: 'Numbered list' },
+  { keys: 'Mod Shift 8', label: 'Bullet list' },
+  { keys: 'Mod Shift 9', label: 'Task list' },
+  { keys: '/', label: 'Insert a table, code, diagram, image…' },
+  { keys: '[[', label: 'Link to a page' },
+  { keys: 'Tab', label: 'Next table cell' },
+  { keys: 'Mod Shift F', label: 'Format table' },
+  { keys: 'Mod F', label: 'Find and replace' },
+  { keys: 'Mod S', label: 'Save now' },
+  { keys: 'Esc Tab', label: 'Leave the editor' },
 ];
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
