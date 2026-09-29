@@ -41,7 +41,7 @@ export interface Shortcut {
 
 const mod = (e: KeyboardEvent) => e.ctrlKey || e.metaKey;
 const inEditor = (target: EventTarget | null) =>
-  !!(target as HTMLElement | null)?.closest?.('.cm-editor');
+  !!(target as HTMLElement | null)?.closest?.('.cm-editor, .ProseMirror');
 const plain = (e: KeyboardEvent) => !e.ctrlKey && !e.metaKey && !e.altKey;
 // Letters by physical key: Alt changes the character on some layouts (and on a Mac).
 const letter = (e: KeyboardEvent, l: string) => e.code === `Key${l}`;
@@ -50,10 +50,10 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     id: 'palette',
     keys: 'Mod K',
-    label: 'Search and commands (Mod P in the Markdown editor)',
+    label: 'Search and commands (Mod P in a page)',
     group: 'General',
     scope: 'global',
-    // In the Markdown editor Mod K makes a link (§9.3), so search is Mod P there.
+    // In the editors Mod K makes a link (§9.3, §9.4), so search is Mod P there.
     match: (e) =>
       mod(e) &&
       !e.altKey &&
