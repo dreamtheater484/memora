@@ -1,6 +1,6 @@
 # Installing Memora
 
-> **Draft (Phase 3).** Memora has accounts and notebook organisation now; editing pages starts in Phase 5. The guide grows with each phase and is finished in Phase 13.
+> **Draft (Phase 4).** Memora has accounts, notebook organisation and safe saving, also offline, with a basic Markdown editor; the full editor comes in Phase 5. The guide grows with each phase and is finished in Phase 13.
 
 ## What you need
 
@@ -29,7 +29,7 @@
    docker logs memora
    ```
 
-5. Open `http://<host-ip>:3000`, enter the setup code, and create your administrator account.
+5. Open `http://<host-ip>:3000`, enter the setup code, and create your administrator account. On the computer that runs Docker, use `http://localhost:3000`: browsers allow offline mode only there or over HTTPS.
 
 > On Ubuntu, `docker compose` needs the Compose plugin: `sudo apt install docker-compose-v2`.
 
@@ -157,7 +157,7 @@ Paste a **fine-grained or classic token with only `read:packages`** as the passw
 
 ## HTTPS
 
-Browsers only allow offline mode, secure cookies and clipboard images over **HTTPS**, even on your own network. Over plain HTTP Memora still works, but logs a warning and uses a weaker cookie.
+Browsers only allow offline mode, secure cookies and clipboard images over **HTTPS** (or at `localhost`), even on your own network. Over plain HTTP Memora still works, but logs a warning and uses a weaker cookie.
 
 Three ways to get HTTPS:
 
@@ -210,7 +210,7 @@ You now have `memora-ca.crt` (goes on every device), `memora.crt` and `memora.ke
 
 - Source: protocol **HTTPS**, hostname `*`, port `8443` (any free port; DSM itself uses 5000 and 5001).
 - Destination: protocol **HTTP**, hostname `localhost`, port `3000`.
-- **Custom Header → Create → WebSocket** (needed for live updates in later phases).
+- **Custom Header → Create → WebSocket**. Without it, changes from your other devices show up only every 30 seconds, and Memora's status says the live connection is blocked.
 
 Then in **Control Panel → Security → Certificate → Settings**, choose the imported certificate for the `*:8443` entry.
 
@@ -263,15 +263,17 @@ Memora updates the database automatically on start, and takes a backup first. A 
 
 ## Troubleshooting
 
-| Symptom                                            | Fix                                                                                                                           |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Container exits with _"is not writable by user …"_ | Give the `PUID`/`PGID` user read/write access to the data folder, or change `PUID`/`PGID`                                     |
-| Container exits with _"refusing to run as root"_   | Set `PUID` to a regular user's id (not `0`)                                                                                   |
-| Container exits with _"newer version of Memora"_   | You started an older image on a newer database. Use the newer image, or restore a backup.                                     |
-| Lost the setup code                                | Check the log again, or restart the container to print a new one                                                              |
-| Forgot a password                                  | An administrator resets it in **Settings → Users**. For the last administrator: `memora-admin reset-password <username>`      |
-| _"Too many attempts"_                              | Wait the time shown. Repeated failures double the wait, up to 15 minutes                                                      |
-| _"Requests from other sites are not allowed"_      | `MEMORA_BASE_URL` doesn't match the address in the browser. Set it to exactly that address, including `https://` and the port |
-| Log warns about _"signing in over plain HTTP"_     | You're using plain HTTP. Set up HTTPS and `MEMORA_BASE_URL`                                                                   |
-| `denied` when pulling the image                    | The image is private: see [If the image is private](#if-the-image-is-private)                                                 |
-| Check the logs                                     | `docker logs memora`, or Container Manager → Container → memora → Log                                                         |
+| Symptom                                                                                                  | Fix                                                                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Container exits with _"is not writable by user …"_                                                       | Give the `PUID`/`PGID` user read/write access to the data folder, or change `PUID`/`PGID`                                                                                                                                                       |
+| Container exits with _"refusing to run as root"_                                                         | Set `PUID` to a regular user's id (not `0`)                                                                                                                                                                                                     |
+| Container exits with _"newer version of Memora"_                                                         | You started an older image on a newer database. Use the newer image, or restore a backup.                                                                                                                                                       |
+| Lost the setup code                                                                                      | Check the log again, or restart the container to print a new one                                                                                                                                                                                |
+| Forgot a password                                                                                        | An administrator resets it in **Settings → Users**. For the last administrator: `memora-admin reset-password <username>`                                                                                                                        |
+| _"Too many attempts"_                                                                                    | Wait the time shown. Repeated failures double the wait, up to 15 minutes                                                                                                                                                                        |
+| _"Requests from other sites are not allowed"_                                                            | `MEMORA_BASE_URL` doesn't match the address in the browser. Set it to exactly that address, including `https://` and the port                                                                                                                   |
+| Log warns about _"signing in over plain HTTP"_                                                           | You're using plain HTTP. Set up HTTPS and `MEMORA_BASE_URL`                                                                                                                                                                                     |
+| `denied` when pulling the image                                                                          | The image is private: see [Images from your own fork](#images-from-your-own-fork)                                                                                                                                                               |
+| Changes from other devices take up to 30 s to appear, and the status says the live connection is blocked | The reverse proxy doesn't pass WebSockets. On Synology, add the **WebSocket** custom header to the rule ([HTTPS](#a-vpn-plus-a-local-certificate), step 3). Other proxies must pass the `Upgrade` and `Connection` headers for `/api/v1/events` |
+| The badge stays on _"Saved on this device"_                                                              | The browser can't reach Memora. Your changes are safe in the browser and are sent as soon as it can; check that the container runs                                                                                                              |
+| Check the logs                                                                                           | `docker logs memora`, or Container Manager → Container → memora → Log                                                                                                                                                                           |
