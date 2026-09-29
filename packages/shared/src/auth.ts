@@ -147,6 +147,9 @@ export const AUDIT_EVENTS = [
   'user_enabled',
   'user_deleted',
   'password_reset',
+  'backup_created',
+  'backup_downloaded',
+  'backup_restored',
 ] as const;
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];
 
