@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { fromServer, settle } from './records';
+import { adoptData } from './engine';
 import { MemoryStore, openStore, type LocalStore } from './store';
 
 let users = 0;
@@ -63,6 +64,25 @@ describe.each(stores)('the %s store', (_name, open) => {
     expect(await store.get('a')).toBeUndefined();
     expect(await store.get('b')).toMatchObject({ content: 'B!' });
     expect(await store.read('tree')).toBeUndefined();
+  });
+
+  it('after a restore, drops the old data and compares changes with the restored pages', async () => {
+    const store = await open();
+    expect(await adoptData(store, 'data-1')).toBe(false);
+    await store.update('a', () => fromServer('a', { ...server('A'), revision: 7 }, 1));
+    await store.update('b', () =>
+      settle({ ...fromServer('b', { ...server('B'), revision: 7 }, 1), content: 'B!' }),
+    );
+    await store.write('tree', {});
+    // Same data: nothing happens.
+    expect(await adoptData(store, 'data-1')).toBe(false);
+    expect(await store.get('a')).toBeDefined();
+    // Restored: the unchanged page goes, the changed one is sent again from scratch.
+    expect(await adoptData(store, 'data-2')).toBe(true);
+    expect(await store.get('a')).toBeUndefined();
+    expect(await store.get('b')).toMatchObject({ content: 'B!', revision: 0, base: '', dirty: 1 });
+    expect(await store.read('tree')).toBeUndefined();
+    expect(await store.read('dataId')).toBe('data-2');
   });
 });
 

@@ -70,6 +70,12 @@ export interface LocalStore {
   trim(keep: number): Promise<void>;
   /** Drops every unchanged page and the kept tree and settings (logging out). */
   forgetClean(): Promise<void>;
+  /**
+   * The server's data was restored from a backup: drops what was kept of the old data, and
+   * compares changes not sent yet with the restored pages afresh (as conflicts where they
+   * differ), so nothing typed here is lost.
+   */
+  forgetRestored(): Promise<void>;
   close(): void;
 }
 
@@ -80,6 +86,14 @@ interface Schema extends DBSchema {
 }
 
 const VERSION = 1;
+
+/** A record with changes, no longer tied to a revision of the server's (see forgetRestored). */
+const unanchored = ({ conflict, ...record }: PageRecord): PageRecord => ({
+  ...record,
+  revision: 0,
+  base: '',
+  ...(conflict ? { conflict: { ...conflict, revision: 0 } } : {}),
+});
 
 /** The per-user database's name. */
 export const databaseName = (userId: string) => `memora-${userId}`;
@@ -168,6 +182,17 @@ class IdbStore implements LocalStore {
     await tx.done;
   }
 
+  async forgetRestored() {
+    const tx = this.db.transaction(['pages', 'kv'], 'readwrite');
+    const pages = tx.objectStore('pages');
+    for (let cursor = await pages.openCursor(); cursor; cursor = await cursor.continue()) {
+      if (cursor.value.dirty) await cursor.update(unanchored(cursor.value));
+      else await cursor.delete();
+    }
+    await tx.objectStore('kv').clear();
+    await tx.done;
+  }
+
   close() {
     this.db.close();
   }
@@ -235,6 +260,14 @@ export class MemoryStore implements LocalStore {
 
   async forgetClean() {
     for (const r of [...this.pages.values()]) if (!r.dirty) this.pages.delete(r.id);
+    this.kv.clear();
+  }
+
+  async forgetRestored() {
+    for (const r of [...this.pages.values()]) {
+      if (r.dirty) this.pages.set(r.id, unanchored(r));
+      else this.pages.delete(r.id);
+    }
     this.kv.clear();
   }
 

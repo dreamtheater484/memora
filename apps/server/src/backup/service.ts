@@ -11,6 +11,7 @@ import {
 import Database from 'better-sqlite3';
 import type { Config } from '../config';
 import type { SqliteDatabase } from '../db/client';
+import { renewDataId } from '../db/meta';
 import { ApiError, notFound } from '../errors';
 import { nextRun } from './cron';
 import { EnvelopeError, decryptFile, encryptFile, isEncrypted } from './envelope';
@@ -291,6 +292,8 @@ export class BackupService {
         });
       } else await copyFile(source, pending);
       checkDatabase(pending);
+      // Browsers that kept the data as it is now drop it once they see the new id.
+      renewDataId(pending);
       const safety = await this.create('pre-restore');
       await writeFile(
         join(dir, MARKER),

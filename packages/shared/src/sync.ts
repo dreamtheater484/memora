@@ -125,6 +125,8 @@ export interface PresenceDevice {
 }
 
 export type ServerEvent =
+  /** Sent first: the id of the server's data, new after a backup is restored. */
+  | { type: 'hello'; dataId: string }
   /** Notebooks, groups, sections or pages changed: reload the tree. */
   | { type: 'tree.changed'; origin: string | null }
   /** A page's content was saved. */

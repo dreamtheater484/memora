@@ -67,6 +67,8 @@ export interface EngineOptions {
   onSignedOut: () => void;
   /** Gets a fresh session check (with a CSRF token); answers whether still signed in. */
   refreshSession: () => Promise<boolean>;
+  /** The id of the server's data when signing in (`MeResponse.dataId`), if known. */
+  dataId?: string;
 }
 
 export class SyncEngine implements SenderHost, DocHost, LiveHost {
@@ -418,7 +420,20 @@ export class SyncEngine implements SenderHost, DocHost, LiveHost {
       case 'presence':
         useSync.setState({ devices: event.devices });
         break;
+      case 'hello':
+        void this.follow(event.dataId);
+        break;
     }
+  }
+
+  /**
+   * The server's data was restored from a backup since this tab started: start again, which
+   * drops what was kept of the old data (`adoptData`).
+   */
+  private async follow(dataId: string) {
+    if (dataId === this.options.dataId) return;
+    if (this.options.dataId || (await adoptData(this.store, dataId))) window.location.reload();
+    else this.options.dataId = dataId;
   }
 
   private mergeTree(changes: TreeChanges) {
@@ -711,7 +726,9 @@ export function startSync(
   if (starting) return starting;
   starting = (async () => {
     await current?.stop();
-    const engine = new SyncEngine(userId, await openStore(userId), queryClient, options);
+    const store = await openStore(userId);
+    if (options.dataId) await adoptData(store, options.dataId);
+    const engine = new SyncEngine(userId, store, queryClient, options);
     engine.start();
     useEngine.setState({ engine });
     return engine;
@@ -719,6 +736,18 @@ export function startSync(
     starting = null;
   });
   return starting;
+}
+
+/**
+ * Keeps the id of the server's data the store's pages come from. When it changed (a backup was
+ * restored), what the store kept of the old data is dropped; answers whether it was.
+ */
+export async function adoptData(store: LocalStore, dataId: string): Promise<boolean> {
+  const seen = await store.read<string>('dataId').catch(() => undefined);
+  if (seen === dataId) return false;
+  if (seen) await store.forgetRestored().catch(() => undefined);
+  await store.write('dataId', dataId).catch(() => undefined);
+  return !!seen;
 }
 
 export async function stopSync(options: { forget?: boolean } = {}): Promise<void> {

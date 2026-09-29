@@ -12,7 +12,6 @@ import { Button, DialogContent, toast } from '../components/ui';
 import { api, errorMessage } from '../lib/api';
 import type { PageDoc } from '../sync/doc';
 import { currentSync } from '../sync/engine';
-import type { PageRecord } from '../sync/records';
 
 /*
  * Converting a page between Markdown and rich text (§9.4), from the page menu. The report says
@@ -21,28 +20,6 @@ import type { PageRecord } from '../sync/records';
  */
 
 const LABEL: Record<PageType, string> = { markdown: 'Markdown', rich: 'rich text' };
-
-/** Waits until everything typed on the page is on the server; null if that takes too long. */
-function saved(doc: PageDoc, timeout = 10_000): Promise<PageRecord | null> {
-  return new Promise((resolve) => {
-    const check = () => {
-      const { record, unpersisted, state } = doc.getSnapshot();
-      if (state === 'ready' && record && !record.dirty && !unpersisted) {
-        done(record);
-        return true;
-      }
-      return false;
-    };
-    const timer = setTimeout(() => done(null), timeout);
-    const unsubscribe = doc.subscribe(check);
-    function done(value: PageRecord | null) {
-      clearTimeout(timer);
-      unsubscribe();
-      resolve(value);
-    }
-    check();
-  });
-}
 
 async function convertContent(content: string, to: PageType) {
   const { markdownToRich, richToMarkdownPage } = await import('../rich/convert');
@@ -82,7 +59,7 @@ export function ConvertDialog({
     setError(null);
     try {
       await doc.flush();
-      const record = await saved(doc);
+      const record = await doc.whenSaved();
       if (!record) {
         throw new Error(
           'The page’s latest changes haven’t reached the server yet. Converting needs a connection: try again in a moment.',

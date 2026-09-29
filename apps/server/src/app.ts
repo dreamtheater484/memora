@@ -13,6 +13,7 @@ import { registerAuth } from './auth/plugin';
 import { AuthService } from './auth/service';
 import type { Config } from './config';
 import type { SqliteDatabase } from './db/client';
+import { dataIdOf } from './db/meta';
 import { ApiError } from './errors';
 import { EventHub } from './events/hub';
 import { NotesService } from './notes/service';
@@ -108,6 +109,7 @@ export async function buildApp({
     },
     now,
   );
+  let dataId: string | undefined;
   const deps: RouteDeps = {
     db,
     repos,
@@ -116,6 +118,7 @@ export async function buildApp({
     assets,
     fetchPolicy,
     backups,
+    dataId: () => (dataId ??= dataIdOf(db)),
     restart: onRestart,
     events,
     config,

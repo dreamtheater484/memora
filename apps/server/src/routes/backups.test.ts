@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { BackupInfo, BackupStatus, Tree, TreeChanges } from '@memora/shared';
+import type { BackupInfo, BackupStatus, MeResponse, Tree, TreeChanges } from '@memora/shared';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { applyPendingRestore, backupsToKeep } from '../backup/service';
@@ -41,6 +41,10 @@ describe('backups', () => {
     t = await createTestApp({ MEMORA_BACKUP_SCHEDULE: 'off' }, { onRestart });
     const admin = await t.setupAdmin('alex');
     const id = await withPage(admin, 'As it was');
+    const { dataId } = (await admin.get('/api/v1/auth/me')).json() as MeResponse;
+    expect(dataId).toMatch(/^[0-9a-f-]{36}$/);
+    // Signed out, the id isn't shown.
+    expect((await t.client().get('/api/v1/auth/me')).json().dataId).toBeUndefined();
 
     const made = await admin.post('/api/v1/admin/backups');
     expect(made.statusCode).toBe(201);
@@ -73,6 +77,11 @@ describe('backups', () => {
     expect(db.prepare('SELECT content FROM pages WHERE id = ?').get(id)).toEqual({
       content: 'As it was',
     });
+    // The data has a new id, so browsers drop what they kept of it.
+    const restoredId = db.prepare("SELECT value FROM app_meta WHERE key = 'data_id'").get() as {
+      value: string;
+    };
+    expect(restoredId.value).not.toBe(dataId);
     db.close();
     const saved = new Database(join(t.config.backupDir, safety), { readonly: true });
     expect(saved.prepare('SELECT content FROM pages WHERE id = ?').get(id)).toEqual({

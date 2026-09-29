@@ -3,7 +3,7 @@ import { MonitorSmartphone, TriangleAlert } from 'lucide-react';
 import { Suspense, lazy, useMemo, useState } from 'react';
 import { Button, Dialog, DialogContent, SaveIndicator, Skeleton } from '../components/ui';
 import { cn } from '../lib/cn';
-import { composeBlocks, compareBlocks, type Choice } from '../sync/compare';
+import { comparePage, type Choice } from '../sync/compare';
 import type { PageDoc } from '../sync/doc';
 import { useDocSnapshot, usePageSaveState } from '../sync/hooks';
 import { useSync } from '../sync/status';
@@ -118,8 +118,6 @@ function ConflictBanner({ doc }: { doc: PageDoc }) {
   const record = useDocSnapshot(doc)?.record;
   // Converted on another device meanwhile: only the server's version fits the page now.
   const converted = !!record?.conflict?.type;
-  // Rich pages are compared block by block with the history (Phase 7).
-  const comparable = record?.type === 'markdown' && !converted;
   if (converted) {
     return (
       <div
@@ -154,11 +152,9 @@ function ConflictBanner({ doc }: { doc: PageDoc }) {
         <Button size="sm" onClick={() => void doc.keepTheirs()}>
           Keep theirs
         </Button>
-        {comparable && (
-          <Button size="sm" variant="primary" onClick={() => setComparing(true)}>
-            Compare
-          </Button>
-        )}
+        <Button size="sm" variant="primary" onClick={() => setComparing(true)}>
+          Compare
+        </Button>
       </div>
       <Dialog open={comparing} onOpenChange={setComparing}>
         {comparing && <CompareDialog doc={doc} onDone={() => setComparing(false)} />}
@@ -178,7 +174,9 @@ function CompareDialog({ doc, onDone }: { doc: PageDoc; onDone: () => void }) {
   const conflict = snapshot?.record?.conflict;
   const theirs = conflict?.content ?? '';
   const mine = snapshot?.record?.content ?? '';
-  const blocks = useMemo(() => compareBlocks(theirs, mine), [theirs, mine]);
+  const type = snapshot?.record?.type ?? 'markdown';
+  const comparison = useMemo(() => comparePage(type, theirs, mine), [type, theirs, mine]);
+  const blocks = comparison?.blocks ?? [];
   const changes = blocks.filter((b) => b.kind === 'change').length;
   const [choices, setChoices] = useState<Choice[]>(() => Array(changes).fill('mine'));
   const choose = (i: number, choice: Choice) =>
@@ -195,8 +193,9 @@ function CompareDialog({ doc, onDone }: { doc: PageDoc; onDone: () => void }) {
           <Button onClick={onDone}>Cancel</Button>
           <Button
             variant="primary"
+            disabled={!comparison}
             onClick={() => {
-              void doc.keepMine(composeBlocks(blocks, choices));
+              if (comparison) void doc.keepMine(comparison.compose(choices));
               onDone();
             }}
           >
