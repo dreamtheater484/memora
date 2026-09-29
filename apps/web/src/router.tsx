@@ -13,6 +13,7 @@ import { LoginPage } from './auth/LoginPage';
 import { meQuery } from './auth/queries';
 import { SetupPage } from './auth/SetupPage';
 import { safeRedirect } from './lib/redirect';
+import { settingsQuery, treeQuery } from './notes/queries';
 import { RootError } from './RootError';
 import { AccountPage } from './settings/AccountPage';
 import { SettingsLayout } from './settings/SettingsLayout';
@@ -84,11 +85,25 @@ const appRoute = createRoute({
   component: Outlet,
 });
 
-const indexRoute = createRoute({
+/** The notes app. The URL says where you are; the shell renders every level. */
+const notesRoute = createRoute({
   getParentRoute: () => appRoute,
-  path: '/',
+  id: 'notes',
+  loader: ({ context }) =>
+    Promise.all([
+      context.queryClient.ensureQueryData(treeQuery),
+      context.queryClient.ensureQueryData(settingsQuery),
+    ]),
   component: AppShell,
 });
+
+const parent = () => notesRoute;
+const homeRoute = createRoute({ getParentRoute: parent, path: '/' });
+const notebookRoute = createRoute({ getParentRoute: parent, path: '/n/$notebookId' });
+const groupRoute = createRoute({ getParentRoute: parent, path: '/g/$groupId' });
+const sectionRoute = createRoute({ getParentRoute: parent, path: '/s/$sectionId' });
+const pageRoute = createRoute({ getParentRoute: parent, path: '/p/$pageId' });
+const boardRoute = createRoute({ getParentRoute: parent, path: '/b/$boardId' });
 
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -138,7 +153,14 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   changePasswordRoute,
   appRoute.addChildren([
-    indexRoute,
+    notesRoute.addChildren([
+      homeRoute,
+      notebookRoute,
+      groupRoute,
+      sectionRoute,
+      pageRoute,
+      boardRoute,
+    ]),
     settingsRoute.addChildren([
       settingsIndexRoute,
       accountRoute,
