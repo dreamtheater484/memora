@@ -1,0 +1,168 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/figtree';
+@import '@fontsource-variable/bricolage-grotesque/opsz.css';
+@import '@fontsource-variable/jetbrains-mono';
+@import './tokens.css';
+@import './base.css';
+
+/* Light/dark variants follow our tokens, not only the OS setting. */
+@custom-variant dark {
+  &:where([data-theme='dark'], [data-theme='dark'] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme='light']), :root:not([data-theme='light']) *) {
+      @slot;
+    }
+  }
+}
+
+/* Only Memora's own colours exist as utilities (bg-surface, text-fg-2, …). */
+@theme inline {
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-overlay: var(--overlay);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-hover: var(--hover);
+  --color-active: var(--active);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-mark: var(--mark);
+  --color-focus: var(--focus);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-sec: var(--sec);
+  --color-sec-soft: var(--sec-soft);
+  --color-sec-softer: var(--sec-softer);
+  --color-sec-ink: var(--sec-ink);
+  --color-code: var(--code-bg);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-panel: var(--shadow-panel);
+  --shadow-pop: var(--shadow-pop);
+}
+
+@theme {
+  --font-sans: 'Figtree Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Bricolage Grotesque Variable', 'Figtree Variable', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'Cascadia Code', monospace;
+
+  /* Type scale (rem, so it follows the browser's font-size setting). */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.35rem;
+  --text-md: 0.9375rem;
+  --text-md--line-height: 1.6rem;
+  --text-lg: 1.0625rem;
+  --text-lg--line-height: 1.6rem;
+  --text-xl: 1.3125rem;
+  --text-xl--line-height: 1.65rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 1.9rem;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 2.2rem;
+  --text-4xl: 2.125rem;
+  --text-4xl--line-height: 2.45rem;
+
+  /* Corner radii. */
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.5625rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.25rem;
+
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Layout breakpoints (§9.12): phone < 640, tablet, desktop, wide, ultra-wide. */
+  --breakpoint-tablet: 40rem;
+  --breakpoint-desktop: 64rem;
+  --breakpoint-wide: 120rem;
+  --breakpoint-ultra: 200rem;
+  --container-tablet: 40rem;
+  --container-desktop: 64rem;
+  --container-wide: 120rem;
+  --container-ultra: 200rem;
+
+  --animate-fade-in: fade-in var(--dur-base) var(--ease-out);
+  --animate-pop-in: pop-in var(--dur-base) var(--ease-out);
+  --animate-slide-in-left: slide-in-left var(--dur-slow) var(--ease-out);
+  --animate-slide-in-right: slide-in-right var(--dur-slow) var(--ease-out);
+  --animate-slide-in-up: slide-in-up var(--dur-slow) var(--ease-out);
+  --animate-spin: spin 0.9s linear infinite;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.98);
+    }
+  }
+  @keyframes slide-in-left {
+    from {
+      transform: translateX(-24px);
+      opacity: 0;
+    }
+  }
+  @keyframes slide-in-right {
+    from {
+      transform: translateX(24px);
+      opacity: 0;
+    }
+  }
+  @keyframes slide-in-up {
+    from {
+      transform: translateY(32px);
+      opacity: 0;
+    }
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+}
+
+/* Frosted panel: translucent surface, blur, light edge and soft shadow. */
+@utility glass {
+  background-color: var(--panel);
+  backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--shadow-panel);
+}
+/* Floating layer (menus, popovers, dialogs): more opaque, stronger shadow. */
+@utility glass-raised {
+  background-color: var(--raised);
+  backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-pop);
+}

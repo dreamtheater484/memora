@@ -3,7 +3,12 @@ import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { router } from './router';
-import './styles.css';
+import './styles/index.css';
+import { applyAccent } from './theme/sections';
+import { applyAppearance, useTheme } from './theme/theme';
+
+applyAppearance(useTheme.getState());
+applyAccent('blue');
 
 const queryClient = new QueryClient();
 

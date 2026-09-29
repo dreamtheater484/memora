@@ -1,0 +1,88 @@
+/* Global base styles on top of Tailwind's preflight. */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+
+/* The Aurora ambient glow: three soft light sources in the current section's
+   colour and two neighbouring hues. It sits behind everything. */
+.aurora-bg {
+  background:
+    radial-gradient(
+      60% 55% at 6% 0%,
+      light-dark(
+        oklch(0.86 calc(0.1 * var(--ac)) var(--ah) / 0.95),
+        oklch(0.36 calc(0.12 * var(--ac)) var(--ah) / 0.6)
+      ),
+      transparent 72%
+    ),
+    radial-gradient(
+      50% 60% at 100% 6%,
+      light-dark(
+        oklch(0.88 calc(0.09 * var(--ac)) calc(var(--ah) + 50) / 0.85),
+        oklch(0.32 calc(0.1 * var(--ac)) calc(var(--ah) + 50) / 0.5)
+      ),
+      transparent 72%
+    ),
+    radial-gradient(
+      70% 60% at 55% 110%,
+      light-dark(
+        oklch(0.9 calc(0.08 * var(--ac)) calc(var(--ah) - 45) / 0.9),
+        oklch(0.3 calc(0.09 * var(--ac)) calc(var(--ah) - 45) / 0.5)
+      ),
+      transparent 72%
+    ),
+    var(--bg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--mark);
+}
+
+/* Thin, quiet scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+/* Keeps text readable in forced-colours mode (Windows High Contrast). */
+@media (forced-colors: active) {
+  .glass {
+    border: 1px solid CanvasText;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  :root {
+    transition: none;
+  }
+}
