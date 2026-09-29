@@ -86,6 +86,8 @@ export class PageDoc {
   private refreshAgain = false;
   private readonly editors = new Set<DocEditor>();
   private readonly listeners = new Set<() => void>();
+  /** Edited in this tab since it was opened: closing it keeps a version (§9.7). */
+  private editedHere = false;
   private snapshot: DocSnapshot;
 
   constructor(
@@ -252,6 +254,7 @@ export class PageDoc {
   /** The user changed the text in `from`; `read` gets it (only when needed). */
   edited(read: () => string, from?: DocEditor): void {
     this.reader = read;
+    this.editedHere = true;
     const was = this.unpersisted;
     this.unpersisted = true;
     if (this.editors.size > 1) {
@@ -420,12 +423,47 @@ export class PageDoc {
 
   // Closing
 
-  /** Stores and sends what's left, and stops. */
+  /** Stores and sends what's left, and stops. A page edited here then keeps a version. */
   async close(): Promise<void> {
     clearTimeout(this.retryTimer);
     await this.flush();
     clearTimeout(this.persistTimer);
+    if (this.editedHere && !this.fallback) void this.snapshotWhenSaved();
     this.listeners.clear();
+  }
+
+  /** Once what was typed is on the server, asks it to keep the page as a version. */
+  private async snapshotWhenSaved() {
+    const record = await this.whenSaved(15_000);
+    if (!record) return;
+    await api('POST', `/pages/${this.id}/versions`, { reason: 'auto' }).catch(() => undefined);
+  }
+
+  /** Waits until everything typed on the page is on the server; null if that takes too long. */
+  whenSaved(timeout = 10_000): Promise<PageRecord | null> {
+    return new Promise((resolve) => {
+      let unsubscribe = () => {};
+      const done = (value: PageRecord | null) => {
+        clearTimeout(timer);
+        unsubscribe();
+        resolve(value);
+      };
+      const check = () => {
+        const { record, unpersisted, state } = this.snapshot;
+        if (state === 'ready' && record && !record.dirty && !unpersisted) done(record);
+      };
+      const timer = setTimeout(() => done(null), timeout);
+      // Watched through the store too: the listeners are cleared when the page closes.
+      const poll = setInterval(() => void this.reload().then(check), 500);
+      unsubscribe = (() => {
+        const off = this.subscribe(check);
+        return () => {
+          off();
+          clearInterval(poll);
+        };
+      })();
+      check();
+    });
   }
 
   /** Something typed here isn't safe in the store yet. */

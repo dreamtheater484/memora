@@ -534,7 +534,7 @@ export function Sidebar() {
         <Row icon={<LayoutTemplate />} onClick={soon('Templates', 8)}>
           Templates
         </Row>
-        <Row icon={<Trash2 />} onClick={soon('The recycle bin', 7)}>
+        <Row icon={<Trash2 />} onClick={go.trash} current={level === 'trash'}>
           Recycle bin
         </Row>
         <Row icon={<Settings />} onClick={() => void navigate({ to: '/settings/account' })}>
@@ -566,12 +566,12 @@ export function Rail() {
         label="Inbox"
         icon={<Inbox />}
         tooltipSide="right"
-        active={level !== 'board' && !notebook}
+        active={level !== 'board' && level !== 'trash' && !notebook}
         onClick={() => go.section(index.inbox.id)}
       />
       <span aria-hidden className="my-1 h-px w-6 shrink-0 bg-line" />
       {index.notebooks.map((nb) => {
-        const on = level !== 'board' && nb.id === notebook?.id;
+        const on = level !== 'board' && level !== 'trash' && nb.id === notebook?.id;
         return (
           <button
             key={nb.id}
@@ -609,7 +609,8 @@ export function Rail() {
         label="Recycle bin"
         icon={<Trash2 />}
         tooltipSide="right"
-        onClick={soon('The recycle bin', 7)}
+        active={level === 'trash'}
+        onClick={go.trash}
       />
       <IconButton
         label="Settings"

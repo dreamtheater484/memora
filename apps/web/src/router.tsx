@@ -22,8 +22,8 @@ import { AppShell } from './shell/AppShell';
 
 export interface RouterContext {
   queryClient: QueryClient;
-  /** Starts syncing the signed-in user's notes (§9.6). */
-  startSync: (userId: string) => Promise<unknown>;
+  /** Starts syncing the signed-in user's notes (§9.6), from the server's data `dataId`. */
+  startSync: (userId: string, dataId?: string) => Promise<unknown>;
 }
 
 const me = (context: RouterContext): Promise<MeResponse> =>
@@ -94,8 +94,8 @@ const notesRoute = createRoute({
   id: 'notes',
   loader: async ({ context }) => {
     // The store first: without a connection, the tree and settings come from it.
-    const { user } = await me(context);
-    if (user) await context.startSync(user.id);
+    const { user, dataId } = await me(context);
+    if (user) await context.startSync(user.id, dataId);
     return Promise.all([
       context.queryClient.ensureQueryData(treeQuery),
       context.queryClient.ensureQueryData(settingsQuery),
@@ -111,6 +111,7 @@ const groupRoute = createRoute({ getParentRoute: parent, path: '/g/$groupId' });
 const sectionRoute = createRoute({ getParentRoute: parent, path: '/s/$sectionId' });
 const pageRoute = createRoute({ getParentRoute: parent, path: '/p/$pageId' });
 const boardRoute = createRoute({ getParentRoute: parent, path: '/b/$boardId' });
+const trashRoute = createRoute({ getParentRoute: parent, path: '/trash' });
 
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -161,6 +162,12 @@ const auditRoute = createRoute({
   component: lazyRouteComponent(() => import('./settings/AuditPage'), 'AuditPage'),
 });
 
+const backupsRoute = createRoute({
+  getParentRoute: () => adminRoute,
+  path: 'backups',
+  component: lazyRouteComponent(() => import('./settings/BackupsPage'), 'BackupsPage'),
+});
+
 const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
@@ -173,12 +180,13 @@ const routeTree = rootRoute.addChildren([
       sectionRoute,
       pageRoute,
       boardRoute,
+      trashRoute,
     ]),
     settingsRoute.addChildren([
       settingsIndexRoute,
       accountRoute,
       editingRoute,
-      adminRoute.addChildren([usersRoute, auditRoute]),
+      adminRoute.addChildren([usersRoute, auditRoute, backupsRoute]),
     ]),
   ]),
 ]);

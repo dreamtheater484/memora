@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type {
   AdminUser,
   AuditEntry,
+  BackupInfo,
   CurrentUser,
   MeResponse,
   ServerEvent,
@@ -132,6 +133,26 @@ const AUDIT: AuditEntry[] = [
   entry(1, 'setup_completed', 'alex', 30 * DAY),
 ];
 
+const backup = (kind: BackupInfo['kind'], ago: number, encrypted = false): BackupInfo => {
+  const at = NOW - ago;
+  const stamp = new Date(at).toISOString().replace(/[:.]/g, '-');
+  return {
+    name: `memora-${kind}-${stamp}.db${encrypted ? '.enc' : ''}`,
+    kind,
+    size: 3_400_000 + Math.round(ago / 1000),
+    createdAt: at,
+    encrypted,
+  };
+};
+
+const BACKUPS: BackupInfo[] = [
+  backup('scheduled', 11 * HOUR + 30 * MINUTE),
+  backup('manual', DAY + 2 * HOUR),
+  backup('scheduled', DAY + 11 * HOUR + 30 * MINUTE),
+  backup('pre-migration', 4 * DAY),
+  backup('scheduled', 8 * DAY + 11 * HOUR + 30 * MINUTE),
+];
+
 export interface RecordedRequest {
   method: string;
   path: string;
@@ -161,6 +182,9 @@ export class FakeApi {
   users = structuredClone(USERS);
   sessions = structuredClone(SESSIONS);
   audit = structuredClone(AUDIT);
+  backups = structuredClone(BACKUPS);
+  /** The id of the server's data; a restore changes it. */
+  dataId = 'data-1';
   readonly requests: RecordedRequest[] = [];
   /** Who logging in with PASSWORD becomes. */
   loginAs: CurrentUser = ADMIN;
@@ -211,6 +235,14 @@ export class FakeApi {
     this.down = false;
   }
 
+  /** Tells every browser the server's data changed (a backup was restored). */
+  restored(dataId: string) {
+    this.dataId = dataId;
+    for (const channel of this.channels) {
+      channel.ws.send(JSON.stringify({ type: 'hello', dataId }));
+    }
+  }
+
   /** The content saves sent, whether or not the server was there to take them. */
   saves() {
     return this.requests.filter((r) => r.method === 'PUT' && r.path.endsWith('/content'));
@@ -228,6 +260,7 @@ export class FakeApi {
       pages: [],
     };
     this.channels.add(channel);
+    ws.send(JSON.stringify({ type: 'hello', dataId: this.dataId }));
     ws.onMessage((message) => {
       const data = JSON.parse(String(message)) as { type: string; pages?: string[] };
       if (data.type === 'presence') {
@@ -275,7 +308,7 @@ export class FakeApi {
       case 'GET /api/health':
         return { json: { status: 'ok', version: '0.1.0' } };
       case 'GET /api/v1/auth/me':
-        return { json: this.me };
+        return { json: this.me.user ? { ...this.me, dataId: this.dataId } : this.me };
       case 'POST /api/v1/auth/setup':
         if (body.setupCode !== SETUP_CODE) {
           return error(403, 'invalid_setup_code', 'That code is not right.', {
@@ -320,11 +353,43 @@ export class FakeApi {
       }
       case 'GET /api/v1/admin/audit':
         return { json: { entries: this.audit, nextCursor: null } };
-      default:
+      case 'GET /api/v1/admin/backups':
+        return {
+          json: {
+            backups: this.backups,
+            schedule: '0 3 * * *',
+            nextRunAt: NOW + 12 * HOUR + 30 * MINUTE,
+            last: { at: this.backups[0]?.createdAt ?? NOW, ok: true },
+            encrypting: false,
+            keep: { daily: 7, weekly: 4, monthly: 12 },
+          },
+        };
+      case 'POST /api/v1/admin/backups': {
+        const made = backup('manual', 0);
+        this.backups.unshift(made);
+        return { status: 201, json: made };
+      }
+      default: {
+        const named = path.match(/^\/api\/v1\/admin\/backups\/([^/]+?)(\/restore)?$/);
+        if (named) {
+          const name = decodeURIComponent(named[1]!);
+          const found = this.backups.find((b) => b.name === name);
+          if (!found) return error(404, 'not_found', 'No such backup.');
+          if (method === 'DELETE' && !named[2]) {
+            this.backups = this.backups.filter((b) => b !== found);
+            return { status: 204 };
+          }
+          if (method === 'POST' && named[2]) {
+            const safety = backup('pre-restore', 0);
+            this.backups.unshift(safety);
+            return { json: { restarting: true, safetyBackup: safety.name } };
+          }
+        }
         return (
           this.notes.respond(method, path, body, origin) ??
           error(404, 'not_found', `No fake for ${route}.`)
         );
+      }
     }
   }
 

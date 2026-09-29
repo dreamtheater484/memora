@@ -14,6 +14,7 @@ import { toCurrentUser, type AuthContext, type AuthService } from '../auth/servi
 import { csrfTokenFor } from '../auth/tokens';
 import type { Config } from '../config';
 import type { FetchPolicy } from '../assets/fetch';
+import type { BackupService } from '../backup/service';
 import type { AssetsService } from '../assets/service';
 import type { SqliteDatabase } from '../db/client';
 import type { EventHub } from '../events/hub';
@@ -26,6 +27,11 @@ export interface RouteDeps {
   assets: AssetsService;
   /** How remote images are downloaded (tests allow their local server). */
   fetchPolicy: FetchPolicy;
+  backups: BackupService;
+  /** The id of the data as it is (new after a restore). */
+  dataId: () => string;
+  /** Restarts Memora, to put a restored backup in place. */
+  restart: () => void;
   repos: Repos;
   auth: AuthService;
   notes: NotesService;
@@ -41,7 +47,7 @@ export function authOf(request: FastifyRequest): AuthContext {
   return request.auth;
 }
 
-export function authRoutes(app: FastifyInstance, { auth, repos }: RouteDeps): void {
+export function authRoutes(app: FastifyInstance, { auth, repos, dataId }: RouteDeps): void {
   const signedIn = (
     request: FastifyRequest,
     reply: FastifyReply,
@@ -57,6 +63,7 @@ export function authRoutes(app: FastifyInstance, { auth, repos }: RouteDeps): vo
       setupRequired: current ? false : auth.isSetupRequired(),
       user: current ? toCurrentUser(current.user) : null,
       csrfToken: current ? csrfTokenFor(current.token) : null,
+      ...(current ? { dataId: dataId() } : {}),
     } satisfies MeResponse;
   });
 

@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs';
 import { DEFAULT_HASH_PARAMS, PasswordHasher } from './auth/password';
 import { newTemporaryPassword } from './auth/tokens';
-import { ConfigError, loadConfig } from './config';
+import { BackupService } from './backup/service';
+import { ConfigError, loadConfig, type Config } from './config';
 import { openDatabase, type SqliteDatabase } from './db/client';
 import { createOrm, createRepos } from './repo';
 
@@ -21,6 +22,10 @@ Commands:
   list-users                  Show all accounts
   reset-password <username>   Set a one-time password (to be replaced at the next login)
                               and sign the user out everywhere
+  backup                      Make a backup now (safe while Memora runs)
+  list-backups                Show the backups in the backup folder
+  restore <backup>            Get a backup from the backup folder ready to restore; it is
+                              put in place when Memora restarts (docker restart memora)
   hash-benchmark              Time one password hash with the current settings
   help                        Show this help
 `;
@@ -30,18 +35,21 @@ function fail(message: string): never {
   process.exit(1);
 }
 
-function openExisting(): SqliteDatabase {
-  let config;
+function config(): Config {
   try {
-    config = loadConfig();
+    return loadConfig();
   } catch (error) {
     if (error instanceof ConfigError) fail(error.message);
     throw error;
   }
-  if (!existsSync(config.databaseFile)) {
-    fail(`no database at ${config.databaseFile}. Start Memora once first.`);
+}
+
+function openExisting(): SqliteDatabase {
+  const { databaseFile } = config();
+  if (!existsSync(databaseFile)) {
+    fail(`no database at ${databaseFile}. Start Memora once first.`);
   }
-  const db = openDatabase(config.databaseFile);
+  const db = openDatabase(databaseFile);
   const table = db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'users'")
     .get();
@@ -109,6 +117,61 @@ async function resetPassword(username: string | undefined): Promise<void> {
   }
 }
 
+const quiet = { info: () => undefined, error: () => undefined };
+
+const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
+async function backup(): Promise<void> {
+  const db = openExisting();
+  try {
+    const info = await new BackupService(db, config(), quiet).create('manual');
+    console.log(`Backup written: ${info.name} (${megabytes(info.size)})`);
+  } catch (error) {
+    fail(`the backup failed: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    db.close();
+  }
+}
+
+async function listBackups(): Promise<void> {
+  const settings = config();
+  const db = openExisting();
+  const backups = await new BackupService(db, settings, quiet).list();
+  db.close();
+  if (!backups.length) {
+    console.log(`No backups in ${settings.backupDir} yet. Make one: memora-admin backup`);
+    return;
+  }
+  for (const b of backups) {
+    console.log(
+      [
+        b.name.padEnd(60),
+        megabytes(b.size).padStart(10),
+        date(b.createdAt),
+        b.encrypted ? 'encrypted' : '',
+      ]
+        .join('  ')
+        .trimEnd(),
+    );
+  }
+}
+
+async function restore(name: string | undefined): Promise<void> {
+  if (!name)
+    fail('which backup? Usage: memora-admin restore <backup>  (see: memora-admin list-backups)');
+  const db = openExisting();
+  try {
+    const started = await new BackupService(db, config(), quiet).prepareRestore(name);
+    console.log(`The current state was backed up first: ${started.safetyBackup}`);
+    console.log(`${name} is ready. Restart Memora to put it in place, for example:`);
+    console.log('  docker restart memora');
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  } finally {
+    db.close();
+  }
+}
+
 async function hashBenchmark(): Promise<void> {
   const hasher = new PasswordHasher();
   const times: number[] = [];
@@ -135,6 +198,15 @@ async function main(): Promise<void> {
       break;
     case 'reset-password':
       await resetPassword(args[0]);
+      break;
+    case 'backup':
+      await backup();
+      break;
+    case 'list-backups':
+      await listBackups();
+      break;
+    case 'restore':
+      await restore(args[0]);
       break;
     case 'hash-benchmark':
       await hashBenchmark();

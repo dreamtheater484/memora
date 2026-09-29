@@ -1,11 +1,15 @@
 import { mkdirSync } from 'node:fs';
 import { buildApp } from './app';
+import { applyPendingRestore } from './backup/service';
 import { ConfigError, loadConfig } from './config';
 import { openDatabase } from './db/client';
 import { ensureInstanceMeta } from './db/meta';
 import { runMigrations } from './db/migrate';
 import { migrationsDir } from './paths';
 import { APP_VERSION } from './version';
+
+/** Exit code asking to be started again (after a restore): Docker's restart policy does. */
+const RESTART_EXIT_CODE = 75;
 
 async function main(): Promise<void> {
   let config;
@@ -20,8 +24,17 @@ async function main(): Promise<void> {
   }
 
   mkdirSync(config.dataDir, { recursive: true });
+  // A backup chosen to be restored goes in place before the database is opened (§9.14).
+  const restored = applyPendingRestore(config.dataDir, config.databaseFile);
   const db = openDatabase(config.databaseFile);
-  const app = await buildApp({ config, db, version: APP_VERSION });
+  let requestRestart = () => undefined as void;
+  const app = await buildApp({
+    config,
+    db,
+    version: APP_VERSION,
+    onRestart: () => requestRestart(),
+  });
+  if (restored) app.log.info({ backup: restored }, 'backup restored');
 
   try {
     const result = await runMigrations({
@@ -44,16 +57,18 @@ async function main(): Promise<void> {
   }
 
   let shuttingDown = false;
-  const shutdown = async (signal: NodeJS.Signals) => {
+  const shutdown = async (signal: NodeJS.Signals | 'restart') => {
     if (shuttingDown) return;
     shuttingDown = true;
-    app.log.info({ signal }, 'shutting down');
+    app.log.info({ signal }, signal === 'restart' ? 'restarting' : 'shutting down');
     await app.close();
     db.close(); // checkpoints the WAL so memora.db is self-contained on disk
-    process.exit(0);
+    // A restart ends with a code the container's restart policy acts on (EX_TEMPFAIL).
+    process.exit(signal === 'restart' ? RESTART_EXIT_CODE : 0);
   };
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
+  requestRestart = () => void shutdown('restart');
 
   await app.listen({ host: config.host, port: config.port });
   app.log.info({ version: APP_VERSION, dataDir: config.dataDir }, 'Memora is running');

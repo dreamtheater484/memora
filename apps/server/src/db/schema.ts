@@ -249,6 +249,8 @@ export const pageVersions = sqliteTable(
     reason: text('reason', {
       enum: ['auto', 'conversion', 'import', 'restore', 'conflict', 'manual'],
     }).notNull(),
+    /** A name given to the version (§9.7); named versions are always kept. */
+    name: text('name'),
     deviceLabel: text('device_label').notNull(),
     createdAt: integer('created_at').notNull(),
   },

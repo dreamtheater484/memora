@@ -32,10 +32,11 @@ const onSignedOut = () => {
 
 const router = createAppRouter({
   queryClient,
-  startSync: (userId) =>
+  startSync: (userId, dataId) =>
     startSync(userId, queryClient, {
       onSignedOut,
       refreshSession: () => refreshSession(queryClient),
+      ...(dataId ? { dataId } : {}),
     }),
 });
 

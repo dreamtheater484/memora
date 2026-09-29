@@ -5,12 +5,15 @@ import fastifyWebsocket from '@fastify/websocket';
 import type { HealthResponse } from '@memora/shared';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { DEFAULT_FETCH_POLICY, type FetchPolicy } from './assets/fetch';
+import { cleanUnusedAssets } from './assets/cleanup';
 import { AssetsService } from './assets/service';
+import { BackupService } from './backup/service';
 import { DEFAULT_HASH_PARAMS, PasswordHasher, type HashParams } from './auth/password';
 import { registerAuth } from './auth/plugin';
 import { AuthService } from './auth/service';
 import type { Config } from './config';
 import type { SqliteDatabase } from './db/client';
+import { dataIdOf } from './db/meta';
 import { ApiError } from './errors';
 import { EventHub } from './events/hub';
 import { NotesService } from './notes/service';
@@ -18,6 +21,7 @@ import { createOrm, createRepos } from './repo';
 import { adminRoutes } from './routes/admin';
 import { assetRoutes } from './routes/assets';
 import { authRoutes, type RouteDeps } from './routes/auth';
+import { backupRoutes } from './routes/backups';
 import { eventRoutes } from './routes/events';
 import { notesRoutes } from './routes/notes';
 
@@ -33,6 +37,11 @@ export interface AppOptions {
   hashParams?: HashParams;
   /** Tests download images from a local server; production blocks local addresses. */
   fetchPolicy?: FetchPolicy;
+  /**
+   * Restarts Memora (after a restore is ready). The server's entry point closes it and exits
+   * so the container restarts it; tests just note the request.
+   */
+  onRestart?: () => void;
 }
 
 declare module 'fastify' {
@@ -57,6 +66,7 @@ export async function buildApp({
   now = Date.now,
   hashParams = DEFAULT_HASH_PARAMS,
   fetchPolicy = DEFAULT_FETCH_POLICY,
+  onRestart = () => undefined,
 }: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     // `base: null` drops pid/hostname from every line: inside Docker they are noise.
@@ -90,6 +100,16 @@ export async function buildApp({
   const notes = new NotesService(db, orm, now);
   const events = new EventHub();
   const assets = new AssetsService(db, orm, now);
+  const backups = new BackupService(
+    db,
+    config,
+    {
+      info: (obj, msg) => app.log.info(obj, msg),
+      error: (obj, msg) => app.log.error(obj, msg),
+    },
+    now,
+  );
+  let dataId: string | undefined;
   const deps: RouteDeps = {
     db,
     repos,
@@ -97,6 +117,9 @@ export async function buildApp({
     notes,
     assets,
     fetchPolicy,
+    backups,
+    dataId: () => (dataId ??= dataIdOf(db)),
+    restart: onRestart,
     events,
     config,
     hasher,
@@ -147,6 +170,7 @@ export async function buildApp({
   authRoutes(app, deps);
   adminRoutes(app, deps);
   notesRoutes(app, deps);
+  backupRoutes(app, deps);
   await assetRoutes(app, deps);
   eventRoutes(app, deps);
 
@@ -181,10 +205,25 @@ export async function buildApp({
   });
 
   let maintenance: NodeJS.Timeout | undefined;
+  let assetsCleanedAt = 0;
   const runMaintenance = () => {
     try {
       repos.sessions.deleteExpired();
       repos.audit.prune(AUDIT_MAX_AGE_MS, AUDIT_MAX_ROWS);
+      // History and the recycle bin (§9.7), then files nothing uses any more.
+      const thinned = notes.thinVersions(config.historyRetention);
+      const purged = notes.purgeExpired(now() - config.trashMs);
+      let cleaned = 0;
+      if (purged.removed > 0 || now() - assetsCleanedAt > 24 * 3_600_000) {
+        cleaned = cleanUnusedAssets(db, now());
+        assetsCleanedAt = now();
+      }
+      if (thinned || purged.removed || cleaned) {
+        app.log.info(
+          { versionsThinned: thinned, rowsPurged: purged.removed, filesRemoved: cleaned },
+          'maintenance',
+        );
+      }
     } catch (error) {
       app.log.warn({ err: error }, 'maintenance failed');
     }
@@ -193,8 +232,12 @@ export async function buildApp({
     runMaintenance();
     maintenance = setInterval(runMaintenance, MAINTENANCE_INTERVAL_MS);
     maintenance.unref();
+    backups.start();
   });
-  app.addHook('onClose', async () => clearInterval(maintenance));
+  app.addHook('onClose', async () => {
+    clearInterval(maintenance);
+    backups.stop();
+  });
 
   return app;
 }

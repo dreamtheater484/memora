@@ -1,5 +1,12 @@
+import type { RichNode } from '@memora/shared';
 import { describe, expect, it } from 'vitest';
-import { composeBlocks, compareBlocks } from './compare';
+import {
+  comparePage,
+  compareRichBlocks,
+  composeBlocks,
+  compareBlocks,
+  composeRichBlocks,
+} from './compare';
 
 const theirs = '# Trip\n\nTake the hammock.\n\n- Tickets\n';
 const mine = '# Trip\n\nTake the bivvy.\n\n- Tickets\n- Maps\n';
@@ -29,5 +36,51 @@ describe('compare', () => {
   it('keeps both sides on their own lines when the last line has no line break', () => {
     const blocks = compareBlocks('a\nold', 'a\nnew');
     expect(composeBlocks(blocks, ['both'])).toBe('a\nold\nnew');
+  });
+});
+
+const para = (text: string): RichNode => ({
+  type: 'paragraph',
+  content: [{ type: 'text', text }],
+});
+const doc = (...content: RichNode[]): RichNode => ({ type: 'doc', content });
+
+describe('compare rich pages', () => {
+  const theirs = doc(para('Trip'), para('Take the hammock.'), para('Tickets'));
+  const mine = doc(para('Trip'), para('Take the bivvy.'), para('Tickets'), para('Maps'));
+
+  it('compares block by block', () => {
+    expect(compareRichBlocks(theirs, mine)).toEqual([
+      { kind: 'same', nodes: [para('Trip')] },
+      { kind: 'change', theirs: [para('Take the hammock.')], mine: [para('Take the bivvy.')] },
+      { kind: 'same', nodes: [para('Tickets')] },
+      { kind: 'change', theirs: [], mine: [para('Maps')] },
+    ]);
+  });
+
+  it('builds the page from a choice per change', () => {
+    const blocks = compareRichBlocks(theirs, mine);
+    expect(composeRichBlocks(blocks, ['mine', 'mine'])).toEqual(mine);
+    expect(composeRichBlocks(blocks, ['theirs', 'theirs'])).toEqual(theirs);
+    expect(composeRichBlocks(blocks, ['both', 'theirs'])).toEqual(
+      doc(para('Trip'), para('Take the hammock.'), para('Take the bivvy.'), para('Tickets')),
+    );
+    // Nothing chosen at all still leaves a page to type in.
+    expect(composeRichBlocks(compareRichBlocks(doc(para('a')), doc(para('b'))), ['both'])).toEqual(
+      doc(para('a'), para('b')),
+    );
+  });
+
+  it('shows rich blocks as Markdown and saves the page as rich content', () => {
+    const comparison = comparePage('rich', JSON.stringify(theirs), JSON.stringify(mine))!;
+    expect(comparison.blocks[1]).toEqual({
+      kind: 'change',
+      theirs: 'Take the hammock.\n',
+      mine: 'Take the bivvy.\n',
+    });
+    expect(JSON.parse(comparison.compose(['theirs', 'mine']))).toEqual(
+      doc(para('Trip'), para('Take the hammock.'), para('Tickets'), para('Maps')),
+    );
+    expect(comparePage('rich', 'not json', JSON.stringify(mine))).toBeNull();
   });
 });

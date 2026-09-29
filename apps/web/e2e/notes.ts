@@ -14,6 +14,7 @@ import {
   type TrashItem,
   type Tree,
   type TreeChanges,
+  type VersionReason,
 } from '@memora/shared';
 import {
   buildIndex,
@@ -76,11 +77,25 @@ const notFound: Reply = {
   json: { error: { code: 'not_found', message: 'Not found.' } },
 };
 
-/** A version the fake server kept: a conflict copy, or what "Keep mine" replaced. */
+/** A version the fake server kept: a conflict copy, what a change replaced, or a snapshot. */
 export interface KeptVersion {
+  id: string;
   pageId: string;
   content: string;
-  reason: string;
+  reason: VersionReason;
+  name: string | null;
+  type: PageType;
+  revision: number;
+  createdAt: number;
+}
+
+/** A deleted item in the fake recycle bin, with what went with it. */
+interface Trashed {
+  item: TrashItem;
+  name: string;
+  location: string[];
+  deletedAt: number;
+  rows: Omit<Tree, 'inboxId'>;
 }
 
 export class FakeNotes {
@@ -92,8 +107,10 @@ export class FakeNotes {
   private readonly history: { at: number; id: string; before: string; after: string }[] = [];
   /** Told about every content change, with the device that made it (null: elsewhere). */
   onChange: ((page: PageMeta, origin: string | null) => void) | null = null;
-  private readonly trash = new Map<string, Tree>();
+  /** The recycle bin, newest last. */
+  readonly trash: Trashed[] = [];
   private nextId = 1;
+  private nextVersion = 1;
 
   constructor(
     private readonly now: number,
@@ -143,6 +160,18 @@ export class FakeNotes {
       return this.remove((body.ids as string[]).map((pageId) => ({ type: 'page', id: pageId })));
     }
     if (route === 'POST /trash/restore') return this.restore(body.items as TrashItem[]);
+    if (route === 'GET /trash') return this.trashList();
+    if (route === 'POST /trash/restore-to') return this.restoreTo(body);
+    if (route === 'POST /trash/delete') return this.deleteForever(body.items as TrashItem[]);
+    if (route === 'POST /trash/empty') {
+      const removed = this.trash.splice(0).length;
+      return { json: { removed } };
+    }
+    const versionRoute = path.match(/\/pages\/([^/]+)\/versions\/([^/]+)(?:\/(restore|copy))?$/);
+    if (versionRoute) {
+      const [, pageId, versionId, verb] = versionRoute;
+      return this.versionAction(method, pageId!, versionId!, verb, body);
+    }
     if (route === 'POST /notebooks') return this.createNotebook(body);
     if (route === 'POST /groups') return this.createGroup(body);
     if (route === 'POST /sections') return this.createSection(body);
@@ -152,10 +181,11 @@ export class FakeNotes {
       { notebooks: 'notebook', groups: 'group', sections: 'section', pages: 'page' } as const
     )[kind as 'notebooks' | 'groups' | 'sections' | 'pages'];
     if (!type) return null;
-    if (method === 'GET' && type === 'page') return this.getPage(id);
+    if (method === 'GET' && type === 'page' && !action) return this.getPage(id);
     if (method === 'PUT' && type === 'page' && action === 'content') {
       return this.saveContent(id, body, origin);
     }
+    if (method === 'GET' && type === 'page' && action === 'versions') return this.listVersions(id);
     if (method === 'POST' && type === 'page' && action === 'versions') {
       return this.keepVersion(id, body);
     }
@@ -218,7 +248,7 @@ export class FakeNotes {
         },
       };
     }
-    if (body.resolving) this.versions.push({ pageId: id, content: current, reason: 'conflict' });
+    if (body.resolving) this.keep(id, current, 'conflict');
     const saved = this.edit(id, content, origin);
     return { json: { revision: saved.revision, pages: [saved] } };
   }
@@ -232,7 +262,7 @@ export class FakeNotes {
         json: { error: { code: 'revision_conflict', message: 'This page was changed elsewhere.' } },
       };
     }
-    this.versions.push({ pageId: id, content: this.content.get(id) ?? '', reason: 'conversion' });
+    this.keep(id, this.content.get(id) ?? '', 'conversion');
     const type = body.type as PageType;
     const content = String(body.content);
     this.content.set(id, content);
@@ -247,21 +277,90 @@ export class FakeNotes {
     return { json: { revision: next.revision, pages: [next] } };
   }
 
+  /** Keeps a version of a page, `ago` before now (the fixed now of the tests). */
+  keep(
+    pageId: string,
+    content: string,
+    reason: VersionReason,
+    { name = null, ago = 0 }: { name?: string | null; ago?: number } = {},
+  ): KeptVersion {
+    const page = this.tree.pages.find((p) => p.id === pageId);
+    const version: KeptVersion = {
+      id: `version-${this.nextVersion++}`,
+      pageId,
+      content,
+      reason,
+      name,
+      type: page?.type ?? 'markdown',
+      revision: page?.revision ?? 1,
+      createdAt: this.now - ago,
+    };
+    this.versions.push(version);
+    return version;
+  }
+
+  private versionMeta({ content, ...version }: KeptVersion) {
+    return { ...version, size: content.length, deviceLabel: 'Chrome on Linux' };
+  }
+
+  private listVersions(pageId: string): Reply {
+    if (!this.tree.pages.some((p) => p.id === pageId)) return notFound;
+    const list = this.versions
+      .filter((v) => v.pageId === pageId)
+      .sort(
+        (a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id, 'en', { numeric: true }),
+      );
+    return { json: list.map((v) => this.versionMeta(v)) };
+  }
+
   private keepVersion(id: string, body: Record<string, unknown>): Reply {
     if (!this.tree.pages.some((p) => p.id === id)) return notFound;
-    const reason = String(body.reason);
-    this.versions.push({ pageId: id, content: String(body.content), reason });
-    return {
-      status: 201,
-      json: {
-        id: `version-${this.versions.length}`,
-        pageId: id,
-        revision: Number(body.baseRevision),
-        reason,
-        deviceLabel: 'Chrome on Linux',
-        createdAt: this.now,
-      },
-    };
+    const reason = String(body.reason) as VersionReason;
+    const name = typeof body.name === 'string' ? body.name : null;
+    const content = reason === 'conflict' ? String(body.content) : (this.content.get(id) ?? '');
+    const last = this.versions.findLast((v) => v.pageId === id);
+    // The page as it is is already kept: an unnamed snapshot adds nothing.
+    if (reason !== 'conflict' && !name && last?.content === content) {
+      return { json: { version: null } };
+    }
+    const version = this.keep(id, content, reason, { name });
+    return { status: 201, json: { version: this.versionMeta(version) } };
+  }
+
+  private versionAction(
+    method: string,
+    pageId: string,
+    versionId: string,
+    verb: string | undefined,
+    body: Record<string, unknown>,
+  ): Reply | null {
+    const page = this.tree.pages.find((p) => p.id === pageId);
+    const version = this.versions.find((v) => v.id === versionId && v.pageId === pageId);
+    if (!page || !version) return notFound;
+    if (method === 'GET' && !verb) {
+      return {
+        json: { ...this.versionMeta(version), title: page.title, content: version.content },
+      };
+    }
+    if (method === 'PATCH' && !verb) {
+      version.name = (body.name as string | null) ?? null;
+      return { json: this.versionMeta(version) };
+    }
+    if (method === 'POST' && verb === 'restore') {
+      this.keep(pageId, this.content.get(pageId) ?? '', 'restore');
+      const saved = this.edit(pageId, version.content);
+      return { json: { revision: saved.revision, pages: [saved] } };
+    }
+    if (method === 'POST' && verb === 'copy') {
+      const copy = this.createPage({
+        sectionId: page.sectionId,
+        title: `${page.title} (2026-09-29 16:00)`,
+        type: version.type,
+        content: version.content,
+      });
+      return { status: 201, json: copy.json };
+    }
+    return null;
   }
 
   // Creating
@@ -403,30 +502,140 @@ export class FakeNotes {
   // Deleting and restoring
 
   private remove(items: TrashItem[]): Reply {
-    const before = this.tree;
-    this.tree = removeItems(before, items);
-    const gone = (list: { id: string }[], kept: { id: string }[]) => {
-      const ids = new Set(kept.map((x) => x.id));
-      return list.filter((x) => !ids.has(x.id));
-    };
-    const key = items.map((i) => i.id).join(',');
-    this.trash.set(key, {
-      inboxId: before.inboxId,
-      notebooks: gone(before.notebooks, this.tree.notebooks) as Notebook[],
-      groups: gone(before.groups, this.tree.groups) as SectionGroup[],
-      sections: gone(before.sections, this.tree.sections) as Section[],
-      pages: gone(before.pages, this.tree.pages) as PageMeta[],
-    });
+    for (const item of items) {
+      const before = this.tree;
+      const index = buildIndex(before);
+      const list = before[LISTS[item.type]] as { id: string; name?: string; title?: string }[];
+      const row = list.find((x) => x.id === item.id);
+      if (!row) continue;
+      this.tree = removeItems(before, [item]);
+      const gone = <T extends { id: string }>(all: T[], kept: T[]) => {
+        const ids = new Set(kept.map((x) => x.id));
+        return all.filter((x) => !ids.has(x.id));
+      };
+      this.trash.push({
+        item,
+        name: row.name ?? row.title ?? '',
+        location: this.locationOf(index, item),
+        deletedAt: this.now,
+        rows: {
+          notebooks: gone(before.notebooks, this.tree.notebooks),
+          groups: gone(before.groups, this.tree.groups),
+          sections: gone(before.sections, this.tree.sections),
+          pages: gone(before.pages, this.tree.pages),
+        },
+      });
+    }
     return { json: { deleted: items } };
   }
 
+  private locationOf(index: ReturnType<typeof buildIndex>, item: TrashItem): string[] {
+    if (item.type === 'notebook') return [];
+    if (item.type === 'page') {
+      const page = index.page.get(item.id);
+      const path = page ? index.pathOf(page.sectionId) : null;
+      if (!path) return [];
+      return [
+        ...(path.notebook ? [path.notebook.name] : []),
+        ...path.groups.map((g) => g.name),
+        path.section.name,
+      ];
+    }
+    const notebookId =
+      item.type === 'section'
+        ? index.section.get(item.id)?.notebookId
+        : index.group.get(item.id)?.notebookId;
+    const notebook = notebookId ? index.notebook.get(notebookId) : undefined;
+    return notebook ? [notebook.name] : [];
+  }
+
+  /** Whether the item's place is still there. */
+  private restorable({ item, rows }: Trashed): boolean {
+    const has = (list: { id: string }[], id: string | null) =>
+      id === null || list.some((x) => x.id === id);
+    if (item.type === 'notebook') return true;
+    if (item.type === 'page') {
+      const page = rows.pages.find((p) => p.id === item.id)!;
+      return has(this.tree.sections, page.sectionId);
+    }
+    if (item.type === 'section') {
+      const section = rows.sections.find((x) => x.id === item.id)!;
+      return has(this.tree.notebooks, section.notebookId) && has(this.tree.groups, section.groupId);
+    }
+    const group = rows.groups.find((g) => g.id === item.id)!;
+    return has(this.tree.notebooks, group.notebookId) && has(this.tree.groups, group.parentGroupId);
+  }
+
+  private trashList(): Reply {
+    const entries = [...this.trash].reverse().map((t) => ({
+      type: t.item.type,
+      id: t.item.id,
+      name: t.name,
+      location: t.location,
+      pages: t.rows.pages.length,
+      deletedAt: t.deletedAt,
+      purgeAt: t.deletedAt + 30 * DAY,
+      restorable: this.restorable(t),
+    }));
+    return { json: { entries, days: 30 } };
+  }
+
+  private take(items: TrashItem[]): Trashed[] | null {
+    const found = items.map((i) => this.trash.find((t) => t.item.id === i.id));
+    if (found.some((t) => !t)) return null;
+    for (const t of found) this.trash.splice(this.trash.indexOf(t!), 1);
+    return found as Trashed[];
+  }
+
   private restore(items: TrashItem[]): Reply {
-    const key = items.map((i) => i.id).join(',');
-    const back = this.trash.get(key);
-    if (!back) return notFound;
-    this.trash.delete(key);
-    const { inboxId: _, ...changes } = back;
+    const all = items.map((i) => this.trash.find((t) => t.item.id === i.id));
+    if (all.some((t) => !t)) return notFound;
+    if (all.some((t) => !this.restorable(t!))) {
+      return {
+        status: 409,
+        json: {
+          error: { code: 'invalid_move', message: 'Its place is gone: restore it to another.' },
+        },
+      };
+    }
+    const changes: TreeChanges = { notebooks: [], groups: [], sections: [], pages: [] };
+    for (const t of this.take(items)!) {
+      changes.notebooks!.push(...t.rows.notebooks);
+      changes.groups!.push(...t.rows.groups);
+      changes.sections!.push(...t.rows.sections);
+      changes.pages!.push(...t.rows.pages);
+    }
     return this.apply(changes);
+  }
+
+  private restoreTo(body: Record<string, unknown>): Reply {
+    const item = body.item as TrashItem;
+    const to = body.to as { notebookId?: string; groupId?: string | null; sectionId?: string };
+    const [t] = this.take([item]) ?? [];
+    if (!t) return notFound;
+    const { rows } = t;
+    if (item.type === 'page') {
+      for (const p of rows.pages) {
+        p.sectionId = to.sectionId!;
+        if (p.id === item.id) p.parentPageId = null;
+      }
+    } else {
+      for (const s of rows.sections) s.notebookId = to.notebookId!;
+      for (const g of rows.groups) g.notebookId = to.notebookId!;
+      const root =
+        item.type === 'section'
+          ? rows.sections.find((x) => x.id === item.id)
+          : rows.groups.find((x) => x.id === item.id);
+      if (root && 'groupId' in root) root.groupId = to.groupId ?? null;
+      if (root && 'parentGroupId' in root) root.parentGroupId = to.groupId ?? null;
+    }
+    return this.apply(rows);
+  }
+
+  private deleteForever(items: TrashItem[]): Reply {
+    const gone = this.take(items);
+    if (!gone) return notFound;
+    return { json: { removed: gone.reduce((n, t) => n + t.rows.pages.length + 1, 0) } };
   }
 
   private apply(changes: TreeChanges): Reply {

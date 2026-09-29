@@ -1,8 +1,11 @@
 import type { AuditEntry, AuditEvent } from '@memora/shared';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import {
+  ArchiveRestore,
   Ban,
   CircleCheck,
+  DatabaseBackup,
+  Download,
   KeyRound,
   LogIn,
   LogOut,
@@ -52,6 +55,14 @@ const EVENTS: Record<
   user_enabled: { icon: <CircleCheck />, text: (e) => `enabled ${target(e)}` },
   user_deleted: { icon: <Trash2 />, text: (e) => `deleted ${target(e)}` },
   password_reset: { icon: <KeyRound />, text: (e) => `reset the password of ${target(e)}` },
+  backup_created: { icon: <DatabaseBackup />, text: () => 'made a backup' },
+  backup_downloaded: { icon: <Download />, text: () => 'downloaded a backup' },
+  backup_restored: {
+    icon: <ArchiveRestore />,
+    alert: true,
+    text: (e) =>
+      `restored the backup ${typeof e.meta.backup === 'string' ? e.meta.backup : ''}`.trim(),
+  },
 };
 
 /** Security-relevant events (§9.1): logins, failed logins, and account changes. */

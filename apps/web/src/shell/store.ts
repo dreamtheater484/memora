@@ -5,7 +5,9 @@ export type ShellDialog =
   | { kind: 'notebook'; notebookId?: string }
   | { kind: 'move'; type: 'pages' | 'section' | 'group'; ids: string[] }
   | { kind: 'quick-note' }
-  | { kind: 'shortcuts' };
+  | { kind: 'shortcuts' }
+  | { kind: 'history'; pageId: string; versionId?: string }
+  | { kind: 'save-version'; pageId: string };
 
 /** Where an item is renamed in place: its tab, its navigation row, or a phone list heading. */
 export type RenameWhere = 'tabs' | 'nav' | 'list';

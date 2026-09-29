@@ -194,6 +194,29 @@ const RULES: Record<string, RouteRule> = {
       () => ({ type: 'rich', content: '', baseRevision: 1 }),
     ),
   },
+  'GET /api/v1/pages/:id/versions': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/pages/${n.pageId}/versions`),
+  },
+  'GET /api/v1/pages/:id/versions/:vid': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/pages/${n.pageId}/versions/${uuidv7()}`),
+  },
+  'PATCH /api/v1/pages/:id/versions/:vid': {
+    access: 'user',
+    foreign: probe(
+      (n) => `/api/v1/pages/${n.pageId}/versions/${uuidv7()}`,
+      () => ({ name: 'Mine now' }),
+    ),
+  },
+  'POST /api/v1/pages/:id/versions/:vid/restore': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/pages/${n.pageId}/versions/${uuidv7()}/restore`),
+  },
+  'POST /api/v1/pages/:id/versions/:vid/copy': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/pages/${n.pageId}/versions/${uuidv7()}/copy`),
+  },
   'POST /api/v1/pages/:id/versions': {
     access: 'user',
     foreign: (w) => ({
@@ -242,6 +265,35 @@ const RULES: Record<string, RouteRule> = {
       (n) => ({ items: [{ type: 'page', id: n.deletedPageId }] }),
     ),
   },
+  'GET /api/v1/trash': {
+    access: 'user',
+    async ownListOnly(w) {
+      expect((await w.bob.get('/api/v1/trash')).json().entries).toEqual([]);
+    },
+  },
+  'POST /api/v1/trash/restore-to': {
+    access: 'user',
+    foreign: probe(
+      () => '/api/v1/trash/restore-to',
+      (n) => ({ item: { type: 'page', id: n.deletedPageId }, to: { sectionId: n.bobSectionId } }),
+    ),
+  },
+  'POST /api/v1/trash/delete': {
+    access: 'user',
+    foreign: probe(
+      () => '/api/v1/trash/delete',
+      (n) => ({ items: [{ type: 'page', id: n.deletedPageId }] }),
+    ),
+  },
+  // Bob's own bin only: Alice's deleted page is still there afterwards (checked below).
+  'POST /api/v1/trash/empty': {
+    access: 'user',
+    async ownListOnly(w) {
+      await w.bob.post('/api/v1/trash/empty');
+      const entries = (await w.alice.get('/api/v1/trash')).json().entries as { id: string }[];
+      expect(entries.map((e) => e.id)).toContain(w.notes.deletedPageId);
+    },
+  },
   'GET /api/v1/settings': {
     access: 'user',
     async ownListOnly(w) {
@@ -257,6 +309,11 @@ const RULES: Record<string, RouteRule> = {
     access: 'user',
     foreign: probe((n) => `/api/v1/assets/${n.assetId}`),
   },
+  'GET /api/v1/admin/backups': { access: 'admin' },
+  'POST /api/v1/admin/backups': { access: 'admin' },
+  'GET /api/v1/admin/backups/:name': { access: 'admin' },
+  'DELETE /api/v1/admin/backups/:name': { access: 'admin' },
+  'POST /api/v1/admin/backups/:name/restore': { access: 'admin' },
   // Scoped by the session itself: events.test.ts checks a user only hears their own events.
   'GET /api/v1/events': { access: 'user' },
 };

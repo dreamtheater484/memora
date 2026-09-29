@@ -1,0 +1,1 @@
+ALTER TABLE `page_versions` ADD `name` text;

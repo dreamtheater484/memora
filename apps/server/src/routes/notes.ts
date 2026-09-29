@@ -6,6 +6,9 @@ import {
   createPageSchema,
   createSectionSchema,
   createVersionSchema,
+  deleteForeverSchema,
+  nameVersionSchema,
+  restoreToSchema,
   deletePagesSchema,
   editorSettingsSchema,
   moveGroupSchema,
@@ -25,6 +28,7 @@ import {
   type UiState,
 } from '@memora/shared';
 import type { FastifyInstance } from 'fastify';
+import { cleanUnusedAssets } from '../assets/cleanup';
 import { parse } from '../errors';
 import { authOf, type RouteDeps } from './auth';
 import { deviceOf } from './events';
@@ -32,7 +36,11 @@ import { deviceOf } from './events';
 type Id = { Params: { id: string } };
 
 /** Notebooks, section groups, sections, pages, the recycle bin and per-user settings. */
-export function notesRoutes(app: FastifyInstance, { notes, repos, events }: RouteDeps): void {
+export function notesRoutes(
+  app: FastifyInstance,
+  { notes, repos, events, db, now, config: settings }: RouteDeps,
+): void {
+  const { trashMs } = settings;
   const config = { access: 'user' as const };
   /** Routes that change the tree: the user's other browsers hear about it (§9.6). */
   const changes = { access: 'user' as const, emits: 'tree' as const };
@@ -170,16 +178,64 @@ export function notesRoutes(app: FastifyInstance, { notes, repos, events }: Rout
     },
   );
 
+  // History (§9.7)
+
+  type Version = { Params: { id: string; vid: string } };
+
+  app.get<Id>('/api/v1/pages/:id/versions', { config }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return notes.listVersions(owner(request), request.params.id);
+  });
+
   app.post<Id>(
     '/api/v1/pages/:id/versions',
     { config, bodyLimit: MAX_CONTENT * 4 },
     async (request, reply) => {
       const { user, session } = authOf(request);
       const body = parse(createVersionSchema, request.body);
-      return reply
-        .code(201)
-        .send(notes.createVersion(user.id, request.params.id, body, session.deviceLabel));
+      const kept = notes.createVersion(user.id, request.params.id, body, session.deviceLabel);
+      return reply.code(kept.version ? 201 : 200).send(kept);
     },
+  );
+
+  app.get<Version>('/api/v1/pages/:id/versions/:vid', { config }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return notes.getVersion(owner(request), request.params.id, request.params.vid);
+  });
+
+  app.patch<Version>('/api/v1/pages/:id/versions/:vid', { config }, async (request) =>
+    notes.nameVersion(
+      owner(request),
+      request.params.id,
+      request.params.vid,
+      parse(nameVersionSchema, request.body),
+    ),
+  );
+
+  app.post<Version>('/api/v1/pages/:id/versions/:vid/restore', { config }, async (request) => {
+    const { user, session } = authOf(request);
+    const saved = notes.restoreVersion(
+      user.id,
+      request.params.id,
+      request.params.vid,
+      session.deviceLabel,
+    );
+    events.publish(user.id, {
+      type: 'page.updated',
+      page: saved.pages[0],
+      revision: saved.revision,
+      origin: deviceOf(request),
+    });
+    return saved;
+  });
+
+  app.post<Version>(
+    '/api/v1/pages/:id/versions/:vid/copy',
+    { config: changes },
+    async (request, reply) =>
+      reply
+        .code(201)
+        .send(notes.copyVersion(owner(request), request.params.id, request.params.vid)),
   );
 
   app.post('/api/v1/pages/move', { config: changes }, async (request) =>
@@ -199,11 +255,34 @@ export function notesRoutes(app: FastifyInstance, { notes, repos, events }: Rout
     notes.deletePages(owner(request), parse(deletePagesSchema, request.body).ids),
   );
 
-  // Recycle bin (browsing and emptying it arrive in Phase 7)
+  // Recycle bin (§9.7)
+
+  app.get('/api/v1/trash', { config }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return notes.listTrash(owner(request), trashMs);
+  });
 
   app.post('/api/v1/trash/restore', { config: changes }, async (request) =>
     notes.restore(owner(request), parse(restoreSchema, request.body).items),
   );
+
+  app.post('/api/v1/trash/restore-to', { config: changes }, async (request) =>
+    notes.restoreTo(owner(request), parse(restoreToSchema, request.body)),
+  );
+
+  app.post('/api/v1/trash/delete', { config }, async (request) => {
+    const user = owner(request);
+    const result = notes.deleteForever(user, parse(deleteForeverSchema, request.body).items);
+    cleanUnusedAssets(db, now(), [user]);
+    return result;
+  });
+
+  app.post('/api/v1/trash/empty', { config }, async (request) => {
+    const user = owner(request);
+    const result = notes.emptyTrash(user);
+    cleanUnusedAssets(db, now(), [user]);
+    return result;
+  });
 
   // Settings
 

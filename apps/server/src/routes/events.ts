@@ -29,7 +29,10 @@ export function deviceOf(request: FastifyRequest): string | null {
  * The event channel, `/api/v1/events` (§9.6, §10): a WebSocket per browser that tells it
  * about changes made elsewhere and which pages the user's other devices have open.
  */
-export function eventRoutes(app: FastifyInstance, { auth, events, config }: RouteDeps): void {
+export function eventRoutes(
+  app: FastifyInstance,
+  { auth, events, config, dataId }: RouteDeps,
+): void {
   const baseOrigin = config.baseUrl ? new URL(config.baseUrl).origin : undefined;
 
   // Tree changes, announced once the answer has gone out.
@@ -61,6 +64,7 @@ export function eventRoutes(app: FastifyInstance, { auth, events, config }: Rout
         },
       };
       events.add(client);
+      client.send({ type: 'hello', dataId: dataId() });
 
       let alive = true;
       let messages = 0;

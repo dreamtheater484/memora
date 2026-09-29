@@ -1,6 +1,8 @@
 import { join, resolve } from 'node:path';
-import { DEFAULT_MAX_UPLOAD_MB } from '@memora/shared';
+import { DEFAULT_MAX_UPLOAD_MB, DEFAULT_TRASH_DAYS } from '@memora/shared';
 import { z } from 'zod';
+import { parseSchedule, type Schedule } from './backup/cron';
+import { DEFAULT_RETENTION, parseRetention, type RetentionRules } from './notes/retention';
 import { defaultWebDir } from './paths';
 
 const logLevels = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
@@ -23,6 +25,17 @@ const envSchema = z.object({
     .default(12),
   MEMORA_TRUST_PROXY: z.string().default('loopback,linklocal,uniquelocal'),
   MEMORA_MAX_UPLOAD_MB: z.coerce.number().int().min(1).max(1024).default(DEFAULT_MAX_UPLOAD_MB),
+  MEMORA_TRASH_DAYS: z.coerce.number().int().min(1).max(3650).default(DEFAULT_TRASH_DAYS),
+  MEMORA_HISTORY_RETENTION: z.string().default('48h,14d,90d'),
+  MEMORA_BACKUP_SCHEDULE: z.string().default('0 3 * * *'),
+  MEMORA_BACKUP_KEEP: z
+    .string()
+    .regex(
+      /^\s*\d+\s*,\s*\d+\s*,\s*\d+\s*$/,
+      'Three numbers: daily, weekly, monthly (like 7,4,12).',
+    )
+    .default('7,4,12'),
+  MEMORA_BACKUP_PASSWORD_FILE: z.string().optional(),
 });
 
 export interface Config {
@@ -48,6 +61,16 @@ export interface Config {
   trustProxy: boolean | number | string[];
   /** Largest file a user can paste or upload into a page, in bytes. */
   maxUploadBytes: number;
+  /** How long deleted items stay in the recycle bin. */
+  trashMs: number;
+  /** Which page versions are kept (§9.7). */
+  historyRetention: RetentionRules;
+  /** When backups are taken, or null for never (`MEMORA_BACKUP_SCHEDULE=off`). */
+  backupSchedule: Schedule | null;
+  /** How many daily, weekly and monthly backups are kept. */
+  backupKeep: { daily: number; weekly: number; monthly: number };
+  /** A file (a Docker secret) with the password that encrypts backups; none: not encrypted. */
+  backupPasswordFile: string | undefined;
 }
 
 export class ConfigError extends Error {
@@ -67,6 +90,21 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     throw new ConfigError(`Invalid configuration:\n${z.prettifyError(parsed.error)}`);
   }
   const e = parsed.data;
+  const setting = <T>(name: string, read: () => T): T => {
+    try {
+      return read();
+    } catch (error) {
+      throw new ConfigError(`Invalid configuration:\n✖ ${name}: ${(error as Error).message}`);
+    }
+  };
+  const historyRetention =
+    e.MEMORA_HISTORY_RETENTION === '48h,14d,90d'
+      ? DEFAULT_RETENTION
+      : setting('MEMORA_HISTORY_RETENTION', () => parseRetention(e.MEMORA_HISTORY_RETENTION));
+  const backupSchedule = /^(off|none|false)$/i.test(e.MEMORA_BACKUP_SCHEDULE.trim())
+    ? null
+    : setting('MEMORA_BACKUP_SCHEDULE', () => parseSchedule(e.MEMORA_BACKUP_SCHEDULE));
+  const [daily = 7, weekly = 4, monthly = 12] = e.MEMORA_BACKUP_KEEP.split(',').map(Number);
 
   // Production (Docker) keeps everything in the /data volume; development uses ./data (gitignored).
   const dataDir = resolve(e.MEMORA_DATA_DIR ?? (e.NODE_ENV === 'production' ? '/data' : 'data'));
@@ -85,6 +123,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     sessionMs: e.MEMORA_SESSION_HOURS * 3_600_000,
     trustProxy: parseTrustProxy(e.MEMORA_TRUST_PROXY),
     maxUploadBytes: e.MEMORA_MAX_UPLOAD_MB * 1024 * 1024,
+    trashMs: e.MEMORA_TRASH_DAYS * 24 * 3_600_000,
+    historyRetention,
+    backupSchedule,
+    backupKeep: { daily, weekly, monthly },
+    backupPasswordFile: e.MEMORA_BACKUP_PASSWORD_FILE,
   };
 }
 

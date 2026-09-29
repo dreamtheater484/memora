@@ -59,22 +59,56 @@ export const VERSION_REASONS = [
 ] as const;
 export type VersionReason = (typeof VERSION_REASONS)[number];
 
-/** A version the browser keeps on the server: its side of a conflict it couldn't merge. */
-export const createVersionSchema = z.object({
-  reason: z.literal('conflict'),
-  content: z.string().max(MAX_CONTENT),
-  /** The revision the kept content started from. */
-  baseRevision: z.number().int().min(1),
-});
+/** Longest version name. */
+export const MAX_VERSION_NAME = 100;
+
+const versionName = z.string().trim().min(1).max(MAX_VERSION_NAME);
+
+/**
+ * `POST /pages/:id/versions`: the browser's side of a conflict it couldn't merge (with its
+ * content), a version saved by hand ("Save version…", optionally named), or a snapshot taken
+ * as a page that was edited is closed (§9.7). The last two keep the page's current content,
+ * and nothing when it is the same as the latest version's.
+ */
+export const createVersionSchema = z.discriminatedUnion('reason', [
+  z.object({
+    reason: z.literal('conflict'),
+    content: z.string().max(MAX_CONTENT),
+    /** The revision the kept content started from. */
+    baseRevision: z.number().int().min(1),
+  }),
+  z.object({ reason: z.literal('manual'), name: versionName.optional() }),
+  z.object({ reason: z.literal('auto') }),
+]);
 export type CreateVersionRequest = z.input<typeof createVersionSchema>;
+
+/** `PATCH /pages/:id/versions/:vid`: names a version, or takes its name away. */
+export const nameVersionSchema = z.object({ name: versionName.nullable() });
+export type NameVersionRequest = z.input<typeof nameVersionSchema>;
 
 export interface PageVersionMeta {
   id: string;
   pageId: string;
   revision: number;
   reason: VersionReason;
+  /** Given by hand; named versions are never thinned out. */
+  name: string | null;
+  type: PageType;
+  /** Length of the content, in characters. */
+  size: number;
   deviceLabel: string;
   createdAt: number;
+}
+
+/** `GET /pages/:id/versions/:vid`: a version with its content. */
+export interface PageVersion extends PageVersionMeta {
+  title: string;
+  content: string;
+}
+
+/** `POST /pages/:id/versions` answers the version kept, or null when nothing changed. */
+export interface VersionKept {
+  version: PageVersionMeta | null;
 }
 
 // Live events (`/api/v1/events`, a WebSocket). The server only sends a user their own events.
@@ -91,6 +125,8 @@ export interface PresenceDevice {
 }
 
 export type ServerEvent =
+  /** Sent first: the id of the server's data, new after a backup is restored. */
+  | { type: 'hello'; dataId: string }
   /** Notebooks, groups, sections or pages changed: reload the tree. */
   | { type: 'tree.changed'; origin: string | null }
   /** A page's content was saved. */

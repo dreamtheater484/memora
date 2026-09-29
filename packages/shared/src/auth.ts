@@ -97,6 +97,11 @@ export interface MeResponse {
   user: CurrentUser | null;
   /** Send back as the `X-CSRF-Token` header on every request that changes data. */
   csrfToken: string | null;
+  /**
+   * The id of the server's data, when signed in. It changes when a backup is restored: what a
+   * browser kept of the data before is then out of date (§9.14).
+   */
+  dataId?: string;
 }
 
 /** Returned by setup, login and password changes (which rotate the session). */
@@ -147,6 +152,9 @@ export const AUDIT_EVENTS = [
   'user_enabled',
   'user_deleted',
   'password_reset',
+  'backup_created',
+  'backup_downloaded',
+  'backup_restored',
 ] as const;
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];
 

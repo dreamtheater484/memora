@@ -20,6 +20,11 @@ import {
   type ContentConflict,
   type ContentSaved,
   type DeleteResponse,
+  type PageVersion,
+  type PurgeResult,
+  type TrashEntry,
+  type TrashList,
+  type VersionKept,
   type Notebook,
   type NotebookIcon,
   type Page,
@@ -38,13 +43,15 @@ import {
   type createVersionSchema,
   type moveGroupSchema,
   type moveSectionSchema,
+  type nameVersionSchema,
+  type restoreToSchema,
   type placePagesSchema,
   type saveContentSchema,
   type updateNotebookSchema,
   type updatePageSchema,
   type updateSectionSchema,
 } from '@memora/shared';
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { SqliteDatabase } from '../db/client';
 import {
@@ -60,6 +67,7 @@ import {
   type SectionRow,
 } from '../db/schema';
 import { ApiError, notFound } from '../errors';
+import { versionsToThin, type RetentionRules } from './retention';
 import type { Orm } from '../repo';
 
 /*
@@ -151,11 +159,27 @@ const toPageMeta = ({ text, ...row }: Omit<PageMeta, 'snippet'> & { text: string
     updatedAt: row.updatedAt,
   }) satisfies PageMeta;
 
-const toVersionMeta = (r: PageVersionRow): PageVersionMeta => ({
+type VersionMetaRow = Omit<PageVersionRow, 'content' | 'ownerId' | 'title'> & { size: number };
+
+const versionMetaColumns = {
+  id: pageVersions.id,
+  pageId: pageVersions.pageId,
+  revision: pageVersions.revision,
+  reason: pageVersions.reason,
+  name: pageVersions.name,
+  type: pageVersions.type,
+  deviceLabel: pageVersions.deviceLabel,
+  createdAt: pageVersions.createdAt,
+};
+
+const toVersionMeta = (r: VersionMetaRow): PageVersionMeta => ({
   id: r.id,
   pageId: r.pageId,
   revision: r.revision,
   reason: r.reason,
+  name: r.name,
+  type: r.type,
+  size: r.size,
   deviceLabel: r.deviceLabel,
   createdAt: r.createdAt,
 });
@@ -769,32 +793,215 @@ export class NotesService {
     });
   }
 
-  /** Keeps the browser's side of a conflict it couldn't merge, so nothing is lost (§9.6). */
+  /**
+   * `POST /pages/:id/versions`: the browser's side of a conflict it couldn't merge (so nothing
+   * is lost, §9.6), or a snapshot of the page as it is: saved by hand, or as a page that was
+   * edited is closed (§9.7). A snapshot equal to the latest version isn't kept again.
+   */
   createVersion(
     owner: string,
     id: string,
     input: In<typeof createVersionSchema>,
     deviceLabel: string,
-  ): PageVersionMeta {
-    const row = this.livePage(owner, id);
-    return toVersionMeta(
-      this.orm
-        .insert(pageVersions)
-        .values({
-          id: uuidv7(this.now()),
-          ownerId: owner,
-          pageId: row.id,
+  ): VersionKept {
+    return this.tx(() => {
+      const row = this.livePage(owner, id);
+      const now = this.now();
+      if (input.reason === 'conflict') {
+        const kept = this.insertVersion(row, 'conflict', deviceLabel, now, {
           revision: input.baseRevision,
-          type: row.type,
-          title: row.title,
           content: input.content,
-          reason: input.reason,
-          deviceLabel,
-          createdAt: this.now(),
+        });
+        return { version: kept };
+      }
+      const latest = this.orm
+        .select({ content: pageVersions.content, type: pageVersions.type })
+        .from(pageVersions)
+        .where(eq(pageVersions.pageId, row.id))
+        .orderBy(desc(pageVersions.createdAt), desc(pageVersions.id))
+        .limit(1)
+        .get();
+      const unchanged = latest && latest.content === row.content && latest.type === row.type;
+      if (input.reason === 'auto' && (unchanged || row.content === '')) return { version: null };
+      if (input.reason === 'manual' && unchanged && !input.name) return { version: null };
+      const name = input.reason === 'manual' ? (input.name ?? null) : null;
+      return { version: this.insertVersion(row, input.reason, deviceLabel, now, { name }) };
+    });
+  }
+
+  /** The page's versions, newest first, without their content. */
+  listVersions(owner: string, id: string): PageVersionMeta[] {
+    const row = this.livePage(owner, id);
+    return this.orm
+      .select({ ...versionMetaColumns, size: sql<number>`length(${pageVersions.content})` })
+      .from(pageVersions)
+      .where(eq(pageVersions.pageId, row.id))
+      .orderBy(desc(pageVersions.createdAt), desc(pageVersions.id))
+      .all()
+      .map(toVersionMeta);
+  }
+
+  getVersion(owner: string, id: string, versionId: string): PageVersion {
+    const version = this.version(owner, id, versionId);
+    return {
+      ...toVersionMeta({ ...version, size: version.content.length }),
+      title: version.title,
+      content: version.content,
+    };
+  }
+
+  /** Names a version (it is then always kept), or takes its name away. */
+  nameVersion(
+    owner: string,
+    id: string,
+    versionId: string,
+    input: In<typeof nameVersionSchema>,
+  ): PageVersionMeta {
+    this.version(owner, id, versionId);
+    const row = this.orm
+      .update(pageVersions)
+      .set({ name: input.name })
+      .where(eq(pageVersions.id, versionId))
+      .returning()
+      .get()!;
+    return toVersionMeta({ ...row, size: row.content.length });
+  }
+
+  /**
+   * Makes a version the page's content again (§9.7). What it replaces is kept as a version
+   * first, so a restore can itself be undone.
+   */
+  restoreVersion(owner: string, id: string, versionId: string, deviceLabel: string): ContentSaved {
+    return this.tx(() => {
+      const version = this.version(owner, id, versionId);
+      const row = this.livePage(owner, id);
+      const now = this.now();
+      if (row.content !== version.content || row.type !== version.type) {
+        this.insertVersion(row, 'restore', deviceLabel, now);
+      }
+      const saved = this.orm
+        .update(pages)
+        .set({
+          type: version.type,
+          content: version.content,
+          contentText: textOf(version.type, version.content),
+          revision: row.revision + 1,
+          updatedAt: now,
+        })
+        .where(eq(pages.id, row.id))
+        .returning()
+        .get()!;
+      return {
+        revision: saved.revision,
+        pages: [toPageMeta({ ...saved, text: saved.contentText })],
+      };
+    });
+  }
+
+  /** "Restore as copy": a new page with the version's content, right after the page. */
+  copyVersion(owner: string, id: string, versionId: string): TreeChanges {
+    return this.tx(() => {
+      const version = this.version(owner, id, versionId);
+      const row = this.livePage(owner, id);
+      const siblings = this.pageNodes(owner, [row.sectionId])
+        .filter((n) => n.parentPageId === row.parentPageId)
+        .sort(bySortKey);
+      const next = siblings[siblings.findIndex((n) => n.id === id) + 1];
+      const [sortKey] =
+        placeKeys(siblings, next?.id ?? null) ?? fail(invalidMove('Can’t place it there.'));
+      const now = this.now();
+      const date = new Date(version.createdAt).toISOString().slice(0, 16).replace('T', ' ');
+      const title = `${version.title || 'Untitled page'} (${date})`.slice(0, 200);
+      const created = this.orm
+        .insert(pages)
+        .values({
+          id: uuidv7(now),
+          ownerId: owner,
+          sectionId: row.sectionId,
+          parentPageId: row.parentPageId,
+          title,
+          type: version.type,
+          content: version.content,
+          contentText: textOf(version.type, version.content),
+          sortKey: sortKey!,
+          createdAt: now,
+          updatedAt: now,
         })
         .returning()
-        .get(),
-    );
+        .get();
+      return { pages: [toPageMeta({ ...created, text: created.contentText })] };
+    });
+  }
+
+  /** Thins out every page's versions by the retention rules (§9.7); answers how many went. */
+  thinVersions(rules: RetentionRules): number {
+    const now = this.now();
+    const byPage = new Map<string, { id: string; createdAt: number; name: string | null }[]>();
+    for (const v of this.db
+      .prepare('SELECT id, page_id AS pageId, created_at AS createdAt, name FROM page_versions')
+      .iterate() as Iterable<{
+      id: string;
+      pageId: string;
+      createdAt: number;
+      name: string | null;
+    }>) {
+      if (now - v.createdAt < rules.allMs && !v.name) continue;
+      let list = byPage.get(v.pageId);
+      if (!list) byPage.set(v.pageId, (list = []));
+      list.push(v);
+    }
+    const thin = [...byPage.values()].flatMap((list) => versionsToThin(list, now, rules));
+    this.tx(() => {
+      for (const part of chunks(thin)) {
+        this.orm.delete(pageVersions).where(inArray(pageVersions.id, part)).run();
+      }
+    });
+    return thin.length;
+  }
+
+  private version(owner: string, pageId: string, versionId: string): PageVersionRow {
+    this.livePage(owner, pageId);
+    const version = this.orm
+      .select()
+      .from(pageVersions)
+      .where(
+        and(
+          eq(pageVersions.id, versionId),
+          eq(pageVersions.pageId, pageId),
+          eq(pageVersions.ownerId, owner),
+        ),
+      )
+      .get();
+    if (!version) throw notFound('Version not found.');
+    return version;
+  }
+
+  private insertVersion(
+    row: PageRow,
+    reason: PageVersionRow['reason'],
+    deviceLabel: string,
+    now: number,
+    extra: { revision?: number; content?: string; name?: string | null } = {},
+  ): PageVersionMeta {
+    const content = extra.content ?? row.content;
+    const kept = this.orm
+      .insert(pageVersions)
+      .values({
+        id: uuidv7(now),
+        ownerId: row.ownerId,
+        pageId: row.id,
+        revision: extra.revision ?? row.revision,
+        type: row.type,
+        title: row.title,
+        content,
+        reason,
+        name: extra.name ?? null,
+        deviceLabel,
+        createdAt: now,
+      })
+      .returning()
+      .get();
+    return toVersionMeta({ ...kept, size: content.length });
   }
 
   private livePage(owner: string, id: string): PageRow {
@@ -824,21 +1031,7 @@ export class NotesService {
     deviceLabel: string,
     now: number,
   ): void {
-    this.orm
-      .insert(pageVersions)
-      .values({
-        id: uuidv7(now),
-        ownerId: row.ownerId,
-        pageId: row.id,
-        revision: row.revision,
-        type: row.type,
-        title: row.title,
-        content: row.content,
-        reason,
-        deviceLabel,
-        createdAt: now,
-      })
-      .run();
+    this.insertVersion(row, reason, deviceLabel, now);
   }
 
   /** The page structure of some sections: enough to check and plan moves. */
@@ -1255,6 +1448,295 @@ export class NotesService {
       .where(and(eq(table.id, id), eq(table.ownerId, owner)))
       .run();
   }
+
+  // Recycle bin (§9.7)
+
+  /** Every item deleted on its own (with what went with it), newest first. */
+  listTrash(owner: string, trashMs: number): TrashList {
+    const notebookRows = this.orm
+      .select()
+      .from(notebooks)
+      .where(eq(notebooks.ownerId, owner))
+      .all();
+    const groupRows = this.orm
+      .select()
+      .from(sectionGroups)
+      .where(eq(sectionGroups.ownerId, owner))
+      .all();
+    const sectionRows = this.orm.select().from(sections).where(eq(sections.ownerId, owner)).all();
+    const deletedPages = this.orm
+      .select({
+        id: pages.id,
+        title: pages.title,
+        sectionId: pages.sectionId,
+        parentPageId: pages.parentPageId,
+        deletedAt: pages.deletedAt,
+        deletedRootId: pages.deletedRootId,
+      })
+      .from(pages)
+      .where(and(eq(pages.ownerId, owner), isNotNull(pages.deletedAt)))
+      .all();
+    const byNotebook = new Map(notebookRows.map((r) => [r.id, r]));
+    const byGroup = new Map(groupRows.map((r) => [r.id, r]));
+    const bySection = new Map(sectionRows.map((r) => [r.id, r]));
+    const pageCount = new Map<string, number>();
+    for (const p of deletedPages) {
+      if (p.deletedRootId)
+        pageCount.set(p.deletedRootId, (pageCount.get(p.deletedRootId) ?? 0) + 1);
+    }
+    const alive = (row: { deletedAt: number | null } | undefined) =>
+      !!row && row.deletedAt === null;
+    const groupPath = (id: string | null): string[] => {
+      const names: string[] = [];
+      for (
+        let g = id ? byGroup.get(id) : undefined;
+        g;
+        g = g.parentGroupId ? byGroup.get(g.parentGroupId) : undefined
+      ) {
+        names.unshift(g.name);
+      }
+      return names;
+    };
+    const notebookName = (id: string | null) => (id ? (byNotebook.get(id)?.name ?? '') : '');
+    const sectionPlace = (section: SectionRow | undefined): string[] =>
+      !section
+        ? []
+        : section.isInbox
+          ? []
+          : [notebookName(section.notebookId), ...groupPath(section.groupId)];
+    const entry = (
+      type: TrashEntry['type'],
+      row: { id: string; deletedAt: number | null },
+      name: string,
+      location: string[],
+      restorable: boolean,
+    ): TrashEntry => ({
+      type,
+      id: row.id,
+      name,
+      location: location.filter(Boolean),
+      pages: pageCount.get(row.id) ?? 0,
+      deletedAt: row.deletedAt!,
+      purgeAt: row.deletedAt! + trashMs,
+      restorable,
+    });
+    const entries: TrashEntry[] = [
+      ...notebookRows
+        .filter((r) => r.deletedRootId === r.id)
+        .map((r) => entry('notebook', r, r.name, [], true)),
+      ...groupRows
+        .filter((r) => r.deletedRootId === r.id)
+        .map((r) =>
+          entry(
+            'group',
+            r,
+            r.name,
+            [notebookName(r.notebookId), ...groupPath(r.parentGroupId)],
+            alive(byNotebook.get(r.notebookId)) &&
+              (r.parentGroupId === null || alive(byGroup.get(r.parentGroupId))),
+          ),
+        ),
+      ...sectionRows
+        .filter((r) => r.deletedRootId === r.id)
+        .map((r) =>
+          entry(
+            'section',
+            r,
+            r.name,
+            sectionPlace(r),
+            (r.notebookId === null || alive(byNotebook.get(r.notebookId))) &&
+              (r.groupId === null || alive(byGroup.get(r.groupId))),
+          ),
+        ),
+      ...deletedPages
+        .filter((p) => p.deletedRootId === p.id)
+        .map((p) => {
+          const section = bySection.get(p.sectionId);
+          const parentAlive =
+            p.parentPageId === null ||
+            !!this.orm
+              .select({ id: pages.id })
+              .from(pages)
+              .where(and(eq(pages.id, p.parentPageId), isNull(pages.deletedAt)))
+              .get();
+          return entry(
+            'page',
+            p,
+            p.title,
+            [...sectionPlace(section), section?.isInbox ? 'Inbox' : (section?.name ?? '')],
+            alive(section) && parentAlive,
+          );
+        }),
+    ];
+    entries.sort((a, b) => b.deletedAt - a.deletedAt);
+    return { entries, days: Math.round(trashMs / (24 * 3_600_000)) };
+  }
+
+  /**
+   * Restores an item into a new place, for when its own is gone: a page into a section, a
+   * section into a notebook (and group), a group into a notebook (and group).
+   */
+  restoreTo(owner: string, { item, to }: In<typeof restoreToSchema>): TreeChanges {
+    return this.tx(() => {
+      const table = trashTable(item.type);
+      const row = this.orm
+        .select({ id: table.id })
+        .from(table)
+        .where(
+          and(eq(table.id, item.id), eq(table.ownerId, owner), eq(table.deletedRootId, item.id)),
+        )
+        .get();
+      if (!row) throw notFound('Not in the recycle bin.');
+      const choose = (what: string) =>
+        new ApiError(400, 'invalid_request', `Choose ${what} to restore it to.`);
+      switch (item.type) {
+        case 'notebook':
+          break;
+        case 'group': {
+          if (!to.notebookId) throw choose('a notebook');
+          const parentGroupId = to.groupId ?? null;
+          const subtree = this.orm
+            .select()
+            .from(sectionGroups)
+            .where(and(eq(sectionGroups.ownerId, owner), eq(sectionGroups.deletedRootId, item.id)))
+            .all();
+          const height = heightOf(childrenByParent(subtree, groupParent), item.id);
+          this.checkGroupParent(owner, to.notebookId, parentGroupId, height);
+          this.orm
+            .update(sectionGroups)
+            .set({ parentGroupId })
+            .where(eq(sectionGroups.id, item.id))
+            .run();
+          for (const t of [sectionGroups, sections]) {
+            this.orm
+              .update(t)
+              .set({ notebookId: to.notebookId })
+              .where(and(eq(t.ownerId, owner), eq(t.deletedRootId, item.id)))
+              .run();
+          }
+          break;
+        }
+        case 'section': {
+          if (!to.notebookId) throw choose('a notebook');
+          this.liveNotebook(owner, to.notebookId);
+          const groupId = to.groupId ?? null;
+          if (groupId !== null && this.liveGroup(owner, groupId).notebookId !== to.notebookId) {
+            throw invalidMove('That group is in another notebook.');
+          }
+          this.orm
+            .update(sections)
+            .set({ notebookId: to.notebookId, groupId })
+            .where(eq(sections.id, item.id))
+            .run();
+          break;
+        }
+        case 'page': {
+          if (!to.sectionId) throw choose('a section');
+          this.liveSection(owner, to.sectionId);
+          this.orm.update(pages).set({ parentPageId: null }).where(eq(pages.id, item.id)).run();
+          this.orm
+            .update(pages)
+            .set({ sectionId: to.sectionId })
+            .where(and(eq(pages.ownerId, owner), eq(pages.deletedRootId, item.id)))
+            .run();
+          break;
+        }
+      }
+      return this.restore(owner, [item]);
+    });
+  }
+
+  /** Deletes items from the recycle bin for good, with everything deleted along with them. */
+  deleteForever(owner: string, items: readonly TrashItem[]): PurgeResult {
+    return this.tx(() => {
+      for (const item of items) {
+        const table = trashTable(item.type);
+        const found = this.orm
+          .select({ id: table.id })
+          .from(table)
+          .where(
+            and(eq(table.id, item.id), eq(table.ownerId, owner), eq(table.deletedRootId, item.id)),
+          )
+          .get();
+        if (!found) throw notFound('Not in the recycle bin.');
+      }
+      return { removed: this.purgeRoots(owner, items) };
+    });
+  }
+
+  /** Empties the user's recycle bin. */
+  emptyTrash(owner: string): PurgeResult {
+    return this.tx(() => ({ removed: this.purgeRoots(owner, this.trashRoots(owner, null)) }));
+  }
+
+  /**
+   * Deletes for good what has been in any user's recycle bin since before `before`. Answers
+   * the users whose bins changed, and how many rows went.
+   */
+  purgeExpired(before: number): { owners: string[]; removed: number } {
+    return this.tx(() => {
+      const owners = new Set<string>();
+      let removed = 0;
+      const byOwner = new Map<string, TrashItem[]>();
+      for (const type of ['notebook', 'group', 'section', 'page'] as const) {
+        const table = trashTable(type);
+        for (const r of this.orm
+          .select({ id: table.id, ownerId: table.ownerId })
+          .from(table)
+          .where(and(eq(table.deletedRootId, table.id), sql`${table.deletedAt} < ${before}`))
+          .all()) {
+          let list = byOwner.get(r.ownerId);
+          if (!list) byOwner.set(r.ownerId, (list = []));
+          list.push({ type, id: r.id });
+        }
+      }
+      for (const [owner, items] of byOwner) {
+        owners.add(owner);
+        removed += this.purgeRoots(owner, items);
+      }
+      return { owners: [...owners], removed };
+    });
+  }
+
+  private trashRoots(owner: string, before: number | null): TrashItem[] {
+    return (['notebook', 'group', 'section', 'page'] as const).flatMap((type) => {
+      const table = trashTable(type);
+      return this.orm
+        .select({ id: table.id })
+        .from(table)
+        .where(
+          and(
+            eq(table.ownerId, owner),
+            eq(table.deletedRootId, table.id),
+            before === null ? undefined : sql`${table.deletedAt} < ${before}`,
+          ),
+        )
+        .all()
+        .map((r) => ({ type, id: r.id }));
+    });
+  }
+
+  /** Deletes trash roots; the database's cascades take their contents and page versions. */
+  private purgeRoots(owner: string, items: readonly TrashItem[]): number {
+    let removed = 0;
+    // Pages first: a notebook deleted later takes the rest along anyway.
+    const rank = { page: 0, section: 1, group: 2, notebook: 3 } as const;
+    for (const item of [...items].sort((a, b) => rank[a.type] - rank[b.type])) {
+      for (const t of [pages, sections, sectionGroups, notebooks]) {
+        removed += this.orm
+          .select({ n: sql<number>`count(*)` })
+          .from(t)
+          .where(and(eq(t.ownerId, owner), eq(t.deletedRootId, item.id)))
+          .get()!.n;
+      }
+      const table = trashTable(item.type);
+      this.orm
+        .delete(table)
+        .where(and(eq(table.id, item.id), eq(table.ownerId, owner)))
+        .run();
+    }
+    return removed;
+  }
 }
 
 /** The selected pages that aren't inside another selected page (those go along with it). */
@@ -1263,6 +1745,9 @@ function topmost(selected: readonly PageNode[], byId: ReadonlyMap<string, PageNo
     (p) => !selected.some((o) => o.id !== p.id && isWithin(byId, p.parentPageId, o.id, pageParent)),
   );
 }
+
+const trashTable = (type: TrashItem['type']) =>
+  ({ notebook: notebooks, group: sectionGroups, section: sections, page: pages })[type];
 
 function fail(error: Error): never {
   throw error;

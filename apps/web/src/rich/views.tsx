@@ -15,6 +15,7 @@ import {
 import { useContext, useRef, useState, type PointerEvent } from 'react';
 import { IconButton, Popover, PopoverContent, PopoverTrigger, toast } from '../components/ui';
 import { floatingPanel } from '../components/ui/styles';
+import { formatBytes } from '../lib/bytes';
 import { cn } from '../lib/cn';
 import { useFileSrc } from '../markdown/context';
 import { ImageViewer } from '../markdown/ImageViewer';
@@ -288,12 +289,7 @@ const hostOf = (url: string) => {
   }
 };
 
-const sizeLabel = (bytes: number | null) => {
-  if (!bytes) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-};
+const sizeLabel = (bytes: number | null) => (bytes ? formatBytes(bytes) : '');
 
 export function FileView({ node, selected }: ReactNodeViewProps) {
   const attrs = node.attrs as { src: string | null; name: string | null; size: number | null };
