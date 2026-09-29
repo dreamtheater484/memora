@@ -167,14 +167,15 @@ test.describe('behaviour', () => {
     const api = new FakeApi();
     api.notes.addPages('meetings', 1000);
     await openShell(page, 'light', api);
-    // From the click until all 1,000 rows are in and drawn; the middle of three tries, so one
-    // slow moment on a busy machine doesn't decide it.
+    // From the click until the section's list is in and drawn; the middle of three tries, so
+    // one slow moment on a busy machine doesn't decide it.
     const times = await page.evaluate(async () => {
       const tab = (name: string) =>
         [...document.querySelectorAll<HTMLElement>('[role="tab"]')].find(
           (t) => t.textContent === name,
         )!;
-      const rows = () => document.querySelectorAll('[data-page-list] [role="treeitem"]').length;
+      const shows = (name: string) =>
+        document.querySelector(`[role="tree"][aria-label="Pages in ${name}"] [role="treeitem"]`);
       const until = (done: () => boolean) =>
         new Promise<void>((resolve) => {
           const check = () => (done() ? resolve() : requestAnimationFrame(check));
@@ -184,16 +185,50 @@ test.describe('behaviour', () => {
       for (let i = 0; i < 3; i += 1) {
         const started = performance.now();
         tab('Meetings').click();
-        await until(() => rows() === 1000);
+        await until(() => !!shows('Meetings'));
         // …and drawn: a task queued in the next frame runs after that frame is painted.
         await new Promise((painted) => requestAnimationFrame(() => setTimeout(painted)));
         result.push(performance.now() - started);
         tab('Roadmap').click();
-        await until(() => rows() < 1000);
+        await until(() => !!shows('Roadmap'));
       }
       return result.sort((a, b) => a - b);
     });
     expect(times[1]).toBeLessThan(300);
+  });
+
+  test('a long page list builds its rows as they come into view', async ({ page }) => {
+    const api = new FakeApi();
+    api.notes.addPages('meetings', 1000);
+    await openShell(page, 'light', api);
+    await page.getByRole('tab', { name: 'Meetings' }).click();
+    const rows = pageList(page).getByRole('treeitem');
+    await expect(rows.first()).toHaveAttribute('aria-setsize', '1000');
+    expect(await rows.count()).toBeLessThan(100);
+
+    // End reaches the last page, though it wasn't built yet.
+    await rows.first().click();
+    await page.keyboard.press('End');
+    const last = pageList(page).getByRole('treeitem', { name: /^Note 1000/ });
+    await expect(last).toBeFocused();
+    await expect(last).toHaveAttribute('aria-posinset', '1000');
+  });
+
+  test('scrolling to the end of a long page list builds the rest', async ({ page }) => {
+    const api = new FakeApi();
+    api.notes.addPages('meetings', 1000);
+    await openShell(page, 'light', api);
+    await page.getByRole('tab', { name: 'Meetings' }).click();
+    const rows = pageList(page).getByRole('treeitem');
+    await expect(rows.first()).toBeVisible();
+    // Like dragging the scrollbar to the bottom, again while the rows come in.
+    await expect
+      .poll(async () => {
+        await page.locator('[data-page-list]').evaluate((el) => el.scrollTo(0, el.scrollHeight));
+        return rows.count();
+      })
+      .toBe(1000);
+    await expect(pageList(page).getByRole('treeitem', { name: /^Note 1000/ })).toBeInViewport();
   });
 
   test('shows offline when the server does not answer', async ({ page }) => {

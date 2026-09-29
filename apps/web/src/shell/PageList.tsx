@@ -82,8 +82,9 @@ function allIds(nodes: readonly PageNode[]): string[] {
 }
 
 function PageRowView({ page, now }: { page: PageMeta; now: number }) {
-  // Rows out of sight skip style and layout until they scroll in, which keeps a section with
-  // a thousand pages quick to open. The drop line stays outside, so it isn't clipped.
+  // The list builds rows as they scroll into view (lazyRowHeight), and rows built but out of
+  // sight skip style and layout, so a section with a thousand pages opens quickly. The drop
+  // line stays outside, so it isn't clipped.
   return (
     <>
       <span className="flex min-w-0 flex-1 flex-col [contain-intrinsic-block-size:auto_3.5rem] [content-visibility:auto]">
@@ -344,6 +345,7 @@ export function PageList({ onOpen }: { onOpen?: () => void } = {}) {
                 onSelect={onSelect}
                 indent={1.125}
                 multiline
+                lazyRowHeight={4.5}
                 renderRow={({ page: p }) => <PageRowView page={p} now={now} />}
                 rowProps={(node) =>
                   ({

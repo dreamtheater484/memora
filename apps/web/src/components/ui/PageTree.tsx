@@ -1,5 +1,6 @@
 import { ChevronRight } from 'lucide-react';
 import {
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -61,8 +62,16 @@ export interface PageTreeProps<N extends TreeNode> {
   indent?: number;
   /** Rows with several lines: align to the top and add vertical padding. */
   multiline?: boolean;
+  /**
+   * For long lists: build rows only as they scroll into view or the keyboard reaches them.
+   * The rows not built yet are a blank gap of this estimated height per row, in rem.
+   */
+  lazyRowHeight?: number;
   className?: string;
 }
+
+/** Rows a lazy tree builds at first, and beyond what is needed when it builds more. */
+const LAZY_CHUNK = 60;
 
 interface Visible<N> {
   node: N;
@@ -103,6 +112,7 @@ export function PageTree<N extends TreeNode>({
   rowProps,
   indent = 1.25,
   multiline,
+  lazyRowHeight,
   className,
 }: PageTreeProps<N>) {
   const [ownExpanded, setOwnExpanded] = useState(() => new Set(defaultExpanded));
@@ -111,7 +121,8 @@ export function PageTree<N extends TreeNode>({
   const indexOf = useMemo(() => new Map(visible.map((v, i) => [v.node.id, i])), [visible]);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const refs = useRef(new Map<string, HTMLElement>());
-  // A focused row that moves under another parent remounts; this carries its focus across.
+  // The row to focus as it mounts: a focused row that remounts after moving under another
+  // parent, or a row of a lazy tree that the keyboard reached before it was built.
   const refocus = useRef<string | null>(null);
   // Runs after the rows' refs: forget a row that was removed rather than moved.
   useLayoutEffect(() => {
@@ -119,10 +130,34 @@ export function PageTree<N extends TreeNode>({
   });
   const typeahead = useRef({ text: '', at: 0 });
 
-  const tabStop =
-    visible.find((v) => v.node.id === focusedId)?.node.id ??
-    visible.find((v) => v.node.id === selectedId)?.node.id ??
-    visible[0]?.node.id;
+  // Rows built so far, in the visible order: all of them, or the first `limit` of a lazy tree.
+  // Without IntersectionObserver (tests), a lazy tree builds everything.
+  const [limit, setLimit] = useState(() =>
+    typeof IntersectionObserver === 'undefined' ? Infinity : LAZY_CHUNK,
+  );
+  const shown = lazyRowHeight ? Math.min(limit, visible.length) : visible.length;
+  const rest = visible.length - shown;
+  const gap = useRef<HTMLDivElement>(null);
+  const built = (id: string | null | undefined) => !!id && (indexOf.get(id) ?? shown) < shown;
+
+  // When the gap comes into view, even deep into it after a scrollbar drag, build the rows down
+  // to the bottom of the view and a chunk more. Observing again after each build checks the gap
+  // anew, since the rows can be shorter than the estimate.
+  useEffect(() => {
+    const el = gap.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry?.isIntersecting) return;
+      const perRow = entry.boundingClientRect.height / rest;
+      const needed = (entry.intersectionRect.bottom - entry.boundingClientRect.top) / perRow;
+      setLimit((l) => Math.max(l, shown + Math.ceil(needed) + LAZY_CHUNK));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [shown, rest]);
+
+  // A row not built yet can't be tabbed to; the first row stands in until it is.
+  const tabStop = [focusedId, selectedId].find(built) ?? visible[0]?.node.id;
 
   function setOpen(id: string, value: boolean) {
     const next = new Set(open);
@@ -135,7 +170,13 @@ export function PageTree<N extends TreeNode>({
   function focus(id: string | undefined) {
     if (!id) return;
     setFocusedId(id);
-    refs.current.get(id)?.focus();
+    const row = refs.current.get(id);
+    if (row) return row.focus();
+    // Not built yet (a lazy tree): build down to it, and focus it as it mounts.
+    const index = indexOf.get(id);
+    if (index === undefined) return;
+    refocus.current = id;
+    setLimit((l) => Math.max(l, index + 1 + LAZY_CHUNK));
   }
 
   /** Focuses the visible row at `index`, if there is one. */
@@ -210,6 +251,8 @@ export function PageTree<N extends TreeNode>({
 
   function renderLevel(list: readonly N[], level: number): ReactNode {
     return list.map((node, i) => {
+      const index = indexOf.get(node.id) ?? 0;
+      if (index >= shown) return null;
       const hasChildren = !!node.children?.length;
       const isOpen = hasChildren && open.has(node.id);
       const state: TreeRowState = {
@@ -219,7 +262,6 @@ export function PageTree<N extends TreeNode>({
         hasChildren,
       };
       const extra = rowProps?.(node, state);
-      const index = indexOf.get(node.id) ?? 0;
       return (
         <li
           key={node.id}
@@ -231,7 +273,9 @@ export function PageTree<N extends TreeNode>({
                 if (el !== document.activeElement) el.focus();
               }
             } else {
-              if (refs.current.get(node.id) === document.activeElement) refocus.current = node.id;
+              // A focused row going away; unless focus is already headed to a row being built.
+              if (!refocus.current && refs.current.get(node.id) === document.activeElement)
+                refocus.current = node.id;
               refs.current.delete(node.id);
             }
           }}
@@ -286,7 +330,8 @@ export function PageTree<N extends TreeNode>({
             ) : null}
             {renderRow ? renderRow(node, state) : <span className="truncate">{node.label}</span>}
           </div>
-          {isOpen && (
+          {/* The first child comes right after its parent in the visible order. */}
+          {isOpen && index + 1 < shown && (
             <ul role="group" className="flex flex-col gap-px pt-px">
               {renderLevel(node.children as readonly N[], level + 1)}
             </ul>
@@ -297,13 +342,25 @@ export function PageTree<N extends TreeNode>({
   }
 
   return (
-    <ul
-      role="tree"
-      aria-label={label}
-      aria-multiselectable={multiselectable || undefined}
-      className={cn('flex flex-col gap-px', className)}
-    >
-      {renderLevel(nodes, 1)}
-    </ul>
+    <>
+      <ul
+        role="tree"
+        aria-label={label}
+        aria-multiselectable={multiselectable || undefined}
+        className={cn('flex flex-col gap-px', className)}
+      >
+        {renderLevel(nodes, 1)}
+      </ul>
+      {rest > 0 && (
+        // No scroll anchoring on the gap: rows built above a view that is inside it fill that view
+        // instead of pushing it further down.
+        <div
+          ref={gap}
+          aria-hidden
+          className="shrink-0 [overflow-anchor:none]"
+          style={{ height: `${rest * lazyRowHeight!}rem` }}
+        />
+      )}
+    </>
   );
 }

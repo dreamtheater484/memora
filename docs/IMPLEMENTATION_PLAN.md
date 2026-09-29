@@ -1200,7 +1200,7 @@ Long lists (pages, search results, cards) render only what is visible on screen.
 
 - The whole hierarchy can be managed with mouse, touch and keyboard. _End-to-end tests cover tabs, group menus, search, the page list (open, indent, multi-select, delete and Undo), the move dialog, new sections, quick notes and phone drill-down._
 - Layouts are correct at all breakpoints. _Baselines at phone, desktop, wide and ultra-wide in both themes, plus the first-run screen._
-- Opening a notebook with 1,000 pages takes under 300 ms. _An end-to-end test opens a section with 1,000 pages: about 125 ms until drawn (the middle of three tries). Rows out of sight skip layout until they scroll in._
+- Opening a notebook with 1,000 pages takes under 300 ms. _An end-to-end test opens a section with 1,000 pages: about 35 ms until drawn on a desktop, and about 120 ms with the CPU slowed four times, as on a CI runner or a phone (the middle of three tries). The page list builds rows as they scroll into view or the keyboard reaches them; two more tests cover scrolling to the end and jumping there with End._
 
 ### Phase 4 — Save & sync engine · L
 
