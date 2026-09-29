@@ -197,6 +197,20 @@ function usePaletteItems(current: Current, commands: Commands): PaletteItem[] {
           hint: shortcutKeys('new-page'),
           onSelect: () => void commands.newPage(),
         },
+        {
+          id: 'cmd:new-markdown-page',
+          title: 'New Markdown page',
+          group: 'Commands',
+          icon: <FilePlus />,
+          onSelect: () => void commands.newPage({ type: 'markdown' }),
+        },
+        {
+          id: 'cmd:new-rich-page',
+          title: 'New rich text page',
+          group: 'Commands',
+          icon: <FilePlus />,
+          onSelect: () => void commands.newPage({ type: 'rich' }),
+        },
         ...(current.page
           ? [
               {

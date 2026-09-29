@@ -162,3 +162,59 @@ describe('pages made in the browser', () => {
     expect((await page()).title).toBe('Plans');
   });
 });
+
+describe('rich pages and conversion', () => {
+  const richDoc = JSON.stringify({
+    type: 'doc',
+    content: [
+      { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Plans' }] },
+      { type: 'paragraph', content: [{ type: 'text', text: 'Ship it.' }] },
+    ],
+  });
+  const convert = (body: object) => me.post(`/api/v1/pages/${pageId}/convert`, body);
+
+  it('converts a page, keeping what it replaces as a version', async () => {
+    await save(1, '# Plans\n\nShip it.');
+    const res = await convert({ type: 'rich', content: richDoc, baseRevision: 2 });
+    expect(res.statusCode).toBe(200);
+    const saved = res.json() as ContentSaved;
+    expect(saved.revision).toBe(3);
+    expect(saved.pages[0]).toMatchObject({ type: 'rich', snippet: 'Plans Ship it.' });
+    expect(await page()).toMatchObject({ type: 'rich', content: richDoc, revision: 3 });
+    expect(versions()).toEqual([
+      {
+        revision: 2,
+        reason: 'conversion',
+        content: '# Plans\n\nShip it.',
+        device: expect.any(String),
+      },
+    ]);
+    // And back.
+    const back = await convert({ type: 'markdown', content: '# Plans', baseRevision: 3 });
+    expect(back.statusCode).toBe(200);
+    expect(await page()).toMatchObject({ type: 'markdown', content: '# Plans', revision: 4 });
+    expect(versions().map((v) => v.reason)).toEqual(['conversion', 'conversion']);
+  });
+
+  it('refuses a conversion based on an old revision, or to the same type', async () => {
+    await save(1, 'Changed meanwhile');
+    const stale = await convert({ type: 'rich', content: richDoc, baseRevision: 1 });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json().error.code).toBe('revision_conflict');
+    const same = await convert({ type: 'markdown', content: 'x', baseRevision: 2 });
+    expect(same.statusCode).toBe(409);
+    expect((await page()).type).toBe('markdown');
+    expect(versions()).toEqual([]);
+  });
+
+  it('only stores documents on rich pages', async () => {
+    const bad = await convert({ type: 'rich', content: '# Not JSON', baseRevision: 1 });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().error.code).toBe('invalid_content');
+    expect((await convert({ type: 'rich', content: '', baseRevision: 1 })).statusCode).toBe(200);
+    expect((await save(2, '{"type":"paragraph"}')).json().error.code).toBe('invalid_content');
+    const saved = await save(2, richDoc);
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().pages[0].snippet).toBe('Plans Ship it.');
+  });
+});

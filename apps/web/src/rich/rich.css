@@ -1,0 +1,400 @@
+/*
+ * Rich pages (§9.4, §9.13): the Markdown preview's typography (the editor carries the
+ * `markdown-body` class), plus what only rich pages have: the sheet of paper, tables with
+ * resizable columns and coloured cells, image frames, file cards, callout titles, the drag
+ * handle and the placeholder.
+ */
+
+@import 'katex/dist/katex.min.css';
+
+/* The page: fitting the pane, or a sheet of A4 or Letter paper. */
+.rich-sheet {
+  max-width: 47.5rem;
+  padding: 1rem var(--page-pad) 30vh;
+}
+[data-page-view='a4'] [data-rich-scroll],
+[data-page-view='letter'] [data-rich-scroll] {
+  background: color-mix(in oklab, var(--bg), var(--fg) 5%);
+}
+.rich-sheet-a4,
+.rich-sheet-letter {
+  box-sizing: border-box;
+  max-width: calc(100% - 2rem);
+  margin: 1.5rem auto 30vh;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.25rem;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.08),
+    0 8px 24px rgb(0 0 0 / 0.06);
+}
+.rich-sheet-a4 {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 25mm 20mm;
+}
+.rich-sheet-letter {
+  width: 8.5in;
+  min-height: 11in;
+  padding: 1in;
+}
+@media (max-width: 60rem) {
+  .rich-sheet-a4,
+  .rich-sheet-letter {
+    padding: 1.5rem var(--page-pad);
+  }
+}
+
+.rich-editor {
+  position: relative;
+}
+.rich-content {
+  min-height: 40vh;
+  outline: none;
+}
+.rich-content > * + * {
+  margin-top: 0;
+}
+
+/* The prompt in an empty line. */
+.rich-content .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--fg-3);
+  pointer-events: none;
+}
+
+/* Links to pages look like the preview's wiki links. */
+.rich-content a[href^='wiki:'] {
+  text-decoration-style: dotted;
+}
+
+/* Callouts: their title comes from their kind. */
+.rich-content .markdown-alert::before {
+  display: block;
+  margin-bottom: 0.3em;
+  font-weight: 650;
+  color: var(--alert);
+  content: 'Note';
+}
+.rich-content .markdown-alert[data-kind='tip']::before {
+  content: 'Tip';
+}
+.rich-content .markdown-alert[data-kind='important']::before {
+  content: 'Important';
+}
+.rich-content .markdown-alert[data-kind='warning']::before {
+  content: 'Warning';
+}
+.rich-content .markdown-alert[data-kind='caution']::before {
+  content: 'Caution';
+}
+
+/* Task lists. */
+.rich-content ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0.2em;
+}
+.rich-content li[data-type='taskItem'] {
+  display: flex;
+  gap: 0.5em;
+  align-items: flex-start;
+}
+.rich-content li[data-type='taskItem'] > label {
+  flex: none;
+  margin-top: 0.2em;
+  user-select: none;
+}
+.rich-content li[data-type='taskItem'] > label input {
+  width: 1em;
+  height: 1em;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.rich-content li[data-type='taskItem'] > div {
+  flex: 1;
+  min-width: 0;
+}
+.rich-content li[data-type='taskItem'][data-checked='true'] > div {
+  color: var(--fg-3);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklab, var(--fg-3) 60%, transparent);
+}
+.rich-content li[data-type='taskItem'] > div > p {
+  margin: 0;
+}
+
+/* Code blocks, coloured by Shiki through the same variables as the preview. */
+.rich-content pre {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--code-bg);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1.6;
+}
+.rich-content pre code {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: inherit;
+}
+.rich-content pre span[style*='--shiki'] {
+  color: light-dark(var(--shiki-light), var(--shiki-dark));
+  font-style: light-dark(var(--shiki-light-font-style), var(--shiki-dark-font-style));
+  font-weight: light-dark(var(--shiki-light-font-weight), var(--shiki-dark-font-weight));
+}
+
+/* Tables: full width, resizable columns, selectable and colourable cells. */
+.rich-content .tableWrapper {
+  margin: 0 0 1rem;
+  overflow-x: auto;
+}
+.markdown-body.rich-content table {
+  display: table;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  table-layout: fixed;
+  border-collapse: collapse;
+  overflow: hidden;
+}
+.rich-content :where(th, td) {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 1em;
+  vertical-align: top;
+}
+.rich-content :where(th, td) > * {
+  margin-bottom: 0;
+}
+.rich-content :where(th, td) > * + * {
+  margin-top: 0.4em;
+}
+.markdown-body.rich-content tr:nth-child(2n) td:not([data-background-color]) {
+  background: none;
+}
+.rich-content .selectedCell::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: color-mix(in oklab, var(--accent) 16%, transparent);
+  content: '';
+  pointer-events: none;
+}
+.rich-content .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: -2px;
+  width: 4px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.rich-content.resize-cursor {
+  cursor: col-resize;
+}
+
+/* Images: a frame to resize, aligned, with a caption. */
+.rich-content .rich-image {
+  margin: 0 0 1rem;
+  text-align: center;
+}
+.rich-content .rich-image[data-align='left'] {
+  float: left;
+  max-width: 50%;
+  margin: 0.25rem 1.25rem 0.75rem 0;
+}
+.rich-content .rich-image[data-align='right'] {
+  float: right;
+  max-width: 50%;
+  margin: 0.25rem 0 0.75rem 1.25rem;
+}
+.rich-content .rich-image[data-align='inline'] {
+  text-align: left;
+}
+.rich-content .rich-image-frame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+  line-height: 0;
+}
+.rich-content .rich-image-frame img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+}
+.rich-content .rich-image-frame:not([style*='width']) img {
+  width: auto;
+}
+.rich-content .rich-image.is-selected .rich-image-frame,
+.rich-content .ProseMirror-selectednode.rich-file,
+.rich-content hr.ProseMirror-selectednode,
+.rich-content [data-type$='math'].ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+.rich-content .rich-image-resize {
+  position: absolute;
+  top: 50%;
+  width: 0.5rem;
+  height: 2.5rem;
+  margin-top: -1.25rem;
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  background: var(--accent);
+  cursor: ew-resize;
+  touch-action: none;
+}
+.rich-content .rich-image-resize.left {
+  left: -0.3rem;
+}
+.rich-content .rich-image-resize.right {
+  right: -0.3rem;
+}
+.rich-content .rich-image-tools {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 50%;
+  translate: -50% 0;
+  line-height: normal;
+  white-space: nowrap;
+}
+.rich-content .rich-image figcaption {
+  margin-top: 0.4rem;
+  font-size: 0.875em;
+  color: var(--fg-2);
+  text-align: center;
+}
+.rich-content .rich-image figcaption input {
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  outline: none;
+}
+.rich-content .rich-image-remote {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+.rich-content .rich-image-remote button {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 0.4rem;
+  color: var(--fg);
+}
+.rich-content .rich-image-remote svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Attached files. */
+.rich-content .rich-file {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--code-bg);
+}
+.rich-content .rich-file-icon {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--accent);
+}
+.rich-content .rich-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rich-content .rich-file-size {
+  margin-left: 0.6rem;
+  font-weight: 400;
+  font-size: 0.85em;
+  color: var(--fg-3);
+}
+.rich-content .rich-file-download {
+  display: inline-flex;
+  flex: none;
+  gap: 0.35rem;
+  align-items: center;
+  font-size: 0.875rem;
+}
+.rich-content .rich-file-download svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+/* Formulas open their editor on click. */
+.rich-content [data-type='inline-math'],
+.rich-content [data-type='block-math'] {
+  cursor: pointer;
+  border-radius: 0.3rem;
+}
+.rich-content [data-type='inline-math']:hover,
+.rich-content [data-type='block-math']:hover {
+  background: var(--hover);
+}
+.rich-content [data-type='block-math'] {
+  margin: 0 0 1rem;
+  padding: 0.25rem 0;
+  overflow-x: auto;
+  text-align: center;
+}
+
+/* The grip for moving blocks, in the margin of the hovered block. */
+.rich-drag-handle {
+  position: absolute;
+  left: -1.6rem;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.5rem;
+  border-radius: 0.3rem;
+  color: var(--fg-3);
+  cursor: grab;
+}
+.rich-drag-handle:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.rich-drag-handle[hidden] {
+  display: none;
+}
+@media (hover: none) {
+  .rich-drag-handle {
+    display: none;
+  }
+}
+
+.rich-content .ProseMirror-gapcursor::after {
+  border-top-color: var(--fg);
+}

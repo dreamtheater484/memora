@@ -5,6 +5,7 @@ export * from './errors';
 export * from './health';
 export * from './ids';
 export * from './notes';
+export * from './rich';
 export * from './sync';
 export * from './table';
 export * from './tree';

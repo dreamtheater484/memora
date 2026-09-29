@@ -1,6 +1,6 @@
 import type { Page } from '@memora/shared';
 import { ApiRequestError, api, isUnreachable } from '../lib/api';
-import { merge3 } from './merge';
+import { mergeContent } from './merge';
 import {
   absorb,
   fromServer,
@@ -221,7 +221,7 @@ export class PageDoc {
         if (record.content !== this.content()) this.setText(record.content);
       } else {
         const mine = this.content();
-        const merged = merge3(this.known.content, record.content, mine);
+        const merged = mergeContent(record.type, this.known.content, record.content, mine);
         // Unmergeable: keep typing; the next store write keeps the other text as a version.
         if (merged.ok) {
           this.known = { writeId: record.writeId, content: record.content };
@@ -337,7 +337,7 @@ export class PageDoc {
       const now = this.content();
       if (now === text) this.setText(record.content);
       else {
-        const merged = merge3(text, record.content, now);
+        const merged = mergeContent(record.type, text, record.content, now);
         if (merged.ok) this.setText(merged.text);
         // Unmergeable: the next write sees a changed record and keeps its text.
         else this.known = { writeId: '', content: text };

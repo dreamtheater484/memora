@@ -35,9 +35,18 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    // Not losing a keystroke is proven in every engine (§13.1); the rest runs in Chromium.
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] }, testMatch: 'resilience.spec.ts' },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] }, testMatch: 'resilience.spec.ts' },
+    // Not losing a keystroke (§13.1) and pasting screenshots (§9.5) are proven in every
+    // engine; the rest runs in Chromium.
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+      testMatch: ['resilience.spec.ts', 'paste.spec.ts'],
+    },
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+      testMatch: ['resilience.spec.ts', 'paste.spec.ts'],
+    },
   ],
   webServer: {
     // The gallery build contains both index.html and gallery.html.

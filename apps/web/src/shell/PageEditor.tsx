@@ -1,5 +1,5 @@
 import type { PageMeta } from '@memora/shared';
-import { MonitorSmartphone, PenLine, TriangleAlert } from 'lucide-react';
+import { MonitorSmartphone, TriangleAlert } from 'lucide-react';
 import { Suspense, lazy, useMemo, useState } from 'react';
 import { Button, Dialog, DialogContent, SaveIndicator, Skeleton } from '../components/ui';
 import { cn } from '../lib/cn';
@@ -14,13 +14,7 @@ import { useSync } from '../sync/status';
  */
 
 const MarkdownPage = lazy(() => import('../editor/MarkdownPage'));
-
-const note = (text: string) => (
-  <p className="mt-2 flex gap-2.5 rounded-sm border border-accent/25 bg-accent/7 px-3.5 py-3 text-sm text-fg-2">
-    <PenLine className="mt-0.5 size-4 shrink-0 text-accent" />
-    {text}
-  </p>
-);
+const RichPage = lazy(() => import('../rich/RichPage'));
 
 const loading = (
   <div className="flex max-w-[47.5rem] flex-col gap-2.5 px-4 pt-4 @tablet:px-7" aria-busy="true">
@@ -30,7 +24,7 @@ const loading = (
   </div>
 );
 
-/** The page's content: the Markdown editor and preview (rich pages arrive in Phase 6). */
+/** The page's content: the Markdown editor and preview, or the rich text editor. */
 export function PageBody({
   page,
   doc,
@@ -42,9 +36,6 @@ export function PageBody({
 }) {
   const snapshot = useDocSnapshot(doc);
   const pad = 'px-4 pt-3 @tablet:px-7 @wide:px-9';
-  if (page.type === 'rich') {
-    return <div className={pad}>{note('Rich text editing arrives in Phase 6.')}</div>;
-  }
   if (!doc || !snapshot || snapshot.state === 'loading') return loading;
   if (snapshot.state !== 'ready') {
     const message = {
@@ -65,7 +56,12 @@ export function PageBody({
       )}
       <div className="min-h-0 flex-1">
         <Suspense fallback={loading}>
-          <MarkdownPage page={page} doc={doc} compact={compact} />
+          {/* The record's type changes with its content (a conversion), before the tree's. */}
+          {(snapshot.record?.type ?? page.type) === 'rich' ? (
+            <RichPage key="rich" page={page} doc={doc} compact={compact} />
+          ) : (
+            <MarkdownPage key="markdown" page={page} doc={doc} compact={compact} />
+          )}
         </Suspense>
       </div>
     </div>
@@ -119,6 +115,28 @@ export function PresenceHint({ pageId }: { pageId: string }) {
 
 function ConflictBanner({ doc }: { doc: PageDoc }) {
   const [comparing, setComparing] = useState(false);
+  const record = useDocSnapshot(doc)?.record;
+  // Converted on another device meanwhile: only the server's version fits the page now.
+  const converted = !!record?.conflict?.type;
+  // Rich pages are compared block by block with the history (Phase 7).
+  const comparable = record?.type === 'markdown' && !converted;
+  if (converted) {
+    return (
+      <div
+        role="alert"
+        className="flex flex-wrap items-center gap-x-3 gap-y-2.5 rounded-md border border-warn/45 bg-warn/10 px-3.5 py-3 text-sm"
+      >
+        <TriangleAlert aria-hidden className="size-4 shrink-0 text-warn" />
+        <p className="min-w-[14rem] flex-1 text-fg">
+          <b className="font-semibold">Converted on another device.</b> Your latest changes were
+          made to the old version; they are kept in the page’s history.
+        </p>
+        <Button size="sm" variant="primary" onClick={() => void doc.keepTheirs()}>
+          Show the converted page
+        </Button>
+      </div>
+    );
+  }
   return (
     <div
       role="alert"
@@ -136,9 +154,11 @@ function ConflictBanner({ doc }: { doc: PageDoc }) {
         <Button size="sm" onClick={() => void doc.keepTheirs()}>
           Keep theirs
         </Button>
-        <Button size="sm" variant="primary" onClick={() => setComparing(true)}>
-          Compare
-        </Button>
+        {comparable && (
+          <Button size="sm" variant="primary" onClick={() => setComparing(true)}>
+            Compare
+          </Button>
+        )}
       </div>
       <Dialog open={comparing} onOpenChange={setComparing}>
         {comparing && <CompareDialog doc={doc} onDone={() => setComparing(false)} />}

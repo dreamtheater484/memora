@@ -187,6 +187,13 @@ const RULES: Record<string, RouteRule> = {
       () => ({ baseRevision: 1, content: 'Mine now' }),
     ),
   },
+  'POST /api/v1/pages/:id/convert': {
+    access: 'user',
+    foreign: probe(
+      (n) => `/api/v1/pages/${n.pageId}/convert`,
+      () => ({ type: 'rich', content: '', baseRevision: 1 }),
+    ),
+  },
   'POST /api/v1/pages/:id/versions': {
     access: 'user',
     foreign: (w) => ({
@@ -244,6 +251,8 @@ const RULES: Record<string, RouteRule> = {
   'PATCH /api/v1/settings': { access: 'user' },
   // assets.test.ts checks that an id taken by another user is refused and left unchanged.
   'PUT /api/v1/assets/:id': { access: 'user' },
+  // Makes a new file of the caller's own; the address is checked by assets-fetch.test.ts.
+  'POST /api/v1/assets/fetch': { access: 'user' },
   'GET /api/v1/assets/:id': {
     access: 'user',
     foreign: probe((n) => `/api/v1/assets/${n.assetId}`),

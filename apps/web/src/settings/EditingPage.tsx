@@ -1,4 +1,4 @@
-import type { EditorSettings, ViewMode } from '@memora/shared';
+import type { EditorSettings, PageType, PageView, ViewMode } from '@memora/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, type ReactNode } from 'react';
 import { SegmentedControl, Select, Switch, toast } from '../components/ui';
@@ -32,6 +32,17 @@ function Row({
     </div>
   );
 }
+
+const PAGE_TYPES: { value: PageType; label: string }[] = [
+  { value: 'markdown', label: 'Markdown' },
+  { value: 'rich', label: 'Rich text' },
+];
+
+const PAGE_VIEWS: { value: PageView; label: string }[] = [
+  { value: 'off', label: 'Fit the window' },
+  { value: 'a4', label: 'A4 page' },
+  { value: 'letter', label: 'Letter page' },
+];
 
 const VIEW_MODES: { value: ViewMode; label: string }[] = [
   { value: 'source', label: 'Source' },
@@ -67,6 +78,22 @@ export function EditingPage() {
   return (
     <>
       <SettingsSection
+        title="New pages"
+        description="Markdown pages are plain text with formatting marks; rich text pages work like a word processor. A page can be converted later from its menu."
+      >
+        <Row
+          label="New pages are"
+          control={() => (
+            <SegmentedControl
+              label="New pages are"
+              value={settings.pageType}
+              onValueChange={(pageType) => save({ pageType })}
+              segments={PAGE_TYPES}
+            />
+          )}
+        />
+      </SettingsSection>
+      <SettingsSection
         title="Markdown pages"
         description="How Markdown pages open and look while you write. These follow you to every device."
       >
@@ -100,6 +127,46 @@ export function EditingPage() {
               value={String(settings.tabSize)}
               onValueChange={(value) => save({ tabSize: Number(value) })}
               options={[2, 4, 8].map((n) => ({ value: String(n), label: `${n} spaces` }))}
+            />
+          )}
+        />
+      </SettingsSection>
+      <SettingsSection title="Rich text pages" description="How rich text pages are laid out.">
+        <Row
+          label="Show pages as"
+          description="A sheet of paper shows how a page will print or export."
+          control={(id) => (
+            <Select
+              id={id}
+              aria-label="Show pages as"
+              value={settings.pageView}
+              onValueChange={(pageView) => save({ pageView: pageView as PageView })}
+              options={PAGE_VIEWS}
+            />
+          )}
+        />
+      </SettingsSection>
+      <SettingsSection
+        title="Images"
+        description="Pasted and dropped images, in both kinds of page."
+      >
+        {toggle(
+          'downscaleImages',
+          'Make large images smaller',
+          'Photos are stored as WebP; screenshots stay lossless PNG.',
+        )}
+        <Row
+          label="Longest side"
+          control={(id) => (
+            <Select
+              id={id}
+              aria-label="Longest side"
+              value={String(settings.maxImageEdge)}
+              onValueChange={(value) => save({ maxImageEdge: Number(value) })}
+              options={[1280, 1920, 2560, 3840].map((n) => ({
+                value: String(n),
+                label: `${n} pixels`,
+              }))}
             />
           )}
         />

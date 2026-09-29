@@ -164,6 +164,8 @@ function withClasses(tag: string, ...classes: (string | RegExp)[]): Attributes[s
 /** GitHub's list of what may stay, plus what Memora's own features need. */
 export const sanitizeSchema = {
   ...defaultSchema,
+  // Underline and highlight, which rich pages keep when converted to Markdown.
+  tagNames: [...(defaultSchema.tagNames ?? []), 'u', 'mark'],
   attributes: {
     ...defaultSchema.attributes,
     '*': [...(defaultSchema.attributes?.['*'] ?? []), 'dataLine'],

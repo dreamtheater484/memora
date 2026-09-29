@@ -214,3 +214,42 @@ it('rebase keeps the text on top of a server that went back', () => {
     dirty: 1,
   });
 });
+
+describe('rich pages and conversions', () => {
+  const doc = (text: string) =>
+    JSON.stringify({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+    });
+  const rich = (revision: number, content: string) =>
+    ({ revision, content, type: 'rich' }) as const;
+
+  it('never merges two edits of a rich page as text', () => {
+    const record = settle({
+      ...fromServer('p1', rich(3, doc('Pack the tent and the stove')), 0),
+      content: doc('Pack the big tent and the stove'),
+    });
+    const next = absorb(record, rich(4, doc('Pack the tent and the old stove')))!;
+    expect(next.conflict).toMatchObject({ revision: 4, kept: null });
+    expect(next.conflict?.type).toBeUndefined();
+    expect(next.content).toBe(doc('Pack the big tent and the stove'));
+  });
+
+  it('takes a page converted elsewhere when nothing was changed here', () => {
+    const next = absorb(fromServer('p1', server(3, base), 0), rich(4, doc('Pack')))!;
+    expect(next).toMatchObject({ type: 'rich', content: doc('Pack'), dirty: 0 });
+  });
+
+  it('keeps only theirs when the page was converted while it was edited here', () => {
+    const next = absorb(edited(`${base}- Maps\n`), rich(4, doc('Pack')))!;
+    expect(next.conflict).toMatchObject({ revision: 4, type: 'rich' });
+    expect(keepMine(next)).toBe(next);
+    expect(keepTheirs(next)).toMatchObject({
+      type: 'rich',
+      content: doc('Pack'),
+      base: doc('Pack'),
+      revision: 4,
+      conflict: undefined,
+    });
+  });
+});

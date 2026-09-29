@@ -5,6 +5,7 @@ import { cn } from '../lib/cn';
 import { useSettled } from '../lib/useSettled';
 import { OutlineList } from '../markdown/OutlineList';
 import { headingsOf, statsOf } from '../markdown/outline';
+import { richOutline } from '../rich/outline';
 import { formatDateTime } from '../lib/time';
 import { useDocSnapshot, usePageDoc } from '../sync/hooks';
 import { useCurrent } from './location';
@@ -25,12 +26,18 @@ const Later = ({ children }: { children: ReactNode }) => (
 /** Page details on wide screens: information and the outline; links and history as they arrive. */
 export function Inspector() {
   const { page, path } = useCurrent();
-  const doc = usePageDoc(page?.type === 'markdown' ? page.id : null);
+  const doc = usePageDoc(page?.id ?? null);
   // As stored on this device: follows typing within a moment.
   // Counted once typing pauses: long pages take a moment.
-  const text = useSettled(useDocSnapshot(doc)?.record?.content, 400);
-  const stats = useMemo(() => (text === undefined ? null : statsOf(text)), [text]);
-  const headings = useMemo(() => (text === undefined ? [] : headingsOf(text)), [text]);
+  const record = useDocSnapshot(doc)?.record;
+  const text = useSettled(record?.content, 400);
+  const rich = record?.type === 'rich';
+  const outline = useMemo(() => {
+    if (text === undefined) return null;
+    return rich ? richOutline(text) : { headings: headingsOf(text), stats: statsOf(text) };
+  }, [text, rich]);
+  const stats = outline?.stats ?? null;
+  const headings = outline?.headings ?? [];
   return (
     <aside
       aria-label="Page details"
@@ -55,7 +62,7 @@ export function Inspector() {
             <dd>{formatDateTime(page.updatedAt)}</dd>
             <dt className="text-fg-3">Type</dt>
             <dd>{page.type === 'markdown' ? 'Markdown' : 'Rich text'}</dd>
-            {stats && page.type === 'markdown' && (
+            {stats && (
               <>
                 <dt className="text-fg-3">Words</dt>
                 <dd className="tabular-nums">
@@ -69,12 +76,12 @@ export function Inspector() {
         <Later>Open a page to see its details.</Later>
       )}
       <Block title="Outline">
-        {page?.type === 'markdown' ? (
+        {page ? (
           <div className="-mx-2">
             <OutlineList headings={headings} onJump={(line) => jumpTo(page.id, line)} />
           </div>
         ) : (
-          <Later>Headings of Markdown pages appear here.</Later>
+          <Later>The page’s headings appear here.</Later>
         )}
       </Block>
       <Block title="Backlinks">

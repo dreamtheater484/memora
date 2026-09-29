@@ -1,7 +1,7 @@
-import { ASSET_SCHEME, assetPath } from '@memora/shared';
+import { ASSET_SCHEME } from '@memora/shared';
 import type { Element, ElementContent, Root, RootContent } from 'hast';
 import { toJsxRuntime, type Components } from 'hast-util-to-jsx-runtime';
-import { Check, Copy, ExternalLink } from 'lucide-react';
+import { Check, Copy } from 'lucide-react';
 import {
   createContext,
   memo,
@@ -13,10 +13,10 @@ import {
   type ReactNode,
 } from 'react';
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
-import { Dialog, DialogContent } from '../components/ui';
 import { cn } from '../lib/cn';
 import { resolvedTheme, useTheme } from '../theme/theme';
-import { usePreviewHost } from './context';
+import { useFileSrc, usePreviewHost } from './context';
+import { ImageViewer } from './ImageViewer';
 import { highlight } from './highlight';
 import './markdown.css';
 import { createRenderer, type Renderer } from './renderer';
@@ -281,23 +281,6 @@ function Mermaid({ code, line }: { code: string; line?: number }) {
   );
 }
 
-/** Where a file referred to as `asset:<id>` loads from: this device's copy, or the server. */
-function useFileSrc(src: string | undefined): string | undefined {
-  const host = usePreviewHost();
-  const id = src?.startsWith(ASSET_SCHEME) ? src.slice(ASSET_SCHEME.length) : null;
-  const [local, setLocal] = useState<string | null>(null);
-  useEffect(() => {
-    if (!id) return;
-    let live = true;
-    void host.localFile(id).then((url) => live && setLocal(url));
-    return () => {
-      live = false;
-    };
-  }, [host, id]);
-  if (!id) return src;
-  return local ?? assetPath(id);
-}
-
 function PreviewImage({ node: _node, src, alt, title, ...props }: WithNode<'img'>) {
   const url = useFileSrc(typeof src === 'string' ? src : undefined);
   const [open, setOpen] = useState(false);
@@ -311,27 +294,13 @@ function PreviewImage({ node: _node, src, alt, title, ...props }: WithNode<'img'
       >
         <img {...props} src={url} alt={alt ?? ''} title={title} loading="lazy" />
       </button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        {open && (
-          <DialogContent size="xl" title={alt || 'Image'} description={title || undefined}>
-            <img
-              src={url}
-              alt={alt ?? ''}
-              className="mx-auto max-h-[65dvh] max-w-full object-contain"
-            />
-            {url && (
-              <a
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center gap-1.5 text-sm text-accent underline [&_svg]:size-3.5"
-              >
-                Open the original <ExternalLink aria-hidden />
-              </a>
-            )}
-          </DialogContent>
-        )}
-      </Dialog>
+      <ImageViewer
+        open={open}
+        onOpenChange={setOpen}
+        url={url}
+        alt={alt ?? ''}
+        title={title ?? undefined}
+      />
     </>
   );
 }

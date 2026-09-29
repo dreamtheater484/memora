@@ -1,3 +1,4 @@
+import type { PageType } from '@memora/shared';
 import { diff3Merge } from 'node-diff3';
 
 /*
@@ -41,6 +42,22 @@ export function merge3(base: string, theirs: string, mine: string): MergeResult 
   if (mine === base) return { ok: true, text: theirs };
   const lines = mergeParts(mine.split('\n'), base.split('\n'), theirs.split('\n'), true);
   return lines ? { ok: true, text: lines.join('\n') } : { ok: false };
+}
+
+/**
+ * Merges a page's text by its type: Markdown word by word; a rich page's document is never
+ * merged as text (Phase 7 compares rich pages block by block), so both edits make a conflict.
+ */
+export function mergeContent(
+  type: PageType,
+  base: string,
+  theirs: string,
+  mine: string,
+): MergeResult {
+  if (type === 'markdown') return merge3(base, theirs, mine);
+  if (mine === theirs || theirs === base) return { ok: true, text: mine };
+  if (mine === base) return { ok: true, text: theirs };
+  return { ok: false };
 }
 
 /**

@@ -2,21 +2,17 @@ import type { EditorView, ViewUpdate } from '@codemirror/view';
 import { EditorView as View } from '@codemirror/view';
 import type { PageMeta, Table, ViewMode } from '@memora/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { Columns2, Eye, ListTree, PenLine } from 'lucide-react';
+import { Columns2, Eye, PenLine } from 'lucide-react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import {
-  Dialog,
-  IconButton,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  SegmentedControl,
-} from '../components/ui';
+import { Dialog, SegmentedControl } from '../components/ui';
 import { cn } from '../lib/cn';
+import { useWidth } from '../lib/useWidth';
+import { prepareImage } from '../lib/images';
+import { downloadImage } from '../lib/remoteImages';
 import { useSettled } from '../lib/useSettled';
 import { PreviewHostContext, type PreviewHost } from '../markdown/context';
-import { headingsOf, statsOf, type Heading } from '../markdown/outline';
-import { OutlineList } from '../markdown/OutlineList';
+import { headingsOf, statsOf } from '../markdown/outline';
+import { OutlineButton } from '../markdown/OutlineButton';
 import { Preview } from '../markdown/Preview';
 import { toggleTask } from '../markdown/tasks';
 import { saveViewMode, useEditorSettings, useNotes } from '../notes/queries';
@@ -62,17 +58,6 @@ function useDocText(doc: PageDoc): [string, DocEditor] {
   return [text, editor];
 }
 
-function useWidth(element: HTMLElement | null): number {
-  const [width, setWidth] = useState(0);
-  useEffect(() => {
-    if (!element) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(entry!.contentRect.width));
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [element]);
-  return width;
-}
-
 export interface MarkdownPageProps {
   page: PageMeta;
   doc: PageDoc;
@@ -107,13 +92,20 @@ export default memo(function MarkdownPage({ page, doc, compact, autoFocus }: Mar
     pagesRef.current = pages;
   });
 
+  const settingsRef = useRef(settings);
+  useLayoutEffect(() => {
+    settingsRef.current = settings;
+  });
+
   const host = useMemo<EditorHost>(
     () => ({
       addFile: async (file, name) => {
         const engine = currentSync();
         if (!engine) throw new Error('Not signed in.');
-        return engine.addFile(file, name);
+        const prepared = await prepareImage(file, name, settingsRef.current);
+        return engine.addFile(prepared.blob, prepared.name);
       },
+      downloadImage,
       localFile: async (id) => (await currentSync()?.localFile(id)) ?? null,
       pages: () => pagesRef.current,
       pickFile: (target, images) => {
@@ -312,37 +304,3 @@ export default memo(function MarkdownPage({ page, doc, compact, autoFocus }: Mar
     </div>
   );
 });
-
-/** The page's headings, and how long it is (on narrower screens; wide ones show them in the details panel). */
-function OutlineButton({
-  headings,
-  onJump,
-  words,
-  minutes,
-}: {
-  headings: Heading[];
-  onJump: (line: number) => void;
-  words: number;
-  minutes: number;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <IconButton label="Outline" icon={<ListTree />} size="sm" active={open} />
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-72 p-2">
-        <OutlineList
-          headings={headings}
-          onJump={(line) => {
-            setOpen(false);
-            onJump(line);
-          }}
-        />
-        <p className="mt-2 border-t border-line px-2 pt-2 text-xs text-fg-3 tabular-nums">
-          {words.toLocaleString()} {words === 1 ? 'word' : 'words'} · {minutes} min read
-        </p>
-      </PopoverContent>
-    </Popover>
-  );
-}

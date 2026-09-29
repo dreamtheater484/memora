@@ -38,6 +38,17 @@ export const assetUploadQuerySchema = z.object({
   name: z.string().trim().min(1).max(MAX_ASSET_NAME),
 });
 
+/** `POST /assets/fetch`: the server downloads an image from the web into a new file (§9.5). */
+export const fetchAssetSchema = z.object({
+  url: z.string().trim().min(1).max(2048),
+});
+export type FetchAssetRequest = z.input<typeof fetchAssetSchema>;
+
+/** `details` of a `fetch_failed` error: why the image couldn't be downloaded. */
+export interface FetchFailedDetails {
+  reason: string;
+}
+
 export interface AssetMeta {
   id: string;
   mime: string;

@@ -2,6 +2,7 @@ import {
   keysBetween,
   pickColor,
   placeKeys,
+  richToText,
   snippetOf,
   type ColorId,
   type Notebook,
@@ -23,6 +24,21 @@ import {
   planSectionMove,
   removeItems,
 } from '../src/notes/model';
+
+/** A rich page's content: one paragraph per blank-line-separated part of `text`. */
+export function richDoc(text?: string): string {
+  if (!text) return '';
+  return JSON.stringify({
+    type: 'doc',
+    content: text.split('\n\n').map((part) => ({
+      type: 'paragraph',
+      content: [{ type: 'text', text: part }],
+    })),
+  });
+}
+
+const snippetFor = (type: PageType, content: string) =>
+  snippetOf(type === 'markdown' ? content : richToText(content));
 
 /*
  * The notes part of the fake server: a seeded tree in memory, changed the way the real
@@ -143,6 +159,7 @@ export class FakeNotes {
     if (method === 'POST' && type === 'page' && action === 'versions') {
       return this.keepVersion(id, body);
     }
+    if (method === 'POST' && type === 'page' && action === 'convert') return this.convert(id, body);
     if (method === 'PATCH') return this.update(type, id, body);
     if (method === 'DELETE') return this.remove([{ type, id }]);
     if (method === 'POST' && action === 'move') return this.move(type, id, body);
@@ -168,7 +185,7 @@ export class FakeNotes {
     const next: PageMeta = {
       ...page,
       revision: page.revision + 1,
-      snippet: page.type === 'markdown' ? snippetOf(content) : '',
+      snippet: snippetFor(page.type, content),
       updatedAt: this.now,
     };
     this.apply({ pages: [next] });
@@ -204,6 +221,30 @@ export class FakeNotes {
     if (body.resolving) this.versions.push({ pageId: id, content: current, reason: 'conflict' });
     const saved = this.edit(id, content, origin);
     return { json: { revision: saved.revision, pages: [saved] } };
+  }
+
+  private convert(id: string, body: Record<string, unknown>): Reply {
+    const page = this.tree.pages.find((p) => p.id === id);
+    if (!page) return notFound;
+    if (body.baseRevision !== page.revision) {
+      return {
+        status: 409,
+        json: { error: { code: 'revision_conflict', message: 'This page was changed elsewhere.' } },
+      };
+    }
+    this.versions.push({ pageId: id, content: this.content.get(id) ?? '', reason: 'conversion' });
+    const type = body.type as PageType;
+    const content = String(body.content);
+    this.content.set(id, content);
+    const next: PageMeta = {
+      ...page,
+      type,
+      revision: page.revision + 1,
+      snippet: snippetFor(type, content),
+      updatedAt: this.now,
+    };
+    this.apply({ pages: [next] });
+    return { json: { revision: next.revision, pages: [next] } };
   }
 
   private keepVersion(id: string, body: Record<string, unknown>): Reply {
@@ -433,7 +474,7 @@ export class FakeNotes {
       title,
       type,
       sortKey,
-      snippet: type === 'markdown' ? snippetOf(text) : '',
+      snippet: snippetFor(type, text),
       revision: 1,
       createdAt: this.now - ago - 7 * DAY,
       updatedAt: this.now - ago,
@@ -444,7 +485,7 @@ export class FakeNotes {
     const keys = keysBetween(null, null, pages.length);
     pages.forEach((p, i) => {
       const type = p.type ?? 'markdown';
-      const text = type === 'markdown' ? (p.text ?? '') : '';
+      const text = type === 'markdown' ? (p.text ?? '') : richDoc(p.text);
       this.content.set(p.id, text);
       this.tree.pages.push(
         this.meta(p.id, sectionId, parentPageId, p.title, type, keys[i]!, p.ago, text),
@@ -530,7 +571,13 @@ export class FakeNotes {
       { id: 'retro', title: 'Retro — September', type: 'rich', ago: 17 * DAY },
     ]);
     this.seedPages('research', [
-      { id: 'comp', title: 'Competitor notes', type: 'rich', ago: 3 * HOUR },
+      {
+        id: 'comp',
+        title: 'Competitor notes',
+        type: 'rich',
+        text: 'Three apps compared on sync, offline use and export.\n\nNone keeps tables lined up in their Markdown.',
+        ago: 3 * HOUR,
+      },
       {
         id: 'interview',
         title: 'Interview synthesis',

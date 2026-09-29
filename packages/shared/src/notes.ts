@@ -313,6 +313,10 @@ export const uiStateSchema = z
 export type UiState = z.infer<typeof uiStateSchema>;
 
 /** How the Markdown editor behaves (§9.16, Editing); unset fields take the defaults below. */
+/** How wide a rich page is shown: filling the pane, or as an A4 or Letter sheet. */
+export const PAGE_VIEWS = ['off', 'a4', 'letter'] as const;
+export type PageView = (typeof PAGE_VIEWS)[number];
+
 export const editorSettingsSchema = z
   .object({
     /** The view a Markdown page opens in until it has one of its own. */
@@ -329,6 +333,14 @@ export const editorSettingsSchema = z
     formatTables: z.boolean(),
     /** Every table on the page lines up when you press Ctrl/Cmd+S. */
     formatTablesOnSave: z.boolean(),
+    /** The type of new pages. */
+    pageType: z.enum(PAGE_TYPES),
+    /** Rich pages shown as a sheet of paper (§9.4), or filling the pane. */
+    pageView: z.enum(PAGE_VIEWS),
+    /** Large pasted images are made smaller, and photos stored as WebP (§9.5). */
+    downscaleImages: z.boolean(),
+    /** The longest side, in pixels, of a downscaled image. */
+    maxImageEdge: z.number().int().min(640).max(8192),
   })
   .partial();
 export type EditorSettings = z.infer<typeof editorSettingsSchema>;
@@ -343,6 +355,10 @@ export const DEFAULT_EDITOR_SETTINGS: Required<EditorSettings> = {
   imageThumbnails: true,
   formatTables: true,
   formatTablesOnSave: false,
+  pageType: 'markdown',
+  pageView: 'off',
+  downscaleImages: false,
+  maxImageEdge: 2560,
 };
 
 export interface Settings {

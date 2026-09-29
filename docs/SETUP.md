@@ -1,6 +1,6 @@
 # Installing Memora
 
-> **Draft (Phase 5).** Memora has accounts, notebook organisation, safe saving (also offline) and a full Markdown editor with a live preview; rich pages come in Phase 6. The guide grows with each phase and is finished in Phase 13.
+> **Draft (Phase 6).** Memora has accounts, notebook organisation, safe saving (also offline), a full Markdown editor with a live preview, and a rich text editor like a word processor's. The guide grows with each phase and is finished in Phase 13.
 
 ## What you need
 
@@ -131,6 +131,8 @@ Set these as environment variables (the `environment:` section of the compose fi
 | `MEMORA_LOG_LEVEL`     | `info`                           | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                  |
 
 **`MEMORA_TRUST_PROXY`.** Memora slows down repeated failed logins per visitor address, and records addresses in the audit log. Behind a reverse proxy every request comes from the proxy, so Memora reads the real address from the proxy's `X-Forwarded-For` header, but only from proxies it trusts. The default trusts proxies on the same machine and on private networks, which covers the Synology reverse proxy and Docker's networks. Set `false` when nothing sits in front of Memora, or list addresses or ranges (for example `198.51.100.2,2001:db8::/32`) to be stricter.
+
+**Images from web pages.** When you paste part of a web page with pictures, Memora's server downloads them, so the page keeps working when the website changes. That needs the container to reach the internet (it does by default). Memora never downloads from addresses on your own network, whatever a pasted page points at.
 
 ## Synology step by step
 

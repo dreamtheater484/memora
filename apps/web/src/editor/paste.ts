@@ -1,6 +1,8 @@
 import { formatTable, isInlineImage, tableFromTsv } from '@memora/shared';
 import { EditorSelection } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { toast } from '../components/ui';
+import { MAX_PASTED_DOWNLOADS } from '../lib/remoteImages';
 
 /*
  * Paste and drop (§9.3): images and other files are kept as the page's files (offline too:
@@ -12,6 +14,8 @@ import { EditorView } from '@codemirror/view';
 export interface FileHost {
   /** Keeps a file until the server has it; answers the id the text refers to. */
   addFile(file: Blob, name: string): Promise<string>;
+  /** Downloads a web image into the page's files; answers its `asset:` address. */
+  downloadImage?(url: string): Promise<string>;
 }
 
 const extensionOf = (type: string) =>
@@ -90,6 +94,46 @@ function pasteText(view: EditorView, text: string) {
   });
 }
 
+/**
+ * Downloads the web images a paste brought in (§9.5) and points the page at the copies. An
+ * image that can't be downloaded keeps its web address, and the user is told.
+ */
+async function keepWebImages(view: EditorView, markdown: string, host: FileHost) {
+  if (!host.downloadImage) return;
+  const urls = [
+    ...new Set([...markdown.matchAll(/!\[[^\]]*\]\((https?:\/\/[^\s)]+)/g)].map((m) => m[1]!)),
+  ].slice(0, MAX_PASTED_DOWNLOADS);
+  let failed = 0;
+  await Promise.all(
+    urls.map(async (url) => {
+      let asset: string;
+      try {
+        asset = await host.downloadImage!(url);
+      } catch {
+        failed++;
+        return;
+      }
+      if (!view.dom.isConnected) return;
+      const text = view.state.doc.toString();
+      const changes = [];
+      for (let at = text.indexOf(`](${url}`); at >= 0; at = text.indexOf(`](${url}`, at + 1)) {
+        changes.push({ from: at + 2, to: at + 2 + url.length, insert: asset });
+      }
+      if (changes.length) view.dispatch({ changes, userEvent: 'input.paste' });
+    }),
+  );
+  if (failed) {
+    toast({
+      title:
+        failed === 1
+          ? 'An image couldn’t be downloaded'
+          : `${failed} images couldn’t be downloaded`,
+      description: 'They still point to their websites, and may not show.',
+      tone: 'error',
+    });
+  }
+}
+
 export function pasteAndDrop(host: FileHost) {
   return EditorView.domEventHandlers({
     paste(event, view) {
@@ -116,7 +160,10 @@ export function pasteAndDrop(host: FileHost) {
       ) {
         event.preventDefault();
         void htmlToMarkdown(html).then(
-          (markdown) => pasteText(view, markdown || plain),
+          (markdown) => {
+            pasteText(view, markdown || plain);
+            void keepWebImages(view, markdown, host);
+          },
           () => pasteText(view, plain),
         );
         return true;

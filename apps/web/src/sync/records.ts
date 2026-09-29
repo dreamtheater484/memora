@@ -1,5 +1,5 @@
 import type { PageType } from '@memora/shared';
-import { merge3 } from './merge';
+import { mergeContent } from './merge';
 
 /*
  * A page as this browser has it (§9.6). `base` is the server's content at `revision`, the
@@ -35,6 +35,8 @@ export interface Conflict {
   /** The server's version, which `content` couldn't be merged with. */
   revision: number;
   content: string;
+  /** The server's page type, when the page was converted meanwhile: only theirs can be kept. */
+  type?: PageType;
   /** The write of this browser's side last kept as a version on the server. */
   kept: string | null;
 }
@@ -83,18 +85,26 @@ export function fromServer(id: string, page: ServerPage, now: number): PageRecor
 export function absorb(record: PageRecord, page: ServerPage): PageRecord | undefined {
   if (record.conflict) {
     if (page.revision <= record.conflict.revision) return undefined;
-    if (page.content === record.content) return follow(record, page);
+    if (page.content === record.content && page.type === record.type) return follow(record, page);
     return {
       ...record,
-      conflict: { ...record.conflict, revision: page.revision, content: page.content },
+      conflict: {
+        ...record.conflict,
+        revision: page.revision,
+        content: page.content,
+        type: page.type === record.type ? undefined : page.type,
+      },
     };
   }
   if (page.revision <= record.revision) return undefined;
-  if (record.content === record.base || record.content === page.content)
+  if (
+    record.content === record.base ||
+    (record.content === page.content && record.type === page.type)
+  )
     return follow(record, page);
   const merged =
-    record.type === 'markdown' && page.type === 'markdown'
-      ? merge3(record.base, page.content, record.content)
+    record.type === page.type
+      ? mergeContent(page.type, record.base, page.content, record.content)
       : ({ ok: false } as const);
   if (merged.ok) {
     return settle({
@@ -109,7 +119,12 @@ export function absorb(record: PageRecord, page: ServerPage): PageRecord | undef
   }
   return settle({
     ...record,
-    conflict: { revision: page.revision, content: page.content, kept: null },
+    conflict: {
+      revision: page.revision,
+      content: page.content,
+      kept: null,
+      ...(page.type === record.type ? {} : { type: page.type }),
+    },
   });
 }
 
@@ -173,10 +188,7 @@ export function write(
     return { record: next(text) };
   }
   if (text === known.content) return { record: { ...record, touchedAt: now } };
-  const merged =
-    record.type === 'markdown'
-      ? merge3(known.content, record.content, text)
-      : { ok: false as const };
+  const merged = mergeContent(record.type, known.content, record.content, text);
   if (merged.ok) return { record: next(merged.text) };
   return { record: next(text), displaced: record.content };
 }
@@ -221,7 +233,8 @@ export function restore(
 
 /** Keep mine: this browser's text replaces the server's version, which the server keeps. */
 export function keepMine(record: PageRecord, content = record.content): PageRecord {
-  if (!record.conflict) return record;
+  // A page converted elsewhere can't take this browser's text of the other type.
+  if (!record.conflict || record.conflict.type) return record;
   return settle({
     ...record,
     revision: record.conflict.revision,
@@ -242,6 +255,7 @@ export function keepTheirs(record: PageRecord): PageRecord {
   if (!record.conflict) return record;
   return settle({
     ...record,
+    type: record.conflict.type ?? record.type,
     revision: record.conflict.revision,
     base: record.conflict.content,
     content: record.conflict.content,

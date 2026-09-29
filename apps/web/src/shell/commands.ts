@@ -1,4 +1,4 @@
-import { MAX_PAGE_DEPTH, pickColor, type ColorId } from '@memora/shared';
+import { MAX_PAGE_DEPTH, pickColor, type ColorId, type PageType } from '@memora/shared';
 import { useMemo } from 'react';
 import { toast } from '../components/ui';
 import {
@@ -10,7 +10,7 @@ import {
   type NotesIndex,
   type PagePlace,
 } from '../notes/model';
-import { useNotesActions } from '../notes/queries';
+import { useEditorSettings, useNotesActions } from '../notes/queries';
 import { useCurrent, useGo, type Current } from './location';
 import { useShell, type RenameWhere } from './store';
 
@@ -38,6 +38,7 @@ export function useCommands() {
   const current = useCurrent();
   const actions = useNotesActions();
   const go = useGo();
+  const { pageType } = useEditorSettings();
 
   return useMemo(() => {
     const { index, section, page } = current;
@@ -60,7 +61,8 @@ export function useCommands() {
     };
 
     const commands = {
-      async newPage(options: { subpage?: boolean; sectionId?: string } = {}) {
+      /** A new page, of the type the Editing settings name unless `type` says otherwise. */
+      async newPage(options: { subpage?: boolean; sectionId?: string; type?: PageType } = {}) {
         const sectionId = options.sectionId ?? section?.id;
         if (!sectionId) return;
         const parentPageId = options.subpage ? (page?.id ?? null) : null;
@@ -68,7 +70,11 @@ export function useCommands() {
           toast({ title: `Pages go at most ${MAX_PAGE_DEPTH} levels deep.`, tone: 'error' });
           return;
         }
-        const result = await actions.createPage({ sectionId, parentPageId });
+        const result = await actions.createPage({
+          sectionId,
+          parentPageId,
+          type: options.type ?? pageType,
+        });
         const created = result?.pages?.[0];
         if (!created) return;
         shell().select([], null);
@@ -225,7 +231,7 @@ export function useCommands() {
       },
     };
     return commands;
-  }, [current, actions, go]);
+  }, [current, actions, go, pageType]);
 }
 
 export type Commands = ReturnType<typeof useCommands>;

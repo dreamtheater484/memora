@@ -22,6 +22,7 @@ import {
 import { useRef, useState } from 'react';
 import {
   Button,
+  Dialog,
   EmptyState,
   IconButton,
   Menu,
@@ -39,6 +40,7 @@ import type { PageDoc } from '../sync/doc';
 import { usePageDoc } from '../sync/hooks';
 import { hueStyle } from '../theme/sections';
 import { useCommands } from './commands';
+import { ConvertDialog } from './ConvertDialog';
 import { useCurrent, useGo } from './location';
 import { PageBody, PageSaveIndicator, PresenceHint } from './PageEditor';
 import { SectionBar } from './SectionBar';
@@ -78,6 +80,7 @@ function TitleEditor({ page }: { page: PageMeta }) {
 function PageHead({ page, doc }: { page: PageMeta; doc: PageDoc | null }) {
   const editing = useShell((s) => s.editingTitle === page.id);
   const commands = useCommands();
+  const [converting, setConverting] = useState(false);
   const copyLink = () => {
     const url = `${location.origin}/p/${page.id}`;
     navigator.clipboard?.writeText(url).then(
@@ -140,11 +143,8 @@ function PageHead({ page, doc }: { page: PageMeta; doc: PageDoc | null }) {
               <MenuItem icon={<Copy />} onSelect={() => commands.duplicatePage(page.id)}>
                 Duplicate
               </MenuItem>
-              <MenuItem
-                icon={<Repeat />}
-                onSelect={soon('Converting between Markdown and rich text', 6)}
-              >
-                Convert…
+              <MenuItem icon={<Repeat />} disabled={!doc} onSelect={() => setConverting(true)}>
+                {page.type === 'markdown' ? 'Convert to rich text…' : 'Convert to Markdown…'}
               </MenuItem>
               <MenuItem icon={<FileClock />} onSelect={soon('Version history', 7)}>
                 History
@@ -173,6 +173,11 @@ function PageHead({ page, doc }: { page: PageMeta; doc: PageDoc | null }) {
           <Tag aria-hidden /> Add tag
         </button>
       </div>
+      <Dialog open={converting} onOpenChange={setConverting}>
+        {converting && doc && (
+          <ConvertDialog page={page} doc={doc} onDone={() => setConverting(false)} />
+        )}
+      </Dialog>
     </div>
   );
 }
@@ -183,7 +188,7 @@ export function NotesPane() {
   const { index, section, page, missing } = current;
   const commands = useCommands();
   const go = useGo();
-  const doc = usePageDoc(page?.type === 'markdown' ? page.id : null);
+  const doc = usePageDoc(page?.id ?? null);
 
   if (missing) {
     return (
@@ -262,7 +267,7 @@ export function SecondPane() {
   const go = useGo();
   const page = secondPageId ? index.page.get(secondPageId) : undefined;
   const section = page ? index.section.get(page.sectionId) : undefined;
-  const doc = usePageDoc(page?.type === 'markdown' ? page.id : null);
+  const doc = usePageDoc(page?.id ?? null);
   return (
     <section aria-label="Second pane" className="flex h-full min-h-0 flex-col">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line pr-2.5 pl-4 text-sm whitespace-nowrap text-fg-2">

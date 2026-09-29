@@ -4,6 +4,7 @@ import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import type { HealthResponse } from '@memora/shared';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { DEFAULT_FETCH_POLICY, type FetchPolicy } from './assets/fetch';
 import { AssetsService } from './assets/service';
 import { DEFAULT_HASH_PARAMS, PasswordHasher, type HashParams } from './auth/password';
 import { registerAuth } from './auth/plugin';
@@ -30,6 +31,8 @@ export interface AppOptions {
   now?: () => number;
   /** Tests use cheap hashing; production keeps the defaults. */
   hashParams?: HashParams;
+  /** Tests download images from a local server; production blocks local addresses. */
+  fetchPolicy?: FetchPolicy;
 }
 
 declare module 'fastify' {
@@ -53,6 +56,7 @@ export async function buildApp({
   logger = true,
   now = Date.now,
   hashParams = DEFAULT_HASH_PARAMS,
+  fetchPolicy = DEFAULT_FETCH_POLICY,
 }: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     // `base: null` drops pid/hostname from every line: inside Docker they are noise.
@@ -86,7 +90,18 @@ export async function buildApp({
   const notes = new NotesService(db, orm, now);
   const events = new EventHub();
   const assets = new AssetsService(db, orm, now);
-  const deps: RouteDeps = { db, repos, auth, notes, assets, events, config, hasher, now };
+  const deps: RouteDeps = {
+    db,
+    repos,
+    auth,
+    notes,
+    assets,
+    fetchPolicy,
+    events,
+    config,
+    hasher,
+    now,
+  };
   app.decorate('authService', auth);
   app.decorate('events', events);
 

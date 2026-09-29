@@ -110,6 +110,12 @@ describe('hierarchies', () => {
 });
 
 describe('markdownToText', () => {
+  it('keeps escaped characters as they are', () => {
+    expect(markdownToText('\\# Not a heading, \\*not emphasis\\* and **bold**')).toBe(
+      '# Not a heading, *not emphasis* and bold',
+    );
+  });
+
   it('keeps the words and drops the marks', () => {
     const md = [
       '# Weekly review',
