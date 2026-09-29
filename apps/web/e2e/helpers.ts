@@ -37,7 +37,7 @@ export const MEMBER: CurrentUser = {
 /** What the fake server accepts. */
 export const PASSWORD = 'violet-harbour-lantern';
 export const SETUP_CODE = 'QYN0-6352-XMM2';
-export const TEMPORARY_PASSWORD = 'k7wq-3mzp-x9rd-v2hn';
+export const TEMPORARY_PASSWORD = 'k7wq-3mzp-x9rd-v2hn'; // gitleaks:allow (fake)
 
 const adminView = (user: CurrentUser, extra: Partial<AdminUser> = {}): AdminUser => ({
   ...user,

@@ -85,7 +85,7 @@ describe('first-run setup', () => {
     const code = t.app.authService.startSetupIfNeeded();
     const res = await t
       .client()
-      .post('/api/v1/auth/setup', setupBody(code, { password: 'qwerty123456' }));
+      .post('/api/v1/auth/setup', setupBody(code, { password: 'qwerty123456' })); // gitleaks:allow (a common password, on purpose)
     expect(res.statusCode).toBe(400);
     expect(res.json().error.code).toBe('weak_password');
     expect(res.json().error.details.fields.password).toMatch(/too common/);
