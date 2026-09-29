@@ -15,7 +15,7 @@ A self-hosted notebook that runs in your browser. It combines OneNote-style orga
 - **Kanban:** projects with multiple boards and the full standard feature set. Link any note to any card.
 - **Never lose a keystroke:**
   - Autosave with offline support and an always-accurate save indicator.
-  - Version history, a recycle bin and automatic backups.
+  - Version history with diffs, a recycle bin, and scheduled, optionally encrypted backups with one-click restore.
 - **Open formats:** import and export single notes or whole notebooks as Markdown, Word, PDF, HTML or a documented `.memora` archive.
 - **Self-hosted:** one Docker container with one SQLite file. Runs on a NAS (Synology included) or any Docker host.
 
@@ -59,6 +59,7 @@ The web app runs at `http://localhost:5173` and the API at `http://localhost:300
 
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md): scope, decisions, architecture, roadmap
 - [Setup guide](docs/SETUP.md): installing Memora with Docker
+- [Backups and restoring](docs/BACKUP_RESTORE.md): the schedule, encryption, Hyper Backup, restoring
 - [Architecture](docs/ARCHITECTURE.md): how the code is organised
 - [Contributing](CONTRIBUTING.md): development workflow and privacy rules
 - [Security policy](docs/SECURITY.md)

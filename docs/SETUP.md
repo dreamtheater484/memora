@@ -110,25 +110,30 @@ Everything is stored in the folder mounted at `/data`:
 | `memora.db-wal`, `memora.db-shm` | SQLite working files while Memora runs (normal)                                       |
 | `backups/`                       | Automatic backups, including one taken before every upgrade that changes the database |
 
-**Never copy `memora.db` while Memora is running** as a backup. Use the files in `backups/`, which are consistent snapshots. Backup scheduling and restore arrive in Phase 7.
+**Never copy `memora.db` while Memora is running** as a backup. Use the files in `backups/`, which are consistent snapshots, taken every night and before every update. [BACKUP_RESTORE.md](BACKUP_RESTORE.md) explains the schedule, encryption, copying them elsewhere with Hyper Backup, and restoring.
 
 ## Configuration
 
 Set these as environment variables (the `environment:` section of the compose file):
 
-| Variable               | Default                          | Purpose                                                                                                         |
-| ---------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `PUID` / `PGID`        | `1000` / `1000`                  | User and group Memora runs as (see above)                                                                       |
-| `TZ`                   | `Etc/UTC`                        | Timezone, for example `Europe/Paris`                                                                            |
-| `PORT`                 | `3000`                           | Port inside the container                                                                                       |
-| `MEMORA_BASE_URL`      | —                                | The address you open Memora at, for example `https://<nas-ip>:8443`. Used for the origin check on every change. |
-| `MEMORA_TRUST_PROXY`   | `loopback,linklocal,uniquelocal` | Which reverse proxies may pass on the visitor's address (`X-Forwarded-For`): see below                          |
-| `MEMORA_SESSION_DAYS`  | `30`                             | How long "remember this device" keeps you logged in without using Memora                                        |
-| `MEMORA_SESSION_HOURS` | `12`                             | How long a session lasts without using Memora, without "remember this device"                                   |
-| `MEMORA_MAX_HEAP_MB`   | `256`                            | Maximum Node.js heap in MB. Keeps RAM use predictable.                                                          |
-| `MEMORA_MAX_UPLOAD_MB` | `25`                             | Largest image or file that can be pasted or dropped into a page, in MB                                          |
-| `MEMORA_BACKUP_DIR`    | `/data/backups`                  | Where backups are written                                                                                       |
-| `MEMORA_LOG_LEVEL`     | `info`                           | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                  |
+| Variable                      | Default                          | Purpose                                                                                                                    |
+| ----------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `PUID` / `PGID`               | `1000` / `1000`                  | User and group Memora runs as (see above)                                                                                  |
+| `TZ`                          | `Etc/UTC`                        | Timezone, for example `Europe/Paris`                                                                                       |
+| `PORT`                        | `3000`                           | Port inside the container                                                                                                  |
+| `MEMORA_BASE_URL`             | —                                | The address you open Memora at, for example `https://<nas-ip>:8443`. Used for the origin check on every change.            |
+| `MEMORA_TRUST_PROXY`          | `loopback,linklocal,uniquelocal` | Which reverse proxies may pass on the visitor's address (`X-Forwarded-For`): see below                                     |
+| `MEMORA_SESSION_DAYS`         | `30`                             | How long "remember this device" keeps you logged in without using Memora                                                   |
+| `MEMORA_SESSION_HOURS`        | `12`                             | How long a session lasts without using Memora, without "remember this device"                                              |
+| `MEMORA_MAX_HEAP_MB`          | `256`                            | Maximum Node.js heap in MB. Keeps RAM use predictable.                                                                     |
+| `MEMORA_MAX_UPLOAD_MB`        | `25`                             | Largest image or file that can be pasted or dropped into a page, in MB                                                     |
+| `MEMORA_BACKUP_DIR`           | `/data/backups`                  | Where backups are written                                                                                                  |
+| `MEMORA_BACKUP_SCHEDULE`      | `0 3 * * *`                      | When backups are taken (cron syntax, the container's time zone); `off` for never                                           |
+| `MEMORA_BACKUP_KEEP`          | `7,4,12`                         | Daily, weekly and monthly backups kept, besides everything from the last day                                               |
+| `MEMORA_BACKUP_PASSWORD_FILE` | —                                | A file with a password to encrypt new backups with ([BACKUP_RESTORE.md](BACKUP_RESTORE.md))                                |
+| `MEMORA_TRASH_DAYS`           | `30`                             | Days a deleted item stays in the recycle bin before it is deleted for good                                                 |
+| `MEMORA_HISTORY_RETENTION`    | `48h,14d,90d`                    | Page versions: all for 48 hours, then hourly for 14 days, daily for 90 days, weekly after. Named versions are always kept. |
+| `MEMORA_LOG_LEVEL`            | `info`                           | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                             |
 
 **`MEMORA_TRUST_PROXY`.** Memora slows down repeated failed logins per visitor address, and records addresses in the audit log. Behind a reverse proxy every request comes from the proxy, so Memora reads the real address from the proxy's `X-Forwarded-For` header, but only from proxies it trusts. The default trusts proxies on the same machine and on private networks, which covers the Synology reverse proxy and Docker's networks. Set `false` when nothing sits in front of Memora, or list addresses or ranges (for example `198.51.100.2,2001:db8::/32`) to be stricter.
 
