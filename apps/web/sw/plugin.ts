@@ -18,23 +18,27 @@ const source = fileURLToPath(new URL('./sw.js', import.meta.url));
 
 /** Lazily loaded chunks, by the module they are loaded for. */
 const OPTIONAL =
-  /node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?(?:mermaid|@mermaid-js|cytoscape[^/]*|katex|shiki|@shikijs|@codemirror\/(?:lang-[^/]+|legacy-modes))\/|src\/markdown\/(?:pipeline|math|mermaid)\.ts$/;
+  /node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?(?:mermaid|@mermaid-js|cytoscape[^/]*|katex|shiki|@shikijs|@codemirror\/(?:lang-[^/]+|legacy-modes))\/|src\/markdown\/(?:pipeline|math|mermaid)\.ts$|src\/rich\/convert\.ts$/;
 
 const precachedAsset = (file: string) =>
   /\.(css|js)$/.test(file) || (/\.woff2$/.test(file) && /latin(?!-ext)/.test(file));
 
-/** Scripts reachable from the app without passing through an optional part. */
+/**
+ * Scripts reachable from the app without loading an optional part on demand. What a script
+ * imports directly always comes with it (the rich editor draws formulas with KaTeX, say).
+ */
 function coreChunks(bundle: OutputBundle): Set<string> {
   const chunks = Object.values(bundle).filter((f): f is OutputChunk => f.type === 'chunk');
   const byName = new Map(chunks.map((c) => [c.fileName, c]));
   const optional = (c: OutputChunk) => !c.isEntry && OPTIONAL.test(c.facadeModuleId ?? '');
   const core = new Set<string>();
-  const visit = (chunk: OutputChunk | undefined) => {
-    if (!chunk || core.has(chunk.fileName) || optional(chunk)) return;
+  const visit = (chunk: OutputChunk | undefined, required: boolean) => {
+    if (!chunk || core.has(chunk.fileName) || (!required && optional(chunk))) return;
     core.add(chunk.fileName);
-    for (const name of [...chunk.imports, ...chunk.dynamicImports]) visit(byName.get(name));
+    for (const name of chunk.imports) visit(byName.get(name), true);
+    for (const name of chunk.dynamicImports) visit(byName.get(name), false);
   };
-  for (const chunk of chunks) if (chunk.isEntry) visit(chunk);
+  for (const chunk of chunks) if (chunk.isEntry) visit(chunk, true);
   return core;
 }
 
