@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { idSchema, type PageMeta, type PageType, type TreeChanges } from './notes';
+import { PAGE_TYPES, idSchema, type PageMeta, type PageType, type TreeChanges } from './notes';
 
 /*
  * Saving page content and the live event channel (§9.6, §10).
@@ -28,6 +28,17 @@ export interface ContentSaved extends TreeChanges {
   revision: number;
   pages: [PageMeta];
 }
+
+/**
+ * `POST /pages/:id/convert` (§9.4): the page becomes the other type, with its content converted
+ * by the browser. The server keeps the old content as a version first.
+ */
+export const convertPageSchema = z.object({
+  type: z.enum(PAGE_TYPES),
+  content: z.string().max(MAX_CONTENT),
+  baseRevision: z.number().int().min(1),
+});
+export type ConvertPageRequest = z.input<typeof convertPageSchema>;
 
 /** `details` of a `revision_conflict` error: what the server has now. */
 export interface ContentConflict {
