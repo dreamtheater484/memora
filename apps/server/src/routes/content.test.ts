@@ -115,7 +115,7 @@ describe('versions', () => {
       baseRevision: 1,
     });
     expect(res.statusCode).toBe(201);
-    expect(res.json()).toMatchObject({ pageId, revision: 1, reason: 'conflict' });
+    expect(res.json().version).toMatchObject({ pageId, revision: 1, reason: 'conflict' });
     expect(versions()).toEqual([
       {
         revision: 1,
@@ -125,7 +125,7 @@ describe('versions', () => {
       },
     ]);
     const bad = await me.post(`/api/v1/pages/${pageId}/versions`, {
-      reason: 'manual',
+      reason: 'restore',
       content: 'x',
       baseRevision: 1,
     });
