@@ -1,7 +1,24 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { serviceWorker } from './sw/plugin';
+
+/**
+ * The Markdown parser runs in a worker, where there is no `document`; this one dependency
+ * uses it in its browser build, so it gets its plain one (the same code the worker condition
+ * picks) everywhere.
+ */
+function withoutDocument(): Plugin {
+  return {
+    name: 'memora-without-document',
+    enforce: 'pre',
+    async resolveId(id, importer, options) {
+      if (id !== 'decode-named-character-reference') return null;
+      const resolved = await this.resolve(id, importer, { ...options, skipSelf: true });
+      return resolved && { ...resolved, id: resolved.id.replace(/index\.dom\.js$/, 'index.js') };
+    },
+  };
+}
 
 // `--mode gallery` also builds the component gallery (gallery.html) into its own
 // folder, for the visual tests. The production build only contains index.html;
@@ -9,7 +26,8 @@ import { serviceWorker } from './sw/plugin';
 export default defineConfig(({ mode }) => {
   const gallery = mode === 'gallery';
   return {
-    plugins: [react(), tailwindcss(), serviceWorker()],
+    plugins: [withoutDocument(), react(), tailwindcss(), serviceWorker()],
+    worker: { plugins: () => [withoutDocument()] },
     server: {
       port: 5173,
       // During development the API runs separately (`pnpm dev` starts both).
