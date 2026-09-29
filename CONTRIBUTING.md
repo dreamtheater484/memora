@@ -49,6 +49,17 @@ pnpm dev
 
 In development the server stores its data in `apps/server/data/`. That folder is gitignored.
 
+## Branches and pull requests
+
+`main` only changes through pull requests.
+
+1. Create a branch from an up-to-date `main`, named after the change, for example `feat/phase-2-auth` or `fix/save-indicator-offline`.
+2. Make several small, focused commits. Each one should build and pass the hooks.
+3. Push the branch and open a pull request against `main`. Describe what changed, why, and how you verified it (tests, screenshots for visual changes).
+4. Merge once CI is green.
+
+Branch names, commit messages and pull request text are public too: the [privacy rules](#privacy-guards-read-this) apply to them.
+
 ## Project layout
 
 ```
