@@ -6,6 +6,7 @@ import {
   createSectionSchema,
   createVersionSchema,
   deletePagesSchema,
+  editorSettingsSchema,
   moveGroupSchema,
   moveNotebookSchema,
   moveSectionSchema,
@@ -18,6 +19,7 @@ import {
   updatePageSchema,
   updateSectionSchema,
   updateSettingsSchema,
+  type EditorSettings,
   type Settings,
   type UiState,
 } from '@memora/shared';
@@ -193,27 +195,42 @@ export function notesRoutes(app: FastifyInstance, { notes, repos, events }: Rout
     return stored.success ? stored.data : {};
   };
 
+  const readEditor = (userId: string): EditorSettings => {
+    const stored = editorSettingsSchema.safeParse(repos.settings.get(userId, 'editor') ?? {});
+    return stored.success ? stored.data : {};
+  };
+
   app.get('/api/v1/settings', { config }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    return { ui: readUi(owner(request)) } satisfies Settings;
+    const userId = owner(request);
+    return { ui: readUi(userId), editor: readEditor(userId) } satisfies Settings;
   });
 
   /** Merges the given fields into the stored ones; `lastPages` merges per section. */
   app.patch('/api/v1/settings', { config }, async (request) => {
     const userId = owner(request);
-    const { ui: patch } = parse(updateSettingsSchema, request.body);
-    const current = readUi(userId);
-    const ui: UiState = { ...current, ...patch };
-    if (patch.lastPages) {
-      // Most recent last; the oldest sections drop out beyond the limit.
-      const merged = Object.entries(current.lastPages ?? {}).filter(
-        ([k]) => !(k in patch.lastPages!),
-      );
-      ui.lastPages = Object.fromEntries(
-        [...merged, ...Object.entries(patch.lastPages)].slice(-MAX_LAST_PAGES),
-      );
+    const body = parse(updateSettingsSchema, request.body);
+    let ui = readUi(userId);
+    if (body.ui) {
+      const patch = body.ui;
+      const current = ui;
+      ui = { ...current, ...patch };
+      if (patch.lastPages) {
+        // Most recent last; the oldest sections drop out beyond the limit.
+        const merged = Object.entries(current.lastPages ?? {}).filter(
+          ([k]) => !(k in patch.lastPages!),
+        );
+        ui.lastPages = Object.fromEntries(
+          [...merged, ...Object.entries(patch.lastPages)].slice(-MAX_LAST_PAGES),
+        );
+      }
+      repos.settings.set(userId, 'ui', ui);
     }
-    repos.settings.set(userId, 'ui', ui);
-    return { ui } satisfies Settings;
+    let editor = readEditor(userId);
+    if (body.editor) {
+      editor = { ...editor, ...body.editor };
+      repos.settings.set(userId, 'editor', editor);
+    }
+    return { ui, editor } satisfies Settings;
   });
 }

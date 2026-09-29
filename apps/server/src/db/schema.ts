@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  blob,
   check,
   index,
   integer,
@@ -257,6 +258,37 @@ export const pageVersions = sqliteTable(
   ],
 );
 
+/**
+ * Files in pages (§7.3, §9.5): one row per id a page refers to (`asset:<id>`), made by the
+ * browser so a file pasted offline already has its place in the text. The bytes live in
+ * `asset_blobs`, once per user and content, so the same screenshot pasted twice is stored once.
+ */
+export const assets = sqliteTable(
+  'assets',
+  {
+    id: text('id').primaryKey(),
+    ownerId: ownerId(),
+    sha256: text('sha256').notNull(),
+    mime: text('mime').notNull(),
+    size: integer('size').notNull(),
+    width: integer('width'),
+    height: integer('height'),
+    originalName: text('original_name').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('assets_owner_id_sha256_idx').on(t.ownerId, t.sha256)],
+);
+
+export const assetBlobs = sqliteTable(
+  'asset_blobs',
+  {
+    ownerId: ownerId(),
+    sha256: text('sha256').notNull(),
+    data: blob('data', { mode: 'buffer' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.ownerId, t.sha256] })],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type NotebookRow = typeof notebooks.$inferSelect;
@@ -264,3 +296,4 @@ export type SectionGroupRow = typeof sectionGroups.$inferSelect;
 export type SectionRow = typeof sections.$inferSelect;
 export type PageRow = typeof pages.$inferSelect;
 export type PageVersionRow = typeof pageVersions.$inferSelect;
+export type AssetRow = typeof assets.$inferSelect;
