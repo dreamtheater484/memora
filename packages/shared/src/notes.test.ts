@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { uuidv7 } from './ids';
 import {
+  COLOR_IDS,
   bySortKey,
   createPageSchema,
   keyBetween,
   keysBetween,
+  pickColor,
   placePagesSchema,
   updateNotebookSchema,
   uiStateSchema,
@@ -162,5 +164,14 @@ describe('request schemas', () => {
     const lastPages = Object.fromEntries(Array.from({ length: 1001 }, () => [uuidv7(), uuidv7()]));
     expect(uiStateSchema.safeParse({ lastPages }).success).toBe(false);
     expect(uiStateSchema.safeParse({ pageListSide: 'left', expanded: [id] }).success).toBe(true);
+  });
+});
+
+describe('section colours', () => {
+  it('pick the first one not in use, and cycle once all are taken', () => {
+    expect(pickColor([])).toBe('coral');
+    expect(pickColor(['coral', 'amber'])).toBe('orange');
+    expect(pickColor(COLOR_IDS)).toBe('coral');
+    expect(pickColor([...COLOR_IDS, 'coral'])).toBe('coral');
   });
 });

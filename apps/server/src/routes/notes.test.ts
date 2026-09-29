@@ -186,6 +186,11 @@ describe('section groups', () => {
       expect(res.sections![0]!.groupId).toBe(res.groups![0]!.id);
       parentGroupId = res.groups![0]!.id;
     }
+    // Each group's first section takes a colour the notebook isn't using yet.
+    const colors = (await tree()).sections
+      .filter((s) => s.notebookId === nb.id)
+      .map((s) => s.color);
+    expect(new Set(colors).size).toBe(5);
     expect(
       await refused('POST', '/api/v1/groups', { notebookId: nb.id, parentGroupId, name: 'Five' }),
     ).toEqual({ status: 400, code: 'too_deep' });

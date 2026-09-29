@@ -25,6 +25,12 @@ export const COLOR_IDS = [
 ] as const;
 export type ColorId = (typeof COLOR_IDS)[number];
 
+/** The first colour not in `used`, so sections side by side differ; cycles once all are taken. */
+export function pickColor(used: Iterable<string>): ColorId {
+  const taken = new Set(used);
+  return COLOR_IDS.find((c) => !taken.has(c)) ?? COLOR_IDS[taken.size % COLOR_IDS.length]!;
+}
+
 /** Notebook icons, named after their Lucide icons. */
 export const NOTEBOOK_ICONS = [
   'notebook',

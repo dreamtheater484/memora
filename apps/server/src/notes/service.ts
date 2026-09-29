@@ -9,6 +9,7 @@ import {
   heightOf,
   isWithin,
   markdownToText,
+  pickColor,
   placeKeys,
   snippetOf,
   subtreeOf,
@@ -391,7 +392,18 @@ export class NotesService {
         })
         .returning()
         .get();
-      const color = this.liveNotebook(owner, notebookId).color as ColorId;
+      const used = this.orm
+        .select({ color: sections.color })
+        .from(sections)
+        .where(
+          and(
+            eq(sections.ownerId, owner),
+            eq(sections.notebookId, notebookId),
+            isNull(sections.deletedAt),
+          ),
+        )
+        .all();
+      const color = pickColor(used.map((s) => s.color));
       const section = this.insertSection(owner, notebookId, group.id, 'New section', color);
       return { groups: [toGroup(group)], sections: [toSection(section)] };
     });
