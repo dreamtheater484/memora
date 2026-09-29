@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Starts a Memora image and checks that it works: health, web app, non-root user, data on the volume.
+# Starts a Memora image and checks that it works: health, web app, non-root user, data on the volume,
+# first-run setup and the memora-admin tool.
 # Usage: docker/smoke-test.sh [image]   (default image: memora:local)
 set -euo pipefail
 
@@ -37,6 +38,21 @@ curl -fsS "http://127.0.0.1:$PORT/" | grep -q '<div id="root">' || fail "web app
 [ -f "$DATA_DIR/memora.db" ] || fail "database not created in the data volume"
 
 docker exec "$NAME" node /app/healthcheck.mjs || fail "built-in healthcheck failed"
+
+# First-run setup: the code is in the log, and only works with that code.
+CODE="$(docker logs "$NAME" 2>&1 | sed -n 's/.*Memora setup code: *\([0-9A-Z-]*\).*/\1/p' | tail -n 1)"
+[ -n "$CODE" ] || fail "no setup code in the log"
+docker exec "$NAME" memora-admin list-users | grep -q "No accounts yet" || fail "memora-admin list-users"
+setup() {
+  curl -s -o /dev/null -w '%{http_code}' -H 'content-type: application/json' \
+    -H "origin: http://127.0.0.1:$PORT" -X POST "http://127.0.0.1:$PORT/api/v1/auth/setup" \
+    -d "{\"setupCode\":\"$1\",\"username\":\"smoke\",\"displayName\":\"Smoke\",\"password\":\"violet-harbour-lantern\"}"
+}
+[ "$(setup WRONG-CODE-0000)" = "403" ] || fail "setup accepted a wrong code"
+[ "$(setup "$CODE")" = "200" ] || fail "setup with the logged code failed"
+docker exec "$NAME" memora-admin list-users | grep -q "^smoke " || fail "admin account not listed"
+docker exec "$NAME" memora-admin reset-password smoke | grep -q "One-time password" || fail "memora-admin reset-password"
+[ "$(stat -c %u "$DATA_DIR/memora.db-wal")" = "$(id -u)" ] || fail "database files not owned by PUID"
 
 docker stop -t 10 "$NAME" >/dev/null
 [ "$(docker inspect -f '{{.State.ExitCode}}' "$NAME")" = "0" ] || fail "container did not shut down cleanly"

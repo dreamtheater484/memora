@@ -8,6 +8,7 @@
     "dev": "tsx watch --clear-screen=false src/index.ts",
     "build": "node build.mjs",
     "start": "node dist/server.mjs",
+    "admin": "tsx src/admin-cli.ts",
     "typecheck": "tsc -p .",
     "db:generate": "drizzle-kit generate"
   },

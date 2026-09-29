@@ -29,8 +29,9 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
 
-# The server bundle's only runtime dependency is the native SQLite driver. It ships
-# prebuilt binaries for every platform; keep only the one for this image.
+# The server bundle's only runtime dependencies are native modules: the SQLite driver and
+# Argon2 (the platform's own package is installed). better-sqlite3 ships prebuilt binaries for
+# every platform; keep only the one for this image.
 RUN pnpm --filter @memora/server deploy --prod --legacy /out/server \
  && cd /out/server/node_modules/better-sqlite3 \
  && keep="$(node -p "require('path').basename(require('./lib/binding').getPrebuildPath())")" \
@@ -64,7 +65,8 @@ COPY --from=build /app/apps/web/dist apps/web/dist
 COPY LICENSE ./
 COPY docker/healthcheck.mjs ./
 COPY docker/entrypoint.sh /usr/local/bin/memora-entrypoint
-RUN chmod 0755 /usr/local/bin/memora-entrypoint && mkdir -p /data
+COPY docker/memora-admin.sh /usr/local/bin/memora-admin
+RUN chmod 0755 /usr/local/bin/memora-entrypoint /usr/local/bin/memora-admin && mkdir -p /data
 
 EXPOSE 3000
 HEALTHCHECK --interval=60s --timeout=5s --start-period=30s --retries=3 \
