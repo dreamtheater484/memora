@@ -1,0 +1,7 @@
+# Known false positives from gitleaks' generic-api-key rule, by fingerprint
+# (commit:file:rule:line). Only fake values used by tests belong here.
+
+# A common password, sent to prove the server refuses it.
+0562a4b13444e5371a4044d3dd94a7cc1cada3a1:apps/server/src/auth/auth.test.ts:generic-api-key:88
+# The fake API's one-time password in the Playwright tests.
+6b92f5fad0bd6f89d41ebef16fa34d85a8f96fea:apps/web/e2e/helpers.ts:generic-api-key:40

@@ -8,10 +8,12 @@
     "dev": "tsx watch --clear-screen=false src/index.ts",
     "build": "node build.mjs",
     "start": "node dist/server.mjs",
+    "admin": "tsx src/admin-cli.ts",
     "typecheck": "tsc -p .",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.2.1",
     "better-sqlite3": "^13.0.3"
   },
   "devDependencies": {

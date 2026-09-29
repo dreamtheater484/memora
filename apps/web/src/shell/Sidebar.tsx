@@ -10,6 +10,7 @@ import {
   Star,
   Trash2,
 } from 'lucide-react';
+import { useNavigate } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { IconButton, Kbd, PageTree, toast, type TreeNode } from '../components/ui';
 import { sectionHeading } from '../components/ui/styles';
@@ -144,6 +145,7 @@ const soon = (what: string, phase: number) => () => toast(`${what} arrives in Ph
 /** Navigation: quick links, notebooks with section groups, boards, and the footer. */
 export function Sidebar() {
   const { view, sectionId, openSection, openBoard, setPaletteOpen } = useShell();
+  const navigate = useNavigate();
   const selected = view.kind === 'notes' ? sectionId : null;
 
   return (
@@ -194,7 +196,7 @@ export function Sidebar() {
         >
           Recycle bin
         </Row>
-        <Row icon={<Settings />} onClick={soon('Settings', 2)}>
+        <Row icon={<Settings />} onClick={() => void navigate({ to: '/settings/account' })}>
           Settings
         </Row>
       </div>
@@ -205,6 +207,7 @@ export function Sidebar() {
 /** Tablet navigation: one button per notebook; they open the full sidebar as a drawer. */
 export function Rail() {
   const { view, sectionId, setNavOpen, setPaletteOpen, openBoard } = useShell();
+  const navigate = useNavigate();
   const current = NOTEBOOKS.find((nb) => nb.sections.some((s) => s.id === sectionId));
   return (
     <nav aria-label="Notebooks" className="flex h-full flex-col items-center gap-1.5 py-3">
@@ -253,7 +256,7 @@ export function Rail() {
         label="Settings"
         icon={<Settings />}
         tooltipSide="right"
-        onClick={soon('Settings', 2)}
+        onClick={() => void navigate({ to: '/settings/account' })}
       />
     </nav>
   );

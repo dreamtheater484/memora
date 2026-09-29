@@ -1,24 +1,27 @@
 # Memora — example Docker Compose file. See docs/SETUP.md for the full guide.
 #
-# Until published images are available, this builds Memora from a checkout of the repository
-# (keep this file in the repository's docker/ folder). Values marked "change me" are yours to set.
+# Save it as docker-compose.yml in a folder of its own. Values marked "change me" are yours to set.
 
 services:
   memora:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    image: memora:local
-    # Later: image: ghcr.io/<owner>/memora:latest   (and remove the build: section)
+    image: ghcr.io/<your-github-user>/memora:edge # change me: the account that publishes Memora
+    # To build from a checkout of the repository instead (keep this file in its docker/ folder):
+    # build:
+    #   context: ..
+    #   dockerfile: docker/Dockerfile
+    # image: memora:local
     container_name: memora
     restart: unless-stopped
     ports:
-      - '3000:3000' # host:container — change the left number if 3000 is taken
+      - '3000:3000' # host:container. Behind a reverse proxy on the same host: '127.0.0.1:3000:3000'
     environment:
       PUID: '1000' # change me: numeric user id that owns ./data on the host
       PGID: '1000' # change me: numeric group id
       TZ: 'Etc/UTC' # change me: e.g. Europe/Paris
-      # MEMORA_BASE_URL: 'https://notes.example.com'
+      # MEMORA_BASE_URL: 'https://<nas-ip>:8443' # the address you open Memora at, once HTTPS is set up
+      # MEMORA_TRUST_PROXY: 'loopback,linklocal,uniquelocal' # reverse proxies allowed to pass on visitor addresses
+      # MEMORA_SESSION_DAYS: '30' # "remember this device": days without use before logging out
+      # MEMORA_SESSION_HOURS: '12' # otherwise: hours without use before logging out
       # MEMORA_MAX_HEAP_MB: '256' # Node.js heap cap in MB (default 256)
     volumes:
       - ./data:/data # everything Memora stores lives here

@@ -1,18 +1,164 @@
-import { Outlet, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
+import type { MeResponse } from '@memora/shared';
+import type { QueryClient } from '@tanstack/react-query';
+import {
+  Outlet,
+  createRootRouteWithContext,
+  createRoute,
+  createRouter,
+  lazyRouteComponent,
+  redirect,
+} from '@tanstack/react-router';
+import { ChangePasswordPage } from './auth/ChangePasswordPage';
+import { LoginPage } from './auth/LoginPage';
+import { meQuery } from './auth/queries';
+import { SetupPage } from './auth/SetupPage';
+import { safeRedirect } from './lib/redirect';
+import { RootError } from './RootError';
+import { AccountPage } from './settings/AccountPage';
+import { SettingsLayout } from './settings/SettingsLayout';
 import { AppShell } from './shell/AppShell';
 
-const rootRoute = createRootRoute({ component: Outlet });
+export interface RouterContext {
+  queryClient: QueryClient;
+}
+
+const me = (context: RouterContext): Promise<MeResponse> =>
+  context.queryClient.ensureQueryData(meQuery);
+
+const rootRoute = createRootRouteWithContext<RouterContext>()({
+  component: Outlet,
+  errorComponent: RootError,
+});
+
+const setupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/setup',
+  beforeLoad: async ({ context }) => {
+    const state = await me(context);
+    if (!state.setupRequired) throw redirect({ to: state.user ? '/' : '/login' });
+  },
+  component: SetupPage,
+});
+
+const loginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/login',
+  // Always set the key: search params are merged over the parent route's raw ones, so
+  // leaving it out would let an unsafe value through.
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
+    redirect: safeRedirect(search.redirect),
+  }),
+  beforeLoad: async ({ context, search }) => {
+    const state = await me(context);
+    if (state.setupRequired) throw redirect({ to: '/setup' });
+    if (state.user?.mustChangePassword) throw redirect({ to: '/change-password' });
+    if (state.user) throw redirect({ href: search.redirect ?? '/' });
+  },
+  component: LoginPage,
+});
+
+const changePasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/change-password',
+  beforeLoad: async ({ context }) => {
+    const state = await me(context);
+    if (!state.user) throw redirect({ to: '/login' });
+    if (!state.user.mustChangePassword) throw redirect({ to: '/' });
+  },
+  component: ChangePasswordPage,
+});
+
+/** Everything below needs a signed-in user with their own password. */
+const appRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'app',
+  beforeLoad: async ({ context, location }) => {
+    const state = await me(context);
+    if (state.setupRequired) throw redirect({ to: '/setup' });
+    if (!state.user) {
+      const back = location.href === '/' ? undefined : location.href;
+      throw redirect({ to: '/login', search: back ? { redirect: back } : {} });
+    }
+    if (state.user.mustChangePassword) throw redirect({ to: '/change-password' });
+  },
+  component: Outlet,
+});
 
 const indexRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appRoute,
   path: '/',
   component: AppShell,
 });
 
-export const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute]) });
+const settingsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/settings',
+  component: SettingsLayout,
+});
+
+const settingsIndexRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: '/',
+  beforeLoad: () => {
+    throw redirect({ to: '/settings/account' });
+  },
+});
+
+const accountRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: 'account',
+  component: AccountPage,
+});
+
+const adminRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  id: 'admin',
+  beforeLoad: async ({ context }) => {
+    const state = await me(context);
+    if (state.user?.role !== 'admin') throw redirect({ to: '/settings/account' });
+  },
+  component: Outlet,
+});
+
+// Admin pages are loaded on demand: most sessions never open them.
+const usersRoute = createRoute({
+  getParentRoute: () => adminRoute,
+  path: 'users',
+  component: lazyRouteComponent(() => import('./settings/UsersPage'), 'UsersPage'),
+});
+
+const auditRoute = createRoute({
+  getParentRoute: () => adminRoute,
+  path: 'audit',
+  component: lazyRouteComponent(() => import('./settings/AuditPage'), 'AuditPage'),
+});
+
+const routeTree = rootRoute.addChildren([
+  setupRoute,
+  loginRoute,
+  changePasswordRoute,
+  appRoute.addChildren([
+    indexRoute,
+    settingsRoute.addChildren([
+      settingsIndexRoute,
+      accountRoute,
+      adminRoute.addChildren([usersRoute, auditRoute]),
+    ]),
+  ]),
+]);
+
+export function createAppRouter(queryClient: QueryClient) {
+  return createRouter({
+    routeTree,
+    context: { queryClient },
+    defaultPreload: 'intent',
+    // The session check is fast; don't flash a loading screen for it.
+    defaultPendingMs: 400,
+  });
+}
 
 declare module '@tanstack/react-router' {
   interface Register {
-    router: typeof router;
+    router: ReturnType<typeof createAppRouter>;
   }
 }
