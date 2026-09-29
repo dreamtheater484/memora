@@ -13,6 +13,14 @@ const envSchema = z.object({
   MEMORA_WEB_DIR: z.string().optional(),
   MEMORA_BASE_URL: z.url({ protocol: /^https?$/ }).optional(),
   MEMORA_LOG_LEVEL: z.enum(logLevels).default('info'),
+  MEMORA_SESSION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  MEMORA_SESSION_HOURS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 30)
+    .default(12),
+  MEMORA_TRUST_PROXY: z.string().default('loopback,linklocal,uniquelocal'),
 });
 
 export interface Config {
@@ -25,6 +33,17 @@ export interface Config {
   webDir: string;
   baseUrl: string | undefined;
   logLevel: (typeof logLevels)[number];
+  /** Idle timeout of a session with "remember this device" (sliding). */
+  sessionRememberMs: number;
+  /** Idle timeout of a session without it (sliding). */
+  sessionMs: number;
+  /**
+   * Which proxies may set X-Forwarded-For/-Proto (Fastify `trustProxy`): `true`, `false`, a hop
+   * count, or a comma-separated list of addresses, CIDR ranges and the presets `loopback`,
+   * `linklocal` and `uniquelocal` (private networks, such as Docker's bridge and a NAS's
+   * reverse proxy). Needed for correct client IPs in rate limits and sessions.
+   */
+  trustProxy: boolean | number | string[];
 }
 
 export class ConfigError extends Error {
@@ -58,5 +77,19 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     webDir: resolve(e.MEMORA_WEB_DIR ?? defaultWebDir),
     baseUrl: e.MEMORA_BASE_URL,
     logLevel: e.MEMORA_LOG_LEVEL,
+    sessionRememberMs: e.MEMORA_SESSION_DAYS * 24 * 3_600_000,
+    sessionMs: e.MEMORA_SESSION_HOURS * 3_600_000,
+    trustProxy: parseTrustProxy(e.MEMORA_TRUST_PROXY),
   };
+}
+
+function parseTrustProxy(value: string): boolean | number | string[] {
+  const v = value.trim().toLowerCase();
+  if (v === 'true') return true;
+  if (v === 'false' || v === 'none') return false;
+  if (/^\d+$/.test(v)) return Number(v);
+  return v
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
 }

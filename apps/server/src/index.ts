@@ -57,6 +57,30 @@ async function main(): Promise<void> {
 
   await app.listen({ host: config.host, port: config.port });
   app.log.info({ version: APP_VERSION, dataDir: config.dataDir }, 'Memora is running');
+
+  const setupCode = app.authService.startSetupIfNeeded();
+  if (setupCode) {
+    // Printed plainly (not as a JSON log line) so it is easy to spot in `docker logs`.
+    process.stdout.write(setupBanner(setupCode));
+    app.log.info('first-run setup required: the setup code is printed above');
+  }
+}
+
+/** The one-time code that proves whoever creates the first admin can read the server log. */
+function setupBanner(code: string): string {
+  const line = '='.repeat(64);
+  return [
+    '',
+    line,
+    `  Memora setup code:  ${code}`,
+    '',
+    '  Open Memora in your browser and enter this code to create the',
+    '  first (administrator) account. Until that is done, a new code',
+    '  is printed every time Memora starts.',
+    line,
+    '',
+    '',
+  ].join('\n');
 }
 
 main().catch((error: unknown) => {
