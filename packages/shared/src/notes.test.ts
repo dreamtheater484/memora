@@ -153,10 +153,14 @@ describe('request schemas', () => {
     });
   });
 
-  it('only lets Markdown pages start with text', () => {
-    expect(createPageSchema.safeParse({ sectionId: id, type: 'rich', content: 'x' }).success).toBe(
-      false,
+  it('lets pages start with content, within a limit', () => {
+    const doc = JSON.stringify({ type: 'doc', content: [] });
+    expect(createPageSchema.safeParse({ sectionId: id, type: 'rich', content: doc }).success).toBe(
+      true,
     );
+    expect(
+      createPageSchema.safeParse({ sectionId: id, content: 'x'.repeat(100_001) }).success,
+    ).toBe(false);
   });
 
   it('refuses empty changes, bad ids and repeated pages', () => {

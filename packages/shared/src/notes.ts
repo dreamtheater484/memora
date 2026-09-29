@@ -1,6 +1,7 @@
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 import { z } from 'zod';
 import { isUuidV7 } from './ids';
+import type { Tag } from './tags';
 
 /*
  * Notebooks, section groups, sections and pages (§7.2, §9.2). The server validates every
@@ -135,6 +136,8 @@ export interface PageMeta {
   revision: number;
   /** How the page was last shown (Markdown: source, split or preview); null for the default. */
   viewMode?: ViewMode | null;
+  /** Its tags' ids (§9.9); absent when it has none. */
+  tags?: string[];
   createdAt: number;
   updatedAt: number;
 }
@@ -151,6 +154,8 @@ export interface Tree {
   sections: Section[];
   pages: PageMeta[];
   inboxId: string;
+  /** The user's tags (§9.9). */
+  tags?: Tag[];
 }
 
 /** Rows a change created or updated; the web app merges them into its copy of the tree. */
@@ -159,6 +164,7 @@ export interface TreeChanges {
   groups?: SectionGroup[];
   sections?: Section[];
   pages?: PageMeta[];
+  tags?: Tag[];
 }
 
 export const TRASH_TYPES = ['notebook', 'group', 'section', 'page'] as const;
@@ -246,22 +252,17 @@ export const moveSectionSchema = z.object({
 });
 export type MoveSectionRequest = z.input<typeof moveSectionSchema>;
 
-export const createPageSchema = z
-  .object({
-    /** Made by the browser, so a page created offline keeps its id when it syncs (D14). */
-    id: idSchema.optional(),
-    sectionId: idSchema,
-    parentPageId: optionalId,
-    title: titleSchema.default(''),
-    type: z.enum(PAGE_TYPES).default('markdown'),
-    /** Initial Markdown text, for quick notes. */
-    content: z.string().max(MAX_INITIAL_CONTENT).default(''),
-    ...placement,
-  })
-  .refine((v) => v.type === 'markdown' || v.content === '', {
-    message: 'Only Markdown pages start with text.',
-    path: ['content'],
-  });
+export const createPageSchema = z.object({
+  /** Made by the browser, so a page created offline keeps its id when it syncs (D14). */
+  id: idSchema.optional(),
+  sectionId: idSchema,
+  parentPageId: optionalId,
+  title: titleSchema.default(''),
+  type: z.enum(PAGE_TYPES).default('markdown'),
+  /** Initial content: a quick note's text, or a template (a rich page's document). */
+  content: z.string().max(MAX_INITIAL_CONTENT).default(''),
+  ...placement,
+});
 export type CreatePageRequest = z.input<typeof createPageSchema>;
 
 export const updatePageSchema = z
@@ -300,6 +301,18 @@ export type RestoreRequest = z.input<typeof restoreSchema>;
 
 export const PAGE_LIST_SIDES = ['left', 'right'] as const;
 
+/** What can be a favourite, or a recent item (§9.9). */
+export const PLACE_TYPES = ['page', 'section', 'notebook'] as const;
+export type PlaceType = (typeof PLACE_TYPES)[number];
+
+/** Recent items kept. */
+export const MAX_RECENT = 50;
+/** Favourites a user may have. */
+export const MAX_FAVORITES = 200;
+
+const place = z.object({ type: z.enum(PLACE_TYPES), id: idSchema });
+export type Place = z.infer<typeof place>;
+
 export const uiStateSchema = z
   .object({
     lastSectionId: idSchema.nullable(),
@@ -308,6 +321,14 @@ export const uiStateSchema = z
     /** Expanded notebooks and section groups in the navigation. */
     expanded: z.array(idSchema).max(2000),
     pageListSide: z.enum(PAGE_LIST_SIDES),
+    /** Favourites, in the order shown. */
+    favorites: z.array(place).max(MAX_FAVORITES),
+    /** Recently opened, newest first. */
+    recent: z.array(place.extend({ at: z.number().int() })).max(MAX_RECENT),
+    /** The template new pages in a section start from, by section (§9.9); null removes it. */
+    sectionTemplates: z
+      .record(idSchema, z.string().max(64).nullable())
+      .refine((v) => Object.keys(v).length <= 1000),
   })
   .partial();
 export type UiState = z.infer<typeof uiStateSchema>;

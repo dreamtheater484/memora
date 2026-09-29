@@ -291,6 +291,78 @@ export const assetBlobs = sqliteTable(
   (t) => [primaryKey({ columns: [t.ownerId, t.sha256] })],
 );
 
+/** Tags (§7.2, §9.9): names are unique per user whatever their case (`name_key`). */
+export const tags = sqliteTable(
+  'tags',
+  {
+    id: text('id').primaryKey(),
+    ownerId: ownerId(),
+    name: text('name').notNull(),
+    nameKey: text('name_key').notNull(),
+    color: text('color'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [uniqueIndex('tags_owner_id_name_key_idx').on(t.ownerId, t.nameKey)],
+);
+
+export const pageTags = sqliteTable(
+  'page_tags',
+  {
+    pageId: text('page_id')
+      .notNull()
+      .references(() => pages.id, { onDelete: 'cascade' }),
+    tagId: text('tag_id')
+      .notNull()
+      .references(() => tags.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.pageId, t.tagId] }), index('page_tags_tag_id_idx').on(t.tagId)],
+);
+
+/**
+ * Links between pages (§7.2, §9.9), rebuilt on every save: which titles a page links to. A
+ * link is resolved by title when read, so backlinks follow renames and new pages.
+ */
+export const pageLinks = sqliteTable(
+  'page_links',
+  {
+    sourcePageId: text('source_page_id')
+      .notNull()
+      .references(() => pages.id, { onDelete: 'cascade' }),
+    /** The linked title as written. */
+    targetTitle: text('target_title').notNull(),
+    /** The same, as titles are compared (`titleKey`). */
+    targetKey: text('target_key').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.sourcePageId, t.targetKey] }),
+    index('page_links_target_key_idx').on(t.targetKey),
+  ],
+);
+
+/** Templates saved by users (§7.2, §9.9); the built-in ones live in the code. */
+export const templates = sqliteTable(
+  'templates',
+  {
+    id: text('id').primaryKey(),
+    ownerId: ownerId(),
+    name: text('name').notNull(),
+    type: text('type', { enum: ['markdown', 'rich'] }).notNull(),
+    content: text('content').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('templates_owner_id_idx').on(t.ownerId)],
+);
+
+/**
+ * The search index's row for each page (§7.5): `fts_pages` (made in the migration, with the
+ * triggers that keep it current) is keyed by `docid`, a stable integer the pages table lacks.
+ */
+export const pageSearch = sqliteTable('page_search', {
+  docid: integer('docid').primaryKey({ autoIncrement: true }),
+  pageId: text('page_id').notNull().unique(),
+});
+
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type NotebookRow = typeof notebooks.$inferSelect;
@@ -298,4 +370,6 @@ export type SectionGroupRow = typeof sectionGroups.$inferSelect;
 export type SectionRow = typeof sections.$inferSelect;
 export type PageRow = typeof pages.$inferSelect;
 export type PageVersionRow = typeof pageVersions.$inferSelect;
+export type TagRow = typeof tags.$inferSelect;
+export type TemplateRow = typeof templates.$inferSelect;
 export type AssetRow = typeof assets.$inferSelect;

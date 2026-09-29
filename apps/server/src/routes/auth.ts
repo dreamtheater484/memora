@@ -20,6 +20,8 @@ import type { SqliteDatabase } from '../db/client';
 import type { EventHub } from '../events/hub';
 import { notFound, parse } from '../errors';
 import type { NotesService } from '../notes/service';
+import type { TemplatesService } from '../notes/templates';
+import type { SearchService } from '../search/service';
 import type { Repos } from '../repo';
 
 export interface RouteDeps {
@@ -35,6 +37,8 @@ export interface RouteDeps {
   repos: Repos;
   auth: AuthService;
   notes: NotesService;
+  search: SearchService;
+  templates: TemplatesService;
   events: EventHub;
   config: Config;
   hasher: PasswordHasher;

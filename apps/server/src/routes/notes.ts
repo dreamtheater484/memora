@@ -136,9 +136,21 @@ export function notesRoutes(
     return notes.getPage(owner(request), request.params.id);
   });
 
-  app.patch<Id>('/api/v1/pages/:id', { config: changes }, async (request) =>
-    notes.updatePage(owner(request), request.params.id, parse(updatePageSchema, request.body)),
-  );
+  // A new title is written into the links to the page: those pages changed too.
+  app.patch<Id>('/api/v1/pages/:id', { config: changes }, async (request) => {
+    const { user, session } = authOf(request);
+    const body = parse(updatePageSchema, request.body);
+    const result = notes.updatePage(user.id, request.params.id, body, session.deviceLabel);
+    for (const page of result.pages?.slice(1) ?? []) {
+      events.publish(user.id, {
+        type: 'page.updated',
+        page,
+        revision: page.revision,
+        origin: null,
+      });
+    }
+    return result;
+  });
 
   // Content (§9.6): JSON-escaped text can be several bytes per character.
   app.put<Id>(
@@ -304,7 +316,10 @@ export function notesRoutes(
     return { ui: readUi(userId), editor: readEditor(userId) } satisfies Settings;
   });
 
-  /** Merges the given fields into the stored ones; `lastPages` merges per section. */
+  /**
+   * Merges the given fields into the stored ones; `lastPages` and `sectionTemplates` merge per
+   * section (a null template removes the section's).
+   */
   app.patch('/api/v1/settings', { config }, async (request) => {
     const userId = owner(request);
     const body = parse(updateSettingsSchema, request.body);
@@ -320,6 +335,12 @@ export function notesRoutes(
         );
         ui.lastPages = Object.fromEntries(
           [...merged, ...Object.entries(patch.lastPages)].slice(-MAX_LAST_PAGES),
+        );
+      }
+      if (patch.sectionTemplates) {
+        const merged = { ...current.sectionTemplates, ...patch.sectionTemplates };
+        ui.sectionTemplates = Object.fromEntries(
+          Object.entries(merged).filter(([, template]) => template !== null),
         );
       }
       repos.settings.set(userId, 'ui', ui);

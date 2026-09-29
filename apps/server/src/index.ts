@@ -4,6 +4,7 @@ import { applyPendingRestore } from './backup/service';
 import { ConfigError, loadConfig } from './config';
 import { openDatabase } from './db/client';
 import { ensureInstanceMeta } from './db/meta';
+import { indexAllLinksOnce } from './notes/links';
 import { runMigrations } from './db/migrate';
 import { migrationsDir } from './paths';
 import { APP_VERSION } from './version';
@@ -50,6 +51,8 @@ async function main(): Promise<void> {
       );
     }
     ensureInstanceMeta(db, APP_VERSION);
+    const indexed = indexAllLinksOnce(db);
+    if (indexed > 0) app.log.info({ pages: indexed }, 'links between pages indexed');
   } catch (error) {
     app.log.fatal({ err: error }, 'could not prepare the database — Memora will not start');
     db.close();

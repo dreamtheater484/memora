@@ -9,12 +9,16 @@ import {
   heightOf,
   isRichContent,
   isWithin,
+  linkedTitles,
   markdownToText,
   pickColor,
   placeKeys,
+  renameLinks,
   richToText,
   snippetOf,
   subtreeOf,
+  tagKey,
+  titleKey,
   uuidv7,
   type ColorId,
   type ContentConflict,
@@ -32,6 +36,7 @@ import {
   type PageVersionMeta,
   type Section,
   type SectionGroup,
+  type Tag,
   type TrashItem,
   type Tree,
   type TreeChanges,
@@ -50,21 +55,26 @@ import {
   type updateNotebookSchema,
   type updatePageSchema,
   type updateSectionSchema,
+  type updateTagSchema,
 } from '@memora/shared';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { SqliteDatabase } from '../db/client';
 import {
   notebooks,
+  pageLinks,
+  pageTags,
   pageVersions,
   pages,
   sectionGroups,
   sections,
+  tags,
   type NotebookRow,
   type PageRow,
   type PageVersionRow,
   type SectionGroupRow,
   type SectionRow,
+  type TagRow,
 } from '../db/schema';
 import { ApiError, notFound } from '../errors';
 import { versionsToThin, type RetentionRules } from './retention';
@@ -142,9 +152,14 @@ const pageMetaColumns = {
   createdAt: pages.createdAt,
   updatedAt: pages.updatedAt,
   text: sql<string>`substr(${pages.contentText}, 1, ${SNIPPET_LENGTH * 2})`,
+  tags: sql<
+    string | null
+  >`(SELECT group_concat(${pageTags.tagId}) FROM ${pageTags} WHERE ${pageTags.pageId} = ${pages.id})`,
 };
 
-const toPageMeta = ({ text, ...row }: Omit<PageMeta, 'snippet'> & { text: string }) =>
+type MetaRow = Omit<PageMeta, 'snippet' | 'tags'> & { text: string; tags?: string | null };
+
+const toPageMeta = ({ text, tags: tagIds, ...row }: MetaRow) =>
   ({
     id: row.id,
     sectionId: row.sectionId,
@@ -155,9 +170,17 @@ const toPageMeta = ({ text, ...row }: Omit<PageMeta, 'snippet'> & { text: string
     snippet: snippetOf(text),
     revision: row.revision,
     viewMode: row.viewMode ?? null,
+    ...(tagIds ? { tags: tagIds.split(',').sort() } : {}),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }) satisfies PageMeta;
+
+const toTag = (r: TagRow): Tag => ({
+  id: r.id,
+  name: r.name,
+  color: (r.color as ColorId | null) ?? null,
+  createdAt: r.createdAt,
+});
 
 type VersionMetaRow = Omit<PageVersionRow, 'content' | 'ownerId' | 'title'> & { size: number };
 
@@ -249,8 +272,43 @@ export class NotesService {
           .all()
           .map(toPageMeta),
         inboxId: inbox.id,
+        tags: this.orm
+          .select()
+          .from(tags)
+          .where(eq(tags.ownerId, owner))
+          .orderBy(asc(tags.nameKey))
+          .all()
+          .map(toTag),
       };
     });
+  }
+
+  /** A page's row as the tree has it, with its tags. */
+  private metaOf(row: PageRow): PageMeta {
+    const ids = this.orm
+      .select({ id: pageTags.tagId })
+      .from(pageTags)
+      .where(eq(pageTags.pageId, row.id))
+      .all()
+      .map((t) => t.id);
+    return toPageMeta({
+      ...row,
+      text: row.contentText.slice(0, SNIPPET_LENGTH * 2),
+      tags: ids.join(',') || null,
+    });
+  }
+
+  /** Rebuilds the list of titles a page links to (§9.9), after its content changed. */
+  private indexLinks(pageId: string, type: PageRow['type'], content: string): void {
+    this.orm.delete(pageLinks).where(eq(pageLinks.sourcePageId, pageId)).run();
+    const titles = linkedTitles(type, content);
+    for (const part of chunks(titles)) {
+      this.orm
+        .insert(pageLinks)
+        .values(part.map((t) => ({ sourcePageId: pageId, targetTitle: t, targetKey: titleKey(t) })))
+        .onConflictDoNothing()
+        .run();
+    }
   }
 
   private inbox(owner: string): SectionRow {
@@ -694,7 +752,7 @@ export class NotesService {
   getPage(owner: string, id: string): Page {
     const row = this.livePage(owner, id);
     return {
-      ...toPageMeta({ ...row, text: row.contentText.slice(0, SNIPPET_LENGTH * 2) }),
+      ...this.metaOf(row),
       content: row.content,
       viewMode: row.viewMode,
     };
@@ -714,7 +772,7 @@ export class NotesService {
     return this.tx(() => {
       const row = this.livePage(owner, id);
       if (input.content === row.content) {
-        return { revision: row.revision, pages: [toPageMeta({ ...row, text: row.contentText })] };
+        return { revision: row.revision, pages: [this.metaOf(row)] };
       }
       if (input.baseRevision !== row.revision) {
         throw new ApiError(409, 'revision_conflict', 'This page was changed elsewhere.', {
@@ -742,9 +800,10 @@ export class NotesService {
         .where(eq(pages.id, row.id))
         .returning()
         .get()!;
+      this.indexLinks(saved.id, saved.type, saved.content);
       return {
         revision: saved.revision,
-        pages: [toPageMeta({ ...saved, text: saved.contentText })],
+        pages: [this.metaOf(saved)],
       };
     });
   }
@@ -786,9 +845,10 @@ export class NotesService {
         .where(eq(pages.id, row.id))
         .returning()
         .get()!;
+      this.indexLinks(saved.id, saved.type, saved.content);
       return {
         revision: saved.revision,
-        pages: [toPageMeta({ ...saved, text: saved.contentText })],
+        pages: [this.metaOf(saved)],
       };
     });
   }
@@ -891,9 +951,10 @@ export class NotesService {
         .where(eq(pages.id, row.id))
         .returning()
         .get()!;
+      this.indexLinks(saved.id, saved.type, saved.content);
       return {
         revision: saved.revision,
-        pages: [toPageMeta({ ...saved, text: saved.contentText })],
+        pages: [this.metaOf(saved)],
       };
     });
   }
@@ -929,7 +990,8 @@ export class NotesService {
         })
         .returning()
         .get();
-      return { pages: [toPageMeta({ ...created, text: created.contentText })] };
+      this.indexLinks(created.id, created.type, created.content);
+      return { pages: [this.metaOf(created)] };
     });
   }
 
@@ -1114,7 +1176,7 @@ export class NotesService {
         // A browser that created the page offline may send it again after a lost answer.
         const existing = this.orm.select().from(pages).where(eq(pages.id, id)).get();
         if (existing?.ownerId === owner) {
-          return { pages: [toPageMeta({ ...existing, text: existing.contentText })] };
+          return { pages: [this.metaOf(existing)] };
         }
         if (existing) throw new ApiError(409, 'conflict', 'That id is taken.');
       }
@@ -1149,23 +1211,220 @@ export class NotesService {
         })
         .returning()
         .get();
-      return { pages: [toPageMeta({ ...row, text: row.contentText })] };
+      this.indexLinks(row.id, row.type, row.content);
+      return { pages: [this.metaOf(row)] };
     });
   }
 
-  updatePage(owner: string, id: string, patch: In<typeof updatePageSchema>): TreeChanges {
-    this.getPage(owner, id);
-    const row = this.orm
-      .update(pages)
-      .set({
-        ...patch,
-        // The view mode is a preference, not an edit: only a new title counts as a change.
-        ...(patch.title === undefined ? {} : { updatedAt: this.now() }),
-      })
-      .where(and(eq(pages.id, id), eq(pages.ownerId, owner)))
-      .returning()
-      .get()!;
-    return { pages: [toPageMeta({ ...row, text: row.contentText })] };
+  /**
+   * Renames a page or changes its view mode. A new title is written into every link to the
+   * page (§9.9), unless another page still has the old one; the pages whose links changed
+   * follow the page in the answer.
+   */
+  updatePage(
+    owner: string,
+    id: string,
+    patch: In<typeof updatePageSchema>,
+    deviceLabel = '',
+  ): TreeChanges {
+    return this.tx(() => {
+      const before = this.livePage(owner, id);
+      const now = this.now();
+      const row = this.orm
+        .update(pages)
+        .set({
+          ...patch,
+          // The view mode is a preference, not an edit: only a new title counts as a change.
+          ...(patch.title === undefined ? {} : { updatedAt: now }),
+        })
+        .where(eq(pages.id, id))
+        .returning()
+        .get()!;
+      const changed = [this.metaOf(row)];
+      if (patch.title !== undefined && patch.title !== before.title) {
+        changed.push(...this.renameLinksTo(owner, before, patch.title, deviceLabel, now));
+      }
+      return { pages: changed };
+    });
+  }
+
+  /** Points the links to `page` at its new title; answers the pages that changed. */
+  private renameLinksTo(
+    owner: string,
+    page: PageRow,
+    to: string,
+    deviceLabel: string,
+    now: number,
+  ): PageMeta[] {
+    const from = page.title;
+    const key = titleKey(from);
+    if (!key || !to.trim()) return [];
+    // While another page has the old title, the links lead there.
+    const namesake = this.orm
+      .select({ id: pages.id, title: pages.title })
+      .from(pages)
+      .where(and(eq(pages.ownerId, owner), isNull(pages.deletedAt)))
+      .all()
+      .some((p) => p.id !== page.id && titleKey(p.title) === key);
+    if (namesake) return [];
+    const sources = this.orm
+      .select({ page: pages })
+      .from(pageLinks)
+      .innerJoin(pages, eq(pages.id, pageLinks.sourcePageId))
+      .where(and(eq(pageLinks.targetKey, key), eq(pages.ownerId, owner), isNull(pages.deletedAt)))
+      .all()
+      .map((r) => r.page);
+    const changed: PageMeta[] = [];
+    for (const source of sources) {
+      const content = renameLinks(source.type, source.content, from, to);
+      if (content === null) continue;
+      if (this.lastVersionAt(source.id) <= now - VERSION_INTERVAL_MS) {
+        this.keepVersion(source, 'auto', deviceLabel, now);
+      }
+      const saved = this.orm
+        .update(pages)
+        .set({
+          content,
+          contentText: textOf(source.type, content),
+          revision: source.revision + 1,
+          updatedAt: now,
+        })
+        .where(eq(pages.id, source.id))
+        .returning()
+        .get()!;
+      this.indexLinks(saved.id, saved.type, saved.content);
+      changed.push(this.metaOf(saved));
+    }
+    return changed;
+  }
+
+  /** The live pages that link to this one, by its title. */
+  backlinks(owner: string, id: string): string[] {
+    const page = this.livePage(owner, id);
+    const key = titleKey(page.title);
+    if (!key) return [];
+    return this.orm
+      .select({ id: pages.id })
+      .from(pageLinks)
+      .innerJoin(pages, eq(pages.id, pageLinks.sourcePageId))
+      .where(and(eq(pageLinks.targetKey, key), eq(pages.ownerId, owner), isNull(pages.deletedAt)))
+      .orderBy(desc(pages.updatedAt))
+      .all()
+      .map((r) => r.id)
+      .filter((source) => source !== id);
+  }
+
+  // Tags (§9.9)
+
+  /** Sets a page's tags by name, making the ones that don't exist yet. */
+  setPageTags(owner: string, id: string, names: readonly string[]): TreeChanges {
+    return this.tx(() => {
+      const row = this.livePage(owner, id);
+      const existing = new Map(
+        this.orm
+          .select()
+          .from(tags)
+          .where(eq(tags.ownerId, owner))
+          .all()
+          .map((t) => [t.nameKey, t]),
+      );
+      const now = this.now();
+      const wanted = new Map<string, TagRow>();
+      const created: TagRow[] = [];
+      for (const name of names) {
+        const key = tagKey(name);
+        if (wanted.has(key)) continue;
+        let tag = existing.get(key);
+        if (!tag) {
+          tag = this.orm
+            .insert(tags)
+            .values({
+              id: uuidv7(now),
+              ownerId: owner,
+              name: name.trim(),
+              nameKey: key,
+              createdAt: now,
+            })
+            .returning()
+            .get();
+          existing.set(key, tag);
+          created.push(tag);
+        }
+        wanted.set(key, tag);
+      }
+      const ids = [...wanted.values()].map((t) => t.id);
+      const current = this.orm
+        .select({ tagId: pageTags.tagId })
+        .from(pageTags)
+        .where(eq(pageTags.pageId, id))
+        .all()
+        .map((t) => t.tagId);
+      const gone = current.filter((t) => !ids.includes(t));
+      if (gone.length) {
+        this.orm
+          .delete(pageTags)
+          .where(and(eq(pageTags.pageId, id), inArray(pageTags.tagId, gone)))
+          .run();
+      }
+      const added = ids.filter((t) => !current.includes(t));
+      if (added.length) {
+        this.orm
+          .insert(pageTags)
+          .values(added.map((tagId) => ({ pageId: id, tagId })))
+          .run();
+      }
+      return { pages: [this.metaOf(row)], tags: created.map(toTag) };
+    });
+  }
+
+  private liveTag(owner: string, id: string): TagRow {
+    const tag = this.orm
+      .select()
+      .from(tags)
+      .where(and(eq(tags.id, id), eq(tags.ownerId, owner)))
+      .get();
+    if (!tag) throw notFound('Tag not found.');
+    return tag;
+  }
+
+  updateTag(owner: string, id: string, patch: In<typeof updateTagSchema>): TreeChanges {
+    return this.tx(() => {
+      const tag = this.liveTag(owner, id);
+      const next: Partial<TagRow> = {};
+      if (patch.name !== undefined) {
+        const key = tagKey(patch.name);
+        const clash = this.orm
+          .select({ id: tags.id })
+          .from(tags)
+          .where(and(eq(tags.ownerId, owner), eq(tags.nameKey, key)))
+          .get();
+        if (clash && clash.id !== id) {
+          throw new ApiError(409, 'conflict', 'There is a tag with that name already.');
+        }
+        next.name = patch.name.trim();
+        next.nameKey = key;
+      }
+      if (patch.color !== undefined) next.color = patch.color;
+      const saved = this.orm.update(tags).set(next).where(eq(tags.id, tag.id)).returning().get()!;
+      return { tags: [toTag(saved)] };
+    });
+  }
+
+  /** Deletes a tag and takes it off its pages; answers those pages. */
+  deleteTag(owner: string, id: string): TreeChanges {
+    return this.tx(() => {
+      this.liveTag(owner, id);
+      const tagged = this.orm
+        .select({ pageId: pageTags.pageId })
+        .from(pageTags)
+        .where(eq(pageTags.tagId, id))
+        .all()
+        .map((t) => t.pageId);
+      // Row by row, so the search index hears of each (its triggers).
+      this.orm.delete(pageTags).where(eq(pageTags.tagId, id)).run();
+      this.orm.delete(tags).where(eq(tags.id, id)).run();
+      return { pages: this.pageMetas(owner, tagged) };
+    });
   }
 
   /** Moves pages, with their subpages, keeping the order they were given in. */
@@ -1234,6 +1493,19 @@ export class NotesService {
               updatedAt: now,
             })
             .run();
+          // A copy has the same tags and links.
+          const tagIds = this.orm
+            .select({ tagId: pageTags.tagId })
+            .from(pageTags)
+            .where(eq(pageTags.pageId, id))
+            .all();
+          if (tagIds.length) {
+            this.orm
+              .insert(pageTags)
+              .values(tagIds.map((t) => ({ pageId: newIds.get(id)!, tagId: t.tagId })))
+              .run();
+          }
+          this.indexLinks(newIds.get(id)!, source.type, source.content);
           created.push(newIds.get(id)!);
         }
       });
