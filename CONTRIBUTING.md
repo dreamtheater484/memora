@@ -55,6 +55,7 @@ In development the server stores its data in `apps/server/data/`. That folder is
 apps/server       Fastify API, SQLite database, migrations (bundled into one file with esbuild)
 apps/web          React + Vite web app
 packages/shared   Code used by both: schemas, types, pure helpers
+design/mockups    Phase 1 clickable design mockups (view with `node design/mockups/serve.mjs`)
 docker/           Dockerfile, entrypoint, compose example, smoke test
 scripts/          Privacy guards and cross-platform helper scripts
 docs/             Plan, setup guide, architecture, decision records

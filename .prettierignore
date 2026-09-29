@@ -4,3 +4,6 @@ dist/
 coverage/
 data/
 backups/
+
+# Hand-formatted design prototype with an inlined icon sprite
+design/mockups/directions.html
