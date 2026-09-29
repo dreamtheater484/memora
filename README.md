@@ -2,7 +2,7 @@
 
 A self-hosted notebook that runs in your browser. It combines OneNote-style organisation (notebooks, section tabs, page lists) with first-class Markdown, a Word-like rich editor and built-in Kanban boards. It is designed to look great on a phone, a laptop and an ultra-wide monitor.
 
-> **Status: Phase 2, accounts.** The design system, the app shell, and accounts (first-run setup, login, sessions, user administration and an audit log) are in place, with an `:edge` image on GHCR. There are no note-taking features yet: they start in Phase 3. See the [implementation plan](docs/IMPLEMENTATION_PLAN.md) for the roadmap.
+> **Status: Phase 3, notebook organisation.** Accounts, the design system and the app shell are in place, with an `:edge` image on GHCR. Notebooks, nested section groups, coloured section tabs, pages with subpages, the Inbox and quick notes can be created, arranged by dragging or from the keyboard, moved, copied and deleted with Undo, on phones as well. Pages can't be edited yet: the Markdown editor comes in Phase 5. See the [implementation plan](docs/IMPLEMENTATION_PLAN.md) for the roadmap.
 
 ## Planned highlights
 
@@ -24,18 +24,26 @@ A self-hosted notebook that runs in your browser. It combines OneNote-style orga
 ### Run with Docker
 
 ```bash
-docker build -f docker/Dockerfile -t memora:local .
+docker run -d --name memora -p 3000:3000 -e PUID=1000 -e PGID=1000 -v ./data:/data ghcr.io/dreamtheater484/memora:edge
+```
+
+Then open `http://localhost:3000`. `:edge` is built from the main branch; version tags come with the first release. See [docs/SETUP.md](docs/SETUP.md) for the full guide (Docker Compose, Synology, HTTPS).
+
+To build the image yourself instead:
+
+```bash
+git clone https://github.com/dreamtheater484/memora.git && cd memora
 ```
 
 ```bash
-docker run -d --name memora -p 3000:3000 -e PUID=1000 -e PGID=1000 -v ./data:/data memora:local
+docker build -f docker/Dockerfile -t memora:local .
 ```
 
-Then open `http://localhost:3000`. See [docs/SETUP.md](docs/SETUP.md) for the full guide (Docker Compose, Synology, HTTPS).
+Then run it as above, with `memora:local` as the image.
 
 ### Develop
 
-Requires Node.js 22.13+ (24 recommended) and pnpm 10.
+Requires Node.js 22.13+ (24 recommended) and pnpm 10. In a clone of the repository:
 
 ```bash
 pnpm install
@@ -58,4 +66,4 @@ The web app runs at `http://localhost:5173` and the API at `http://localhost:300
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Memora is created and maintained by [dreamtheater484](https://github.com/dreamtheater484); the source is at [github.com/dreamtheater484/memora](https://github.com/dreamtheater484/memora).

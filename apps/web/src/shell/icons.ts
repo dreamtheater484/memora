@@ -1,0 +1,40 @@
+import type { NotebookIcon } from '@memora/shared';
+import {
+  BookOpen,
+  Briefcase,
+  Camera,
+  Code,
+  FlaskConical,
+  GraduationCap,
+  Heart,
+  House,
+  Leaf,
+  Lightbulb,
+  Music,
+  Notebook,
+  Plane,
+  Star,
+  Utensils,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react';
+
+/** Lucide icons for the notebook icon ids. */
+export const NOTEBOOK_ICON: Record<NotebookIcon, LucideIcon> = {
+  notebook: Notebook,
+  'book-open': BookOpen,
+  briefcase: Briefcase,
+  house: House,
+  heart: Heart,
+  star: Star,
+  'graduation-cap': GraduationCap,
+  code: Code,
+  'flask-conical': FlaskConical,
+  plane: Plane,
+  utensils: Utensils,
+  music: Music,
+  camera: Camera,
+  leaf: Leaf,
+  lightbulb: Lightbulb,
+  wallet: Wallet,
+};

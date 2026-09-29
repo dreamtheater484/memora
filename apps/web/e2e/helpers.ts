@@ -8,6 +8,7 @@ import type {
   SessionResponse,
 } from '@memora/shared';
 import { expect, type Page, type Route } from '@playwright/test';
+import { FakeNotes } from './notes';
 
 export const THEMES = ['light', 'dark'] as const;
 export type Theme = (typeof THEMES)[number];
@@ -143,8 +144,8 @@ const error = (status: number, code: string, message: string, fields?: Record<st
 });
 
 /**
- * A small in-memory stand-in for the server: enough of the API for the auth and
- * settings screens, with state, so flows like "log in, then see the page" work.
+ * A small in-memory stand-in for the server: enough of the API for the auth, settings and
+ * notes screens, with state, so flows like "log in, then see the page" work.
  */
 export class FakeApi {
   me: MeResponse;
@@ -154,6 +155,8 @@ export class FakeApi {
   readonly requests: RecordedRequest[] = [];
   /** Who logging in with PASSWORD becomes. */
   loginAs: CurrentUser = ADMIN;
+  /** Notebooks, sections and pages; replace before `install` for other content. */
+  notes = new FakeNotes(NOW);
 
   constructor(me: Partial<MeResponse> = { user: ADMIN }) {
     const user = me.user ?? null;
@@ -221,7 +224,9 @@ export class FakeApi {
       case 'GET /api/v1/admin/audit':
         return { json: { entries: this.audit, nextCursor: null } };
       default:
-        return error(404, 'not_found', `No fake for ${route}.`);
+        return (
+          this.notes.respond(method, path, body) ?? error(404, 'not_found', `No fake for ${route}.`)
+        );
     }
   }
 
@@ -253,12 +258,14 @@ export async function setTheme(page: Page, theme: Theme) {
   }, theme);
 }
 
-/** Opens the shell with a fixed theme. */
-export async function openShell(page: Page, theme: Theme) {
-  await mockApi(page);
+/** Opens the shell with a fixed theme (and the seeded notes, unless `api` has others). */
+export async function openShell(page: Page, theme: Theme, api = new FakeApi()) {
+  await mockApi(page, api);
   await setTheme(page, theme);
+  // "Edited 2 minutes ago" is counted from the fixed now, like the seeded dates.
+  await page.clock.setFixedTime(NOW);
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByRole('main')).not.toBeEmpty();
   await expect(page.getByRole('banner').getByText('Saved', { exact: true })).toBeAttached();
   await fontsReady(page);
 }

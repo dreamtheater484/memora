@@ -1,6 +1,6 @@
 # Installing Memora
 
-> **Draft (Phase 2).** Memora has accounts now, but doesn't store notes yet: that starts in Phase 3. The guide grows with each phase and is finished in Phase 13.
+> **Draft (Phase 3).** Memora has accounts and notebook organisation now; editing pages starts in Phase 5. The guide grows with each phase and is finished in Phase 13.
 
 ## What you need
 
@@ -16,9 +16,7 @@
 ## Quick start (any Docker host)
 
 1. Create a folder for Memora, for example `memora`, and save [`docker/docker-compose.example.yml`](../docker/docker-compose.example.yml) in it as `docker-compose.yml`.
-2. Edit it:
-   - `image:` put the GitHub account that publishes Memora in place of `<your-github-user>`.
-   - `PUID`, `PGID` and `TZ` (see [Choosing PUID and PGID](#choosing-puid-and-pgid)).
+2. Edit it: set `PUID`, `PGID` and `TZ` (see [Choosing PUID and PGID](#choosing-puid-and-pgid)).
 3. Start it:
 
    ```bash
@@ -38,7 +36,7 @@
 Or with plain `docker run` (one line):
 
 ```bash
-docker run -d --name memora --restart unless-stopped -p 3000:3000 -e PUID=1000 -e PGID=1000 -v ./data:/data ghcr.io/<your-github-user>/memora:edge
+docker run -d --name memora --restart unless-stopped -p 3000:3000 -e PUID=1000 -e PGID=1000 -v ./data:/data ghcr.io/dreamtheater484/memora:edge
 ```
 
 ### Images
@@ -147,9 +145,9 @@ Set these as environment variables (the `environment:` section of the compose fi
 6. Open `http://<nas-ip>:3000` and create your administrator account.
 7. Set up [HTTPS](#https), then change the port line to `'127.0.0.1:3000:3000'`, so only the reverse proxy can reach Memora directly.
 
-### If the image is private
+### Images from your own fork
 
-A container image published from a GitHub repository starts out private. Either make it public (GitHub → your profile → **Packages → memora → Package settings → Change visibility**), or log in on the NAS with a token that can only read packages:
+The images above come from [github.com/dreamtheater484/memora](https://github.com/dreamtheater484/memora). A fork publishes its own image to `ghcr.io/<your-github-user>/memora`. If that image is private, either make it public (GitHub → your profile → **Packages → memora → Package settings → Change visibility**), or log in on the NAS with a token that can only read packages:
 
 ```bash
 sudo docker login ghcr.io -u <your-github-user>

@@ -23,6 +23,14 @@ fail() {
   exit 1
 }
 
+# expect <pattern> <failure message> <command...>: the command succeeds and its output matches.
+# The output is captured first: in `command | grep -q`, grep stops reading at the first match
+# and Docker 28's client then dies of SIGPIPE on its next write, failing the check at random.
+expect() {
+  local out
+  out="$("${@:3}")" && grep -q -- "$1" <<<"$out" || fail "$2"
+}
+
 docker run -d --name "$NAME" -p "127.0.0.1:$PORT:3000" \
   -e PUID="$(id -u)" -e PGID="$(id -g)" \
   -v "$DATA_DIR:/data" "$IMAGE" >/dev/null
@@ -32,8 +40,8 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
-curl -fsS "http://127.0.0.1:$PORT/api/health" | grep -q '"status":"ok"' || fail "health endpoint not ok"
-curl -fsS "http://127.0.0.1:$PORT/" | grep -q '<div id="root">' || fail "web app not served"
+expect '"status":"ok"' "health endpoint not ok" curl -fsS "http://127.0.0.1:$PORT/api/health"
+expect '<div id="root">' "web app not served" curl -fsS "http://127.0.0.1:$PORT/"
 [ "$(docker exec "$NAME" stat -c %u /proc/1)" = "$(id -u)" ] || fail "server is not running as PUID"
 [ -f "$DATA_DIR/memora.db" ] || fail "database not created in the data volume"
 
@@ -42,7 +50,7 @@ docker exec "$NAME" node /app/healthcheck.mjs || fail "built-in healthcheck fail
 # First-run setup: the code is in the log, and only works with that code.
 CODE="$(docker logs "$NAME" 2>&1 | sed -n 's/.*Memora setup code: *\([0-9A-Z-]*\).*/\1/p' | tail -n 1)"
 [ -n "$CODE" ] || fail "no setup code in the log"
-docker exec "$NAME" memora-admin list-users | grep -q "No accounts yet" || fail "memora-admin list-users"
+expect "No accounts yet" "memora-admin list-users" docker exec "$NAME" memora-admin list-users
 setup() {
   curl -s -o /dev/null -w '%{http_code}' -H 'content-type: application/json' \
     -H "origin: http://127.0.0.1:$PORT" -X POST "http://127.0.0.1:$PORT/api/v1/auth/setup" \
@@ -50,8 +58,9 @@ setup() {
 }
 [ "$(setup WRONG-CODE-0000)" = "403" ] || fail "setup accepted a wrong code"
 [ "$(setup "$CODE")" = "200" ] || fail "setup with the logged code failed"
-docker exec "$NAME" memora-admin list-users | grep -q "^smoke " || fail "admin account not listed"
-docker exec "$NAME" memora-admin reset-password smoke | grep -q "One-time password" || fail "memora-admin reset-password"
+expect "^smoke " "admin account not listed" docker exec "$NAME" memora-admin list-users
+expect "One-time password" "memora-admin reset-password" \
+  docker exec "$NAME" memora-admin reset-password smoke
 [ "$(stat -c %u "$DATA_DIR/memora.db-wal")" = "$(id -u)" ] || fail "database files not owned by PUID"
 
 docker stop -t 10 "$NAME" >/dev/null

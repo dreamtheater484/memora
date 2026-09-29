@@ -1,6 +1,6 @@
 # Memora — Implementation Plan
 
-> **Status:** v2 · 2026-09-29 · Phase 0 (foundation) complete
+> **Status:** v2 · 2026-09-29 · Phases 0–3 built (the NAS deployment from Phase 2 is still to do)
 > **Nature:** Living document. Update it whenever a decision changes; every phase ends with a review of this plan.
 
 ---
@@ -102,6 +102,7 @@ These are parked and listed in §17. The data model is designed so they can be a
 | D20 | Tooling adjustments (Phase 0)    | pnpm 10 (the corepack in some Linux distributions cannot run pnpm 11+); TypeScript 6 (typescript-eslint doesn't support TypeScript 7 yet); **secretlint** in the local pre-commit hook (pure Node.js, identical on Windows and Linux) and **gitleaks** in CI over the full history; **Dependabot** instead of Renovate (no app to install).                                                                              | Works the same on every developer machine and needs no extra installs.                                                                                                                                                                           |
 | D21 | Visual direction (Phase 1)       | **Aurora** (direction B of the Phase 1 mockups): frosted, translucent panels float over a soft ambient glow in the colour of the current section, and the accent colour follows the section. Type: Figtree for the interface, Bricolage Grotesque for titles, JetBrains Mono for code. Reference mockup: `design/mockups/directions.html`.                                                                               | Chosen by the owner from three directions (Ink, Aurora, Spectrum). Needs a solid, non-blurred fallback for reduced transparency and low-power devices, and text contrast checked against the glass surfaces.                                     |
 | D22 | Component gallery & visual tests | A **built-in, development-only gallery page** in the web app (`/gallery.html`) instead of Ladle. Playwright takes the visual snapshots and runs axe, inside the official Playwright Docker image, locally and in CI.                                                                                                                                                                                                     | Ladle 5 pins Vite 6 and pulls in about 40 packages, including its own React plugin; the built-in page uses the app's own Vite 8 and Tailwind pipeline. Running Playwright in one fixed image keeps screenshots pixel-identical on every machine. |
+| D23 | Drag and drop (Phase 3)          | **A small pointer-events module of our own** (`apps/web/src/lib/dnd.ts`) instead of dnd-kit. Drop targets are plain `data-drop-*` attributes read under the pointer, so rows register nothing; touch drags start after a long press, and the drop zones (before / inside / after) follow §9.11's forgiving targets.                                                                                                      | Less memory and JavaScript than a library that tracks every row, which matters with 1,000-page sections; the same module will serve the Kanban board.                                                                                            |
 
 ---
 
@@ -248,7 +249,7 @@ memora/
 1. **By design**
    - Code only uses relative paths or fixed container paths such as `/data`.
    - The session secret is generated on first start and stored in `/data/secrets/`. It never appears in environment files or compose files.
-   - Examples use placeholders only: `<nas-ip>`, `notes.example.com`, `<your-github-user>`.
+   - Examples use placeholders only: `<nas-ip>`, `notes.example.com`. Images point at the project's own `ghcr.io/dreamtheater484/memora`.
 2. **`.gitignore`** (§6.4) excludes data, builds, environment files and local tool configuration.
 3. **Git identity.** A repo-local `user.email` set to your GitHub **noreply** address, checked automatically by the pre-commit hook (`scripts/check-git-identity.mjs`). CI checks the author and committer of every commit. Also turn on GitHub's _"Block command line pushes that expose my email"_.
 4. **Pre-commit hook** (lefthook):
@@ -788,13 +789,13 @@ My Notebook/
 
 ### 9.12 Workspace & responsive layouts
 
-| Breakpoint | Width                                      | Layout                                                                                                                                                                                                                         |
-| ---------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Phone      | < 640 px                                   | Drill-down navigation (Notebooks → Sections → Pages → Page). Bottom navigation bar: Notes · Search · Boards · Recent. The editor is full screen, with the toolbar pinned above the on-screen keyboard. Sheets replace dialogs. |
-| Tablet     | 640–1023 px                                | Page list and notebook rail slide in as overlays. The editor takes most of the width. Portrait uses Source/Preview, landscape uses Split.                                                                                      |
-| Desktop    | 1024–1919 px                               | Notebook rail · section tabs · page list (right) · editor.                                                                                                                                                                     |
-| Wide       | 1920–3199 px                               | Adds an optional right-hand info panel (outline, backlinks, linked cards, history). Two panes can sit side by side.                                                                                                            |
-| Ultra-wide | ≥ 3200 px (for example DQHD 5120×1440, 4K) | **Multi-pane workspace.** 3–4 panes side by side by default, for example: notes ‖ Kanban board ‖ reference note ‖ outline.                                                                                                     |
+| Breakpoint | Width                                      | Layout                                                                                                                                                                                                                                                         |
+| ---------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phone      | < 640 px                                   | Drill-down navigation (Notebooks → Sections → Pages → Page). Bottom navigation bar: Notes · Search · Boards · Inbox (Recent joins search in Phase 8). The editor is full screen, with the toolbar pinned above the on-screen keyboard. Sheets replace dialogs. |
+| Tablet     | 640–1023 px                                | Page list and notebook rail slide in as overlays. The editor takes most of the width. Portrait uses Source/Preview, landscape uses Split.                                                                                                                      |
+| Desktop    | 1024–1919 px                               | Notebook rail · section tabs · page list (right) · editor.                                                                                                                                                                                                     |
+| Wide       | 1920–3199 px                               | Adds an optional right-hand info panel (outline, backlinks, linked cards, history). Two panes can sit side by side.                                                                                                                                            |
+| Ultra-wide | ≥ 3200 px (for example DQHD 5120×1440, 4K) | **Multi-pane workspace.** 3–4 panes side by side by default, for example: notes ‖ Kanban board ‖ reference note ‖ outline.                                                                                                                                     |
 
 - **Panes.**
   - Split a pane by dragging a tab to the edge, from a menu, or with `Ctrl/Cmd+\`. Resize by dragging the dividers.
@@ -964,7 +965,7 @@ All endpoints sit under `/api/v1`. They use JSON validated by zod, return errors
 ```yaml
 services:
   memora:
-    image: ghcr.io/<your-github-user>/memora:1
+    image: ghcr.io/dreamtheater484/memora:1
     container_name: memora
     restart: unless-stopped
     ports:
@@ -1170,7 +1171,7 @@ Long lists (pages, search results, cards) render only what is visible on screen.
 - [x] Account page: password, display name, sessions list with revoke
 - [x] Admin page: user list, create, disable, delete, reset password (forced change), roles. _Plus the audit log viewer._
 - [x] `memora-admin` command-line tool (reset-password, list-users). _Plus `hash-benchmark`, to check the password hashing cost on the NAS._
-- [x] Owner-scoped repository layer, with cross-user access tests as a CI gate. _The gate lists every API route and fails for one without a rule; the notes tables join it in Phase 3._
+- [x] Owner-scoped repository layer, with cross-user access tests as a CI gate. _The gate lists every API route and fails for one without a rule; the notes routes joined it in Phase 3._
 - [x] CI publishes an `:edge` image to GHCR (amd64 primary, plus arm64). _Built natively on both architectures after CI passes on `main`. Still to do by you: make the package public, or log in on the NAS with a read-only token._
 - [ ] Local certificate authority and certificate for the NAS; HTTPS through the Synology reverse proxy; root certificate installed on Windows 11, Ubuntu, Android and iOS (documented step by step). _The guide is in `SETUP.md` and the OpenSSL commands are tested. Still to do by you on the NAS and devices._
 - [ ] **First deployment to the Synology NAS** using the draft `SETUP.md`, reached over the LAN and over WireGuard. _Still to do by you, with the checklist in `SETUP.md`._
@@ -1179,27 +1180,27 @@ Long lists (pages, search results, cards) render only what is visible on screen.
 
 - The setup code cannot be skipped. _Covered by server tests and the Docker smoke test._
 - Brute-force attempts slow down. _Covered by server tests: per username, per address and for the setup code._
-- A second test user cannot reach the first user's data. _Covered for sessions and accounts by the access tests; notes follow in Phase 3._
+- A second test user cannot reach the first user's data. _Covered for sessions, accounts and notes by the access tests._
 - The app runs on the NAS over HTTPS. _Waiting for the first deployment._
 
 ### Phase 3 — Notebook organisation · L
 
-- [ ] Notebooks: create, rename, delete, colour, icon, reorder
-- [ ] Section groups (nested) and sections as coloured top tabs: reorder by dragging, move between notebooks and groups, overflow behaviour
-- [ ] Page list (right by default, configurable): subpages up to 3 levels, drag reorder, indent/outdent, multi-select, snippets
-- [ ] Page header: title, created/modified dates, tags placeholder, menu
-- [ ] Move/copy dialog with search; duplicate; soft delete
-- [ ] Inbox section per user and quick capture
-- [ ] Context menus and keyboard shortcuts, plus a reference sheet (`?`)
-- [ ] Server-side UI state per user (last page, expanded groups)
-- [ ] Phone drill-down navigation with bottom nav; tablet overlays
-- [ ] `GET /tree` endpoint optimised for fast startup
+- [x] Notebooks: create, rename, delete, colour, icon, reorder. _A new notebook comes with a first section, so there is always somewhere to write._
+- [x] Section groups (nested) and sections as coloured top tabs: reorder by dragging, move between notebooks and groups, overflow behaviour. _Groups nest up to four levels. A group's tab shows where you are ("Clients › Acme") and opens a menu of its sections; an overflow menu lists every section when the tabs don't fit._
+- [x] Page list (right by default, configurable): subpages up to 3 levels, drag reorder, indent/outdent, multi-select, snippets. _Drag and drop is our own small module (D23)._
+- [x] Page header: title, created/modified dates, tags placeholder, menu. _The edit / split / preview switch stays hidden until the Markdown editor (Phase 5); page text shows read-only until then._
+- [x] Move/copy dialog with search; duplicate; soft delete. _Pages move, copy and delete in batches (`POST /pages/move`, `/pages/copy`, `/pages/delete`). Every delete offers Undo through `POST /trash/restore`; the recycle bin screen comes in Phase 7._
+- [x] Inbox section per user and quick capture. _Quick note: `Ctrl/Cmd+Alt+N` anywhere, or the pen button on phones._
+- [x] Context menus and keyboard shortcuts, plus a reference sheet (`?`). _One table drives both the keys and the sheet._
+- [x] Server-side UI state per user (last page, expanded groups). _`GET`/`PATCH /settings`: the last section, the last page in each section, expanded notebooks and groups, and the page list side._
+- [x] Phone drill-down navigation with bottom nav; tablet overlays. _Each level has its own address, so the back button works; long-press an item for its menu._
+- [x] `GET /tree` endpoint optimised for fast startup. _Page metadata only (with a 140-character snippet); 1,000 pages answer in about 10 ms on a laptop._
 
 **Acceptance:**
 
-- The whole hierarchy can be managed with mouse, touch and keyboard.
-- Layouts are correct at all breakpoints.
-- Opening a notebook with 1,000 pages takes under 300 ms.
+- The whole hierarchy can be managed with mouse, touch and keyboard. _End-to-end tests cover tabs, group menus, search, the page list (open, indent, multi-select, delete and Undo), the move dialog, new sections, quick notes and phone drill-down._
+- Layouts are correct at all breakpoints. _Baselines at phone, desktop, wide and ultra-wide in both themes, plus the first-run screen._
+- Opening a notebook with 1,000 pages takes under 300 ms. _An end-to-end test opens a section with 1,000 pages: about 35 ms until drawn on a desktop, and about 120 ms with the CPU slowed four times, as on a CI runner or a phone (the middle of three tries). The page list builds rows as they scroll into view or the keyboard reaches them; two more tests cover scrolling to the end and jumping there with End._
 
 ### Phase 4 — Save & sync engine · L
 

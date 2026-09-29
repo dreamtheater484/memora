@@ -3,13 +3,21 @@ import { uuidv7 } from '@memora/shared';
 import { and, count, desc, eq, isNull, lt, max, ne, sql } from 'drizzle-orm';
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type { SqliteDatabase } from '../db/client';
-import { auditLog, sessions, users, type SessionRow, type UserRow } from '../db/schema';
+import {
+  auditLog,
+  sessions,
+  userSettings,
+  users,
+  type SessionRow,
+  type UserRow,
+} from '../db/schema';
 
 /*
- * The repository layer: the only code that queries the database for users, sessions and the
- * audit log. It is **owner-scoped**: every method that reads or changes one user's data takes
- * that user's id and filters on it, so a route can never reach another user's rows by passing
- * a foreign id. Cross-user tests (auth/access.test.ts) check this for every route.
+ * The repository layer: the only code that queries the database for users, sessions, settings
+ * and the audit log (notes have their own service in `notes/service.ts`). It is
+ * **owner-scoped**: every method that reads or changes one user's data takes that user's id
+ * and filters on it, so a route can never reach another user's rows by passing a foreign id.
+ * Cross-user tests (auth/access.test.ts) check this for every route.
  */
 
 export type Orm = BetterSQLite3Database;
@@ -294,10 +302,41 @@ export class AuditRepo {
   }
 }
 
+/** One JSON value per user and key; callers validate what they read back. */
+export class SettingsRepo {
+  constructor(
+    private readonly orm: Orm,
+    private readonly now: () => number,
+  ) {}
+
+  get(userId: string, key: string): unknown {
+    const row = this.orm
+      .select({ valueJson: userSettings.valueJson })
+      .from(userSettings)
+      .where(and(eq(userSettings.userId, userId), eq(userSettings.key, key)))
+      .get();
+    return row ? (JSON.parse(row.valueJson) as unknown) : undefined;
+  }
+
+  set(userId: string, key: string, value: unknown): void {
+    const valueJson = JSON.stringify(value);
+    const updatedAt = this.now();
+    this.orm
+      .insert(userSettings)
+      .values({ userId, key, valueJson, updatedAt })
+      .onConflictDoUpdate({
+        target: [userSettings.userId, userSettings.key],
+        set: { valueJson, updatedAt },
+      })
+      .run();
+  }
+}
+
 export interface Repos {
   users: UsersRepo;
   sessions: SessionsRepo;
   audit: AuditRepo;
+  settings: SettingsRepo;
 }
 
 export function createRepos(orm: Orm, now: () => number): Repos {
@@ -305,5 +344,6 @@ export function createRepos(orm: Orm, now: () => number): Repos {
     users: new UsersRepo(orm, now),
     sessions: new SessionsRepo(orm, now),
     audit: new AuditRepo(orm, now),
+    settings: new SettingsRepo(orm, now),
   };
 }

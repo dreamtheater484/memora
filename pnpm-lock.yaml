@@ -166,6 +166,9 @@ importers:
 
   packages/shared:
     dependencies:
+      fractional-indexing:
+        specifier: ^4.0.0
+        version: 4.0.0
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -2598,6 +2601,10 @@ packages:
 
   flatted@3.4.4:
     resolution: {integrity: sha512-5+ybhBZANEJxaH3X5evAFatUxLfEHSr7n6kYJ+1Qd0mUqr4eu9gIf6GDbWHf8RJijHrjjO8G+la14SlL2SeS1Q==}
+
+  fractional-indexing@4.0.0:
+    resolution: {integrity: sha512-Nr2P1Yyaj2sy1Qdt/wI3GcByxrUdbSKg5+cGvw8f18hT2SkQt6V72iOjBpk7IO3UkzBsdlGRs2a4z6dLrJprgw==}
+    engines: {node: ^14.13.1 || >=16.0.0}
 
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
@@ -5894,6 +5901,8 @@ snapshots:
       hookified: 1.15.1
 
   flatted@3.4.4: {}
+
+  fractional-indexing@4.0.0: {}
 
   fsevents@2.3.3:
     optional: true

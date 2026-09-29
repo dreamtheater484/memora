@@ -1,54 +1,76 @@
 import { create } from 'zustand';
-import { flatPages } from './demo';
 
-export type ShellView = { kind: 'notes' } | { kind: 'board'; boardId: string };
+/** A dialog the shell shows; at most one at a time. */
+export type ShellDialog =
+  | { kind: 'notebook'; notebookId?: string }
+  | { kind: 'move'; type: 'pages' | 'section' | 'group'; ids: string[] }
+  | { kind: 'quick-note' }
+  | { kind: 'shortcuts' };
+
+/** Where an item is renamed in place: its tab, its navigation row, or a phone list heading. */
+export type RenameWhere = 'tabs' | 'nav' | 'list';
+
+export interface Renaming {
+  kind: 'section' | 'group';
+  id: string;
+  where: RenameWhere;
+}
 
 interface ShellState {
-  view: ShellView;
-  sectionId: string;
-  pageId: string | null;
   /** Drawers, used below the desktop breakpoint. */
   navOpen: boolean;
   pagesOpen: boolean;
   paletteOpen: boolean;
-  /** Second editor pane on ultra-wide screens. */
+  dialog: ShellDialog | null;
+  renaming: Renaming | null;
+  /** The page whose title is being edited in the page header. */
+  editingTitle: string | null;
+  /** Pages selected together in the page list (besides the open one). */
+  selection: string[];
+  /** Where a Shift+click range starts. */
+  anchor: string | null;
+  /** Second editor pane on ultra-wide screens, and the page open there. */
   secondPane: boolean;
+  secondPageId: string | null;
   /** Share of the main pane when the second pane is open, in percent. */
   split: number;
 
-  openSection: (id: string) => void;
-  openPage: (id: string) => void;
-  openBoard: (id: string) => void;
   setNavOpen: (open: boolean) => void;
   setPagesOpen: (open: boolean) => void;
   setPaletteOpen: (open: boolean) => void;
-  setSecondPane: (open: boolean) => void;
+  openDialog: (dialog: ShellDialog) => void;
+  closeDialog: () => void;
+  setRenaming: (renaming: Renaming | null) => void;
+  setEditingTitle: (pageId: string | null) => void;
+  select: (ids: string[], anchor?: string | null) => void;
+  setSecondPane: (open: boolean, pageId?: string | null) => void;
   setSplit: (size: number) => void;
 }
 
-/** UI state of the app shell (placeholder until routes carry it in Phase 3). */
+/** Layout and transient UI state; where you are lives in the URL. */
 export const useShell = create<ShellState>()((set) => ({
-  view: { kind: 'notes' },
-  sectionId: 'roadmap',
-  pageId: 'q4',
   navOpen: false,
   pagesOpen: false,
   paletteOpen: false,
+  dialog: null,
+  renaming: null,
+  editingTitle: null,
+  selection: [],
+  anchor: null,
   secondPane: true,
+  secondPageId: null,
   split: 56,
 
-  openSection: (id) =>
-    set({
-      view: { kind: 'notes' },
-      sectionId: id,
-      pageId: flatPages(id)[0]?.id ?? null,
-      navOpen: false,
-    }),
-  openPage: (id) => set({ view: { kind: 'notes' }, pageId: id, pagesOpen: false }),
-  openBoard: (id) => set({ view: { kind: 'board', boardId: id }, navOpen: false }),
   setNavOpen: (navOpen) => set({ navOpen }),
   setPagesOpen: (pagesOpen) => set({ pagesOpen }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
-  setSecondPane: (secondPane) => set({ secondPane }),
+  openDialog: (dialog) => set({ dialog, paletteOpen: false }),
+  closeDialog: () => set({ dialog: null }),
+  setRenaming: (renaming) => set({ renaming }),
+  setEditingTitle: (editingTitle) => set({ editingTitle }),
+  select: (selection, anchor) =>
+    set((s) => ({ selection, anchor: anchor === undefined ? s.anchor : anchor })),
+  setSecondPane: (secondPane, pageId) =>
+    set((s) => ({ secondPane, secondPageId: pageId === undefined ? s.secondPageId : pageId })),
   setSplit: (split) => set({ split }),
 }));

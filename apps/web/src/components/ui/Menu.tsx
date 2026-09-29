@@ -9,6 +9,19 @@ import { floatingPanel, menuItem, menuLabel, menuSeparator } from './styles';
  * Both come from Radix, which handles keyboard navigation, type-ahead and focus.
  */
 
+/**
+ * On close, Radix returns focus to what opened the menu. When a menu item opened a text
+ * field (Rename, New section), that field keeps the focus instead.
+ */
+function keepFieldFocus(onCloseAutoFocus?: (event: Event) => void) {
+  return (event: Event) => {
+    onCloseAutoFocus?.(event);
+    if (document.activeElement?.matches('input, textarea, [contenteditable="true"]')) {
+      event.preventDefault();
+    }
+  };
+}
+
 interface ItemExtras {
   icon?: ReactNode;
   /** Shortcut shown on the right, for example "Ctrl D". */
@@ -42,6 +55,7 @@ export const MenuRadioGroup = DM.RadioGroup;
 export function MenuContent({
   className,
   sideOffset = 6,
+  onCloseAutoFocus,
   ...props
 }: ComponentProps<typeof DM.Content>) {
   return (
@@ -54,6 +68,7 @@ export function MenuContent({
           'min-w-48 p-1 origin-(--radix-dropdown-menu-content-transform-origin)',
           className,
         )}
+        onCloseAutoFocus={keepFieldFocus(onCloseAutoFocus)}
         {...props}
       />
     </DM.Portal>
@@ -149,7 +164,11 @@ export const ContextMenuTrigger = CM.Trigger;
 export const ContextMenuGroup = CM.Group;
 export const ContextMenuSub = CM.Sub;
 
-export function ContextMenuContent({ className, ...props }: ComponentProps<typeof CM.Content>) {
+export function ContextMenuContent({
+  className,
+  onCloseAutoFocus,
+  ...props
+}: ComponentProps<typeof CM.Content>) {
   return (
     <CM.Portal>
       <CM.Content
@@ -159,6 +178,7 @@ export function ContextMenuContent({ className, ...props }: ComponentProps<typeo
           'min-w-48 p-1 origin-(--radix-context-menu-content-transform-origin)',
           className,
         )}
+        onCloseAutoFocus={keepFieldFocus(onCloseAutoFocus)}
         {...props}
       />
     </CM.Portal>

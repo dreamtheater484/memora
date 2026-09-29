@@ -24,6 +24,8 @@ export const API_ERROR_CODES = [
   'wrong_password',
   'username_taken',
   'last_admin',
+  'invalid_move',
+  'too_deep',
   'internal',
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
