@@ -1,6 +1,10 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
+import { jumpTo } from '../editor/jumps';
 import { sectionHeading } from '../components/ui/styles';
 import { cn } from '../lib/cn';
+import { useSettled } from '../lib/useSettled';
+import { OutlineList } from '../markdown/OutlineList';
+import { headingsOf, statsOf } from '../markdown/outline';
 import { formatDateTime } from '../lib/time';
 import { useDocSnapshot, usePageDoc } from '../sync/hooks';
 import { useCurrent } from './location';
@@ -18,13 +22,15 @@ const Later = ({ children }: { children: ReactNode }) => (
   <p className="text-xs text-fg-3">{children}</p>
 );
 
-/** Page details on wide screens: information now; outline, links and history as they arrive. */
+/** Page details on wide screens: information and the outline; links and history as they arrive. */
 export function Inspector() {
   const { page, path } = useCurrent();
   const doc = usePageDoc(page?.type === 'markdown' ? page.id : null);
   // As stored on this device: follows typing within a moment.
-  const text = useDocSnapshot(doc)?.record?.content.trim();
-  const words = text ? text.split(/\s+/).length : 0;
+  // Counted once typing pauses: long pages take a moment.
+  const text = useSettled(useDocSnapshot(doc)?.record?.content, 400);
+  const stats = useMemo(() => (text === undefined ? null : statsOf(text)), [text]);
+  const headings = useMemo(() => (text === undefined ? [] : headingsOf(text)), [text]);
   return (
     <aside
       aria-label="Page details"
@@ -49,10 +55,12 @@ export function Inspector() {
             <dd>{formatDateTime(page.updatedAt)}</dd>
             <dt className="text-fg-3">Type</dt>
             <dd>{page.type === 'markdown' ? 'Markdown' : 'Rich text'}</dd>
-            {text !== undefined && page.type === 'markdown' && (
+            {stats && page.type === 'markdown' && (
               <>
                 <dt className="text-fg-3">Words</dt>
-                <dd className="tabular-nums">{words}</dd>
+                <dd className="tabular-nums">
+                  {stats.words.toLocaleString()} · {stats.minutes} min read
+                </dd>
               </>
             )}
           </dl>
@@ -61,7 +69,13 @@ export function Inspector() {
         <Later>Open a page to see its details.</Later>
       )}
       <Block title="Outline">
-        <Later>The page’s headings appear here with the editors (Phase 5).</Later>
+        {page?.type === 'markdown' ? (
+          <div className="-mx-2">
+            <OutlineList headings={headings} onJump={(line) => jumpTo(page.id, line)} />
+          </div>
+        ) : (
+          <Later>Headings of Markdown pages appear here.</Later>
+        )}
       </Block>
       <Block title="Backlinks">
         <Later>Pages and cards that link here arrive in Phase 8.</Later>

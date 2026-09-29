@@ -84,7 +84,7 @@ export class FakeNotes {
     seed: 'demo' | 'empty' = 'demo',
   ) {
     this.tree = { inboxId: 'inbox', notebooks: [], groups: [], sections: [], pages: [] };
-    this.settings = { ui: {} };
+    this.settings = { ui: {}, editor: {} };
     this.tree.sections.push(this.section('inbox', 'Inbox', 'slate', null, null, 'a0'));
     if (seed === 'demo') this.seedDemo();
   }
@@ -114,8 +114,12 @@ export class FakeNotes {
     if (route === 'GET /settings') return { json: this.settings };
     if (route === 'PATCH /settings') {
       const ui = (body.ui ?? {}) as Settings['ui'];
+      const editor = (body.editor ?? {}) as Settings['editor'];
       const lastPages = { ...this.settings.ui.lastPages, ...ui.lastPages };
-      this.settings = { ui: { ...this.settings.ui, ...ui, lastPages } };
+      this.settings = {
+        ui: { ...this.settings.ui, ...ui, lastPages },
+        editor: { ...this.settings.editor, ...editor },
+      };
       return { json: this.settings };
     }
     if (route === 'POST /pages/move') return this.movePages(body);
@@ -560,6 +564,7 @@ export class FakeNotes {
         expanded: ['work'],
         pageListSide: 'right',
       },
+      editor: {},
     };
   }
 }
