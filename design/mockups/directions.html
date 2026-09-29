@@ -2324,7 +2324,7 @@
     flex: 1;
     min-height: 0;
     display: flex;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 12px;
     padding: 4px 20px 20px;
     overflow-x: auto;
@@ -2335,13 +2335,25 @@
     flex-direction: column;
     flex: 1 0 280px;
     max-width: 400px;
-    max-height: 100%;
+    min-height: 0;
     border-radius: var(--radius);
     background: var(--col-bg);
     transition: box-shadow 0.15s;
   }
+  /* The whole column, down to the bottom of the board, is the drop zone. */
+  .col::after {
+    content: '';
+    flex: 1;
+  }
   .col.drop {
     box-shadow: inset 0 0 0 2px var(--focus);
+    background: color-mix(in oklab, var(--col-bg), var(--focus) 6%);
+  }
+  .drop-slot {
+    flex: none;
+    border-radius: calc(var(--radius-sm) + 2px);
+    border: 2px dashed color-mix(in oklab, var(--focus) 70%, transparent);
+    background: color-mix(in oklab, var(--focus) 8%, transparent);
   }
   .col-head {
     flex: none;
@@ -2370,7 +2382,7 @@
     color: var(--danger);
   }
   .col-body {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-height: 24px;
     overflow: auto;
     display: flex;
@@ -2416,7 +2428,7 @@
       var(--shadow-card);
   }
   .card.dragging {
-    opacity: 0.4;
+    opacity: 0.3;
   }
   .card.hidden {
     display: none;
@@ -5048,33 +5060,74 @@ status.set(pending === <span class="t-num">0</span> ? <span class="t-str">'saved
       }
     });
 
-    /* Drag and drop between columns (mouse; phones use tap to open). */
+    /* Drag and drop between columns (mouse; phones use tap to open).
+       Forgiving by design: the column under the pointer (or the nearest one when
+       the pointer is in a gap) is the target, the placeholder shows where the card
+       lands, and releasing anywhere on the board drops into the highlighted column. */
+    let drop = null;
+    const slot = document.createElement('div');
+    slot.className = 'drop-slot';
+    function clearDrop() {
+      drop = null;
+      slot.remove();
+      app.querySelectorAll('.col.drop').forEach((el) => el.classList.remove('drop'));
+    }
+    function dropTarget(board, x, y) {
+      let col = null;
+      let best = Infinity;
+      for (const c of board.querySelectorAll('.col')) {
+        const r = c.getBoundingClientRect();
+        const d = x < r.left ? r.left - x : x > r.right ? x - r.right : 0;
+        if (d < best) [best, col] = [d, c];
+      }
+      if (!col) return null;
+      const before = [...col.querySelectorAll('.card[data-card]')].find((c) => {
+        if (c.dataset.card === S.drag) return false;
+        const r = c.getBoundingClientRect();
+        return y < r.top + r.height / 2;
+      });
+      return { col, before: before ? before.dataset.card : null };
+    }
     app.addEventListener('dragstart', (e) => {
       const c = e.target.closest?.('.card[data-card]');
       if (!c) return;
       S.drag = c.dataset.card;
+      slot.style.height = c.offsetHeight + 'px';
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', S.drag);
       requestAnimationFrame(() => c.classList.add('dragging'));
     });
     app.addEventListener('dragend', () => {
       S.drag = null;
-      app.querySelectorAll('.dragging, .drop').forEach((el) => el.classList.remove('dragging', 'drop'));
+      clearDrop();
+      app.querySelectorAll('.dragging').forEach((el) => el.classList.remove('dragging'));
     });
     app.addEventListener('dragover', (e) => {
-      const col = e.target.closest?.('.col');
-      if (!col || !S.drag) return;
+      if (!S.drag) return;
+      const board = e.target.closest?.('.kb-cols');
+      if (!board) return clearDrop();
       e.preventDefault();
-      app.querySelectorAll('.col.drop').forEach((el) => el !== col && el.classList.remove('drop'));
-      col.classList.add('drop');
+      e.dataTransfer.dropEffect = 'move';
+      const t = dropTarget(board, e.clientX, e.clientY);
+      if (!t) return clearDrop();
+      // Scroll the board when the pointer nears its left or right edge.
+      const br = board.getBoundingClientRect();
+      if (e.clientX < br.left + 56) board.scrollLeft -= 24;
+      else if (e.clientX > br.right - 56) board.scrollLeft += 24;
+      if (drop && drop.col === t.col && drop.before === t.before) return;
+      drop = t;
+      app.querySelectorAll('.col.drop').forEach((el) => el !== t.col && el.classList.remove('drop'));
+      t.col.classList.add('drop');
+      const body = t.col.querySelector('.col-body');
+      const ref = t.before ? body.querySelector(`[data-card="${t.before}"]`) : null;
+      body.insertBefore(slot, ref);
     });
     app.addEventListener('drop', (e) => {
-      const col = e.target.closest?.('.col');
-      if (!col || !S.drag) return;
+      if (!S.drag || !drop) return;
       e.preventDefault();
-      const before = e.target.closest('.card[data-card]')?.dataset.card;
-      moveCard(S.drag, col.dataset.col, before);
+      moveCard(S.drag, drop.col.dataset.col, drop.before);
       S.drag = null;
+      clearDrop();
       render();
     });
     app.addEventListener(
