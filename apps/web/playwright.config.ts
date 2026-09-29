@@ -24,6 +24,9 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${port}`,
     // Our CSS shortens every animation and transition under reduced motion.
     reducedMotion: 'reduce',
+    // Dates and times on screen look the same wherever the tests run.
+    locale: 'en-US',
+    timezoneId: 'UTC',
     trace: 'retain-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],

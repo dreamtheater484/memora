@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { THEMES, expectNoA11yViolations, openShell } from './helpers';
+import { THEMES, expectNoA11yViolations, mockApi, openShell } from './helpers';
 
 // The three sizes from the mockups plus the wide breakpoint (§9.12).
 const SIZES = [
@@ -60,6 +60,8 @@ test.describe('behaviour', () => {
   });
 
   test('shows offline when the server does not answer', async ({ page }) => {
+    await mockApi(page);
+    // Registered last, so it answers before the fake server does.
     await page.route('**/api/health', (route) => route.abort());
     await page.goto('/');
     await expect(page.getByRole('banner').getByText('Offline', { exact: true })).toBeVisible({
