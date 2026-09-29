@@ -95,3 +95,5 @@ jobs:
         run: docker build -f docker/Dockerfile -t memora:ci .
       - name: Smoke test
         run: ./docker/smoke-test.sh memora:ci
+      - name: Restore drill
+        run: ./docker/restore-drill.sh memora:ci
