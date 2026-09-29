@@ -1,0 +1,24 @@
+# Memora — example Docker Compose file. See docs/SETUP.md for the full guide.
+#
+# Until published images are available, this builds Memora from a checkout of the repository
+# (keep this file in the repository's docker/ folder). Values marked "change me" are yours to set.
+
+services:
+  memora:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: memora:local
+    # Later: image: ghcr.io/<owner>/memora:latest   (and remove the build: section)
+    container_name: memora
+    restart: unless-stopped
+    ports:
+      - '3000:3000' # host:container — change the left number if 3000 is taken
+    environment:
+      PUID: '1000' # change me: numeric user id that owns ./data on the host
+      PGID: '1000' # change me: numeric group id
+      TZ: 'Etc/UTC' # change me: e.g. Europe/Paris
+      # MEMORA_BASE_URL: 'https://notes.example.com'
+      # MEMORA_MAX_HEAP_MB: '256' # Node.js heap cap in MB (default 256)
+    volumes:
+      - ./data:/data # everything Memora stores lives here

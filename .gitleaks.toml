@@ -1,0 +1,5 @@
+# gitleaks configuration — used by CI to scan the full git history for secrets.
+title = "Memora"
+
+[extend]
+useDefault = true

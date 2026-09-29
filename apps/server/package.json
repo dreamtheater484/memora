@@ -1,0 +1,28 @@
+{
+  "name": "@memora/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Memora API server. Bundled with esbuild: `dependencies` lists only what stays external at runtime.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/index.ts",
+    "build": "node build.mjs",
+    "start": "node dist/server.mjs",
+    "typecheck": "tsc -p .",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3"
+  },
+  "devDependencies": {
+    "@fastify/static": "^10.1.5",
+    "@memora/shared": "workspace:*",
+    "@types/better-sqlite3": "^9.6.0",
+    "drizzle-kit": "^0.31.11",
+    "drizzle-orm": "^0.45.3",
+    "esbuild": "^0.28.2",
+    "fastify": "^5.12.5",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.5"
+  }
+}

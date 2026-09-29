@@ -1,0 +1,16 @@
+{
+  "name": "@memora/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Code shared by the Memora server and web app: schemas, types and pure helpers.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}

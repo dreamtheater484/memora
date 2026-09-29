@@ -1,0 +1,6 @@
+pnpm-lock.yaml
+apps/server/drizzle/meta/
+dist/
+coverage/
+data/
+backups/

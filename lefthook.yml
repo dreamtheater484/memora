@@ -1,0 +1,33 @@
+# Git hooks, installed automatically by `pnpm install` (see scripts/install-hooks.mjs).
+# Tools run through scripts/run-bin.mjs so the hooks work on Windows and Linux without pnpm on the PATH.
+
+pre-commit:
+  parallel: true
+  commands:
+    git-identity:
+      run: node scripts/check-git-identity.mjs
+    privacy:
+      run: node scripts/check-forbidden.mjs --staged
+    secrets:
+      run: node scripts/run-bin.mjs secretlint --maskSecrets {staged_files}
+    format:
+      glob: '*.{js,mjs,cjs,ts,tsx,json,md,yml,yaml,css,html}'
+      run: node scripts/run-bin.mjs prettier --check {staged_files}
+    lint:
+      glob: '*.{js,mjs,cjs,ts,tsx}'
+      run: node scripts/run-bin.mjs eslint --no-warn-ignored {staged_files}
+
+commit-msg:
+  commands:
+    privacy:
+      run: node scripts/check-forbidden.mjs --message-file {1}
+
+pre-push:
+  parallel: true
+  commands:
+    privacy:
+      run: node scripts/check-forbidden.mjs
+    typecheck:
+      run: node scripts/typecheck.mjs
+    test:
+      run: node scripts/run-bin.mjs vitest run

@@ -1,0 +1,43 @@
+# dependencies & builds
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.vite/
+playwright-report/
+test-results/
+
+# environment & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+secrets/
+
+# local-only files (personal strings list, local deploy settings, …)
+*.local
+*.local.*
+
+# user data — never commit
+data/
+backups/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.memora
+
+# local tooling
+.claude/settings.local.json
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
