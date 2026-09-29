@@ -1,12 +1,12 @@
 import { Outlet, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
-import { HomePage } from './pages/HomePage';
+import { AppShell } from './shell/AppShell';
 
 const rootRoute = createRootRoute({ component: Outlet });
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: HomePage,
+  component: AppShell,
 });
 
 export const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute]) });

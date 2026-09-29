@@ -1,0 +1,157 @@
+/*
+ * Aurora design tokens (decision D21).
+ *
+ * Every colour is written once with light-dark(): the browser picks the light or
+ * dark value from `color-scheme`, which follows the OS unless `data-theme` on
+ * <html> forces one. Components use these through the Tailwind theme in
+ * index.css (bg-surface, text-fg-2, …) or directly as var(--…).
+ */
+
+/* The current section's hue drives the ambient glow and the accent colour.
+   Registered so that changing section animates the colour instead of jumping. */
+@property --ah {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 255;
+}
+@property --ac {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+:root {
+  color-scheme: light dark;
+
+  /* Current section: hue and chroma factor (1 = colourful, low = neutral). */
+  --ah: 255;
+  --ac: 1;
+
+  /* Surfaces. Panels and surfaces are translucent so the glow shows through. */
+  --bg: light-dark(#eef0f6, #0b0c12);
+  --panel: light-dark(rgb(255 255 255 / 0.55), rgb(26 28 40 / 0.55));
+  --surface: light-dark(rgb(255 255 255 / 0.82), rgb(20 22 31 / 0.76));
+  --raised: light-dark(rgb(255 255 255 / 0.9), rgb(32 34 47 / 0.92));
+  --overlay: light-dark(rgb(18 20 30 / 0.28), rgb(0 0 0 / 0.55));
+
+  /* Lines and interaction layers. */
+  --line: light-dark(rgb(30 34 60 / 0.1), rgb(255 255 255 / 0.08));
+  --line-strong: light-dark(rgb(30 34 60 / 0.18), rgb(255 255 255 / 0.16));
+  --hover: light-dark(rgb(30 34 60 / 0.06), rgb(255 255 255 / 0.07));
+  --active: light-dark(rgb(255 255 255 / 0.92), rgb(255 255 255 / 0.11));
+
+  /* Text. fg-3 still meets WCAG AA (4.5:1) on panels in both themes. */
+  --fg: light-dark(#161822, #eef0f7);
+  --fg-2: light-dark(#474c5e, #b0b5c7);
+  --fg-3: light-dark(#5f6477, #8a8fa3);
+
+  /* Accent follows the current section. Lightness is fixed per theme, so the
+     text on it keeps AA contrast whatever the hue. */
+  --accent: light-dark(
+    oklch(0.55 calc(0.17 * var(--ac)) var(--ah)),
+    oklch(0.78 calc(0.13 * var(--ac)) var(--ah))
+  );
+  --on-accent: light-dark(#ffffff, #0b0c12);
+  --accent-soft: light-dark(
+    oklch(0.94 calc(0.045 * var(--ac)) var(--ah)),
+    oklch(0.32 calc(0.07 * var(--ac)) var(--ah))
+  );
+  --mark: light-dark(
+    oklch(0.9 calc(0.08 * var(--ac)) var(--ah)),
+    oklch(0.42 calc(0.1 * var(--ac)) var(--ah) / 0.8)
+  );
+  --focus: var(--accent);
+
+  /* Status colours (AA on light surfaces, and on dark ones in dark mode). */
+  --ok: light-dark(#1e7d52, #6ee7a8);
+  --warn: light-dark(#955400, #f7bf5a);
+  --danger: light-dark(#b82d45, #ff8197);
+
+  /* Glass. Turned off by data-glass="off" or the OS "reduce transparency". */
+  --glass-filter: blur(24px) saturate(1.6);
+  --glass-edge: light-dark(rgb(255 255 255 / 0.8), rgb(255 255 255 / 0.07));
+  --glass-shadow: light-dark(rgb(40 44 90 / 0.14), rgb(0 0 0 / 0.45));
+
+  /* Elevation. */
+  --shadow-card: 0 1px 2px var(--glass-shadow), 0 4px 14px -6px var(--glass-shadow);
+  --shadow-panel: inset 0 1px 0 var(--glass-edge), 0 10px 30px -14px var(--glass-shadow);
+  --shadow-pop: 0 24px 60px -12px light-dark(rgb(20 24 60 / 0.3), rgb(0 0 0 / 0.7));
+
+  /* Code and the Markdown source view. */
+  --code-bg: light-dark(rgb(248 249 253 / 0.65), rgb(8 9 16 / 0.4));
+  --cur-line: light-dark(
+    oklch(0.96 calc(0.03 * var(--ac)) var(--ah) / 0.8),
+    oklch(0.3 calc(0.05 * var(--ac)) var(--ah) / 0.45)
+  );
+
+  /* Logo: the body takes the accent, the two tabs neighbouring hues. */
+  --logo-t1: light-dark(
+    oklch(0.78 calc(0.13 * var(--ac)) calc(var(--ah) + 60)),
+    oklch(0.66 calc(0.13 * var(--ac)) calc(var(--ah) + 60))
+  );
+  --logo-t2: light-dark(
+    oklch(0.84 calc(0.1 * var(--ac)) calc(var(--ah) - 50)),
+    oklch(0.58 calc(0.1 * var(--ac)) calc(var(--ah) - 50))
+  );
+
+  /* Motion (150–250 ms, see §9.13 of the plan). */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-slow: 250ms;
+  --dur-ambient: 900ms;
+
+  transition:
+    --ah var(--dur-ambient) ease,
+    --ac var(--dur-ambient) ease;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+/* Solid surfaces instead of glass: same layout, no blur. */
+:root[data-glass='off'] {
+  --panel: light-dark(#f4f6fb, #161822);
+  --surface: light-dark(#ffffff, #1a1d28);
+  --raised: light-dark(#ffffff, #222533);
+  --glass-filter: none;
+  --glass-edge: light-dark(rgb(30 34 60 / 0.1), rgb(255 255 255 / 0.06));
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root:not([data-glass='on']) {
+    --panel: light-dark(#f4f6fb, #161822);
+    --surface: light-dark(#ffffff, #1a1d28);
+    --raised: light-dark(#ffffff, #222533);
+    --glass-filter: none;
+    --glass-edge: light-dark(rgb(30 34 60 / 0.1), rgb(255 255 255 / 0.06));
+  }
+}
+
+/*
+ * Section colours. Any element with class "hue" and an inline --h (hue) and
+ * optional --c (chroma factor) gets its own --sec, --sec-soft, --sec-softer and
+ * --sec-ink. See src/theme/sections.ts for the 12 named colours.
+ */
+.hue {
+  --c: 1;
+  --sec: light-dark(
+    oklch(0.64 calc(0.15 * var(--c)) var(--h)),
+    oklch(0.74 calc(0.13 * var(--c)) var(--h))
+  );
+  --sec-soft: light-dark(
+    oklch(0.95 calc(0.035 * var(--c)) var(--h)),
+    oklch(0.3 calc(0.05 * var(--c)) var(--h))
+  );
+  --sec-softer: light-dark(
+    oklch(0.977 calc(0.015 * var(--c)) var(--h)),
+    oklch(0.225 calc(0.018 * var(--c)) var(--h))
+  );
+  --sec-ink: light-dark(
+    oklch(0.42 calc(0.11 * var(--c)) var(--h)),
+    oklch(0.88 calc(0.07 * var(--c)) var(--h))
+  );
+}

@@ -7,7 +7,14 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
-  globalIgnores(['**/dist/', '**/coverage/', 'apps/server/drizzle/']),
+  globalIgnores([
+    '**/dist/',
+    '**/dist-gallery/',
+    '**/coverage/',
+    '**/playwright-report/',
+    '**/test-results/',
+    'apps/server/drizzle/',
+  ]),
   js.configs.recommended,
   tseslint.configs.recommended,
   {

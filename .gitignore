@@ -1,6 +1,7 @@
 # dependencies & builds
 node_modules/
 dist/
+dist-gallery/
 build/
 coverage/
 *.tsbuildinfo

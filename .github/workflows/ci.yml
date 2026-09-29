@@ -53,6 +53,34 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+  e2e:
+    name: Visual & accessibility (Playwright)
+    runs-on: ubuntu-latest
+    # Same image as `pnpm test:visual`, so screenshots match the committed baselines.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      # Only the web app and its workspace dependencies: the image has no
+      # compiler for the server's native better-sqlite3 module.
+      - run: pnpm install --frozen-lockfile --filter "@memora/web..."
+      - run: pnpm --filter @memora/web test:e2e
+      - name: Upload the report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7
+
   docker:
     name: Docker image
     runs-on: ubuntu-latest

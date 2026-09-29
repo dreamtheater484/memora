@@ -20,7 +20,7 @@
 
   Without enabling it, you can also prefix every command with `corepack`, for example `corepack pnpm install`. Root scripts that call `pnpm` internally (such as `pnpm build`) only work once pnpm is on the `PATH`.
 
-- **Docker** (optional), to build and test the container image.
+- **Docker** (optional), to build and test the container image and to run the visual tests.
 
 Development works the same on Windows 11 and Ubuntu. All scripts are cross-platform Node.js scripts, and `.gitattributes` enforces LF line endings.
 
@@ -36,24 +36,65 @@ pnpm install
 pnpm dev
 ```
 
-| Command                                        | What it does                                                                                      |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `pnpm dev`                                     | API at `http://localhost:3000` (auto-restart) and web app at `http://localhost:5173` (hot reload) |
-| `pnpm build`                                   | Production build: `apps/web/dist` and the bundled server at `apps/server/dist/server.mjs`         |
-| `pnpm start`                                   | Runs the production build (serves the web app too)                                                |
-| `pnpm test`                                    | Unit and integration tests (Vitest)                                                               |
-| `pnpm lint` / `pnpm format` / `pnpm typecheck` | Code quality                                                                                      |
-| `pnpm check`                                   | Everything above plus the privacy checks, which is what CI runs                                   |
-| `pnpm db:generate`                             | Creates a migration after changing `apps/server/src/db/schema.ts`                                 |
-| `pnpm docker:build`                            | Builds the Docker image as `memora:local`                                                         |
+| Command                                        | What it does                                                                                              |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                                     | API at `http://localhost:3000` (auto-restart) and web app at `http://localhost:5173` (hot reload)         |
+| `pnpm build`                                   | Production build: `apps/web/dist` and the bundled server at `apps/server/dist/server.mjs`                 |
+| `pnpm start`                                   | Runs the production build (serves the web app too)                                                        |
+| `pnpm test`                                    | Unit and integration tests (Vitest)                                                                       |
+| `pnpm test:visual`                             | Visual snapshots and accessibility checks (Playwright in Docker, see [below](#web-app-and-design-system)) |
+| `pnpm lint` / `pnpm format` / `pnpm typecheck` | Code quality                                                                                              |
+| `pnpm check`                                   | Everything above plus the privacy checks, which is what CI runs                                           |
+| `pnpm db:generate`                             | Creates a migration after changing `apps/server/src/db/schema.ts`                                         |
+| `pnpm docker:build`                            | Builds the Docker image as `memora:local`                                                                 |
 
 In development the server stores its data in `apps/server/data/`. That folder is gitignored.
+
+## Branches and pull requests
+
+`main` only changes through pull requests.
+
+1. Create a branch from an up-to-date `main`, named after the change, for example `feat/phase-2-auth` or `fix/save-indicator-offline`.
+2. Make several small, focused commits. Each one should build and pass the hooks.
+3. Push the branch and open a pull request against `main`. Describe what changed, why, and how you verified it (tests, screenshots for visual changes).
+4. Merge once CI is green.
+
+Branch names, commit messages and pull request text are public too: the [privacy rules](#privacy-guards-read-this) apply to them.
+
+## Web app and design system
+
+The interface follows the Aurora design (decision D21 in the plan). Its building blocks live in `apps/web/src`:
+
+| Folder           | What it holds                                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `styles/`        | Design tokens (`tokens.css`: colours with `light-dark()`, glass, elevation, motion) and the Tailwind theme (`index.css`) |
+| `theme/`         | The 12 section colours and the appearance store (theme, glass effects)                                                   |
+| `components/ui/` | Core components (buttons, menus, dialogs, section tabs, page tree, command palette, save indicator, split pane, …)       |
+| `shell/`         | The responsive app shell (currently with placeholder content)                                                            |
+| `gallery/`       | The component gallery                                                                                                    |
+
+Some rules of thumb:
+
+- Use the token utilities (`bg-surface`, `text-fg-2`, `border-line`, `bg-sec-soft` inside an element with class `hue`). Tailwind's default palette is switched off on purpose.
+- There is no class-merging helper, so don't pass a class that competes with one a component already sets (for example a second `rounded-*`). Add a prop to the component instead.
+- Every interactive element needs a keyboard path and an accessible name. Icon-only buttons use `IconButton`, which requires a `label`.
+
+**Component gallery.** With `pnpm dev` running, open `http://localhost:5173/gallery.html`. It shows every component in light and dark, with glass on or off, and in any section colour. URL parameters fix these for screenshots: `?theme=dark&glass=off&accent=teal`. The gallery is not part of the production build.
+
+**Visual and accessibility tests.** `apps/web/e2e` has Playwright tests: screenshots of the gallery and of the shell at phone, desktop, wide and ultra-wide sizes in both themes, axe accessibility checks and some behaviour tests. Screenshots depend on fonts and rendering, so they always run in the pinned Playwright Docker image, locally and in CI:
+
+```bash
+pnpm test:visual            # run the tests in Docker (Linux or WSL)
+pnpm test:visual:update     # accept new or intended visual changes, then review the PNGs in git
+```
+
+`pnpm test:e2e` runs the same tests with the browsers installed on your machine. That is fine for behaviour and accessibility, but screenshots may differ slightly from the baselines.
 
 ## Project layout
 
 ```
 apps/server       Fastify API, SQLite database, migrations (bundled into one file with esbuild)
-apps/web          React + Vite web app
+apps/web          React + Vite web app (Playwright tests and screenshot baselines in apps/web/e2e)
 packages/shared   Code used by both: schemas, types, pure helpers
 design/mockups    Phase 1 clickable design mockups (view with `node design/mockups/serve.mjs`)
 docker/           Dockerfile, entrypoint, compose example, smoke test

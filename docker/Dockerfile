@@ -16,10 +16,6 @@ WORKDIR /app
 ENV CI=true \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
-# Fallback toolchain, used only if no prebuilt better-sqlite3 binary exists for this platform.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 make g++ \
- && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 
 # Manifests first, so the dependency layer is cached until they change.
@@ -33,10 +29,13 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
 
-# The server bundle's only runtime dependency is the native SQLite driver.
+# The server bundle's only runtime dependency is the native SQLite driver. It ships
+# prebuilt binaries for every platform; keep only the one for this image.
 RUN pnpm --filter @memora/server deploy --prod --legacy /out/server \
  && cd /out/server/node_modules/better-sqlite3 \
- && rm -rf deps src build/Release/obj* build/Release/.deps build/Release/test_extension.node \
+ && keep="$(node -p "require('path').basename(require('./lib/binding').getPrebuildPath())")" \
+ && find prebuilds -type f ! -name "$keep" -delete \
+ && rm -rf deps src build binding.gyp \
  && rm -rf /out/server/node_modules/.pnpm/node-addon-api*
 
 # ---------------------------------------------------------------------------------------------
