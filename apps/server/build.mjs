@@ -12,8 +12,9 @@ await build({
   platform: 'node',
   format: 'esm',
   target: 'node22',
-  // Native modules: loaded from node_modules at runtime (see `dependencies`).
-  external: ['better-sqlite3', '@node-rs/argon2'],
+  // Native modules: loaded from node_modules at runtime (see `dependencies`). `ws` tries two
+  // optional native speed-ups and does without them; they are not installed.
+  external: ['better-sqlite3', '@node-rs/argon2', 'bufferutil', 'utf-8-validate'],
   // No source maps in production output: they would embed build-machine paths.
   sourcemap: false,
   legalComments: 'eof',

@@ -50,7 +50,8 @@ afterEach(() => {
   rmSync(tempDir, { recursive: true, force: true });
 });
 
-describe('runMigrations', () => {
+// These write and back up real database files, which can take seconds on Windows runners.
+describe('runMigrations', { timeout: 30_000 }, () => {
   it('applies the real migrations to a fresh database without taking a backup', async () => {
     const result = await runMigrations({ db, migrationsDir, backupDir, appVersion: '0.1.0' });
     expect(result.applied).toBeGreaterThan(0);

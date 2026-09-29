@@ -1,5 +1,4 @@
 import type { PageMeta } from '@memora/shared';
-import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeftRight,
   Copy,
@@ -30,59 +29,23 @@ import {
   MenuItem,
   MenuSeparator,
   MenuTrigger,
-  Skeleton,
   toast,
 } from '../components/ui';
 import { cn } from '../lib/cn';
 import { useFocusOnMount } from '../lib/useFocusOnMount';
 import { formatDateTime, formatRelative } from '../lib/time';
-import { pageQuery, useNotesActions } from '../notes/queries';
+import { useNotesActions } from '../notes/queries';
+import type { PageDoc } from '../sync/doc';
+import { usePageDoc } from '../sync/hooks';
 import { hueStyle } from '../theme/sections';
 import { useCommands } from './commands';
 import { useCurrent, useGo } from './location';
+import { PageBody, PageSaveIndicator, PresenceHint } from './PageEditor';
 import { SectionBar } from './SectionBar';
 import { shortcutKeys } from './shortcuts';
 import { useShell } from './store';
 
 const soon = (what: string, phase: number) => () => toast(`${what} arrives in Phase ${phase}.`);
-
-/** The page's text, read-only until the editors arrive (Phases 5 and 6). */
-export function PageBody({ page, compact }: { page: PageMeta; compact?: boolean }) {
-  const { data, isPending, isError } = useQuery(pageQuery(page.id));
-  const note = (text: string) => (
-    <p className="mt-6 flex gap-2.5 rounded-sm border border-accent/25 bg-accent/7 px-3.5 py-3 text-sm text-fg-2">
-      <PenLine className="mt-0.5 size-4 shrink-0 text-accent" />
-      {text}
-    </p>
-  );
-  if (isPending) {
-    return (
-      <div className="flex max-w-[47.5rem] flex-col gap-2.5" aria-busy="true">
-        <Skeleton className="h-4 w-11/12" />
-        <Skeleton className="h-4 w-9/12" />
-        <Skeleton className="h-4 w-10/12" />
-      </div>
-    );
-  }
-  if (isError)
-    return (
-      <p className="text-sm text-fg-2">This page couldn’t be loaded. Try again in a moment.</p>
-    );
-  return (
-    <div className={cn('max-w-[47.5rem] text-md leading-relaxed text-fg', compact && 'text-base')}>
-      {page.type === 'rich' ? (
-        note('Rich text editing arrives in Phase 6.')
-      ) : data.content ? (
-        <>
-          <div className="break-words whitespace-pre-wrap">{data.content}</div>
-          {!compact && note('Shown as plain text for now: the Markdown editor arrives in Phase 5.')}
-        </>
-      ) : (
-        note('This page is empty. Writing arrives with the Markdown editor in Phase 5.')
-      )}
-    </div>
-  );
-}
 
 function TitleEditor({ page }: { page: PageMeta }) {
   const actions = useNotesActions();
@@ -112,7 +75,7 @@ function TitleEditor({ page }: { page: PageMeta }) {
   );
 }
 
-function PageHead({ page }: { page: PageMeta }) {
+function PageHead({ page, doc }: { page: PageMeta; doc: PageDoc | null }) {
   const editing = useShell((s) => s.editingTitle === page.id);
   const commands = useCommands();
   const copyLink = () => {
@@ -142,6 +105,7 @@ function PageHead({ page }: { page: PageMeta }) {
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <PageSaveIndicator page={page} doc={doc} />
           <IconButton label="Favourite" icon={<Star />} onClick={soon('Favourites', 8)} />
           <Menu>
             <MenuTrigger asChild>
@@ -200,6 +164,7 @@ function PageHead({ page }: { page: PageMeta }) {
         <span title={formatDateTime(page.updatedAt)}>Edited {formatRelative(page.updatedAt)}</span>
         <span title={formatDateTime(page.createdAt)}>Created {formatDateTime(page.createdAt)}</span>
         <span>{page.type === 'markdown' ? 'Markdown' : 'Rich text'}</span>
+        <PresenceHint pageId={page.id} />
         <button
           type="button"
           onClick={soon('Tags', 8)}
@@ -218,6 +183,7 @@ export function NotesPane() {
   const { index, section, page, missing } = current;
   const commands = useCommands();
   const go = useGo();
+  const doc = usePageDoc(page?.type === 'markdown' ? page.id : null);
 
   if (missing) {
     return (
@@ -266,9 +232,9 @@ export function NotesPane() {
       >
         {page ? (
           <>
-            <PageHead key={page.id} page={page} />
+            <PageHead key={page.id} page={page} doc={doc} />
             <div className="min-h-0 flex-1 overflow-auto px-4 pb-14 @tablet:px-7 @wide:px-9">
-              <PageBody page={page} />
+              <PageBody key={page.id} page={page} doc={doc} />
             </div>
           </>
         ) : (
@@ -276,7 +242,7 @@ export function NotesPane() {
             icon={<FilePlus />}
             color={section.color}
             title={`No pages in ${section.name} yet`}
-            description="Start with a blank page. Markdown and rich text editing arrive in the next phases."
+            description="Start with a blank page: write in Markdown, and it saves as you type."
             actions={
               <Button variant="primary" onClick={() => void commands.newPage()}>
                 <FilePlus /> New page
@@ -296,6 +262,7 @@ export function SecondPane() {
   const go = useGo();
   const page = secondPageId ? index.page.get(secondPageId) : undefined;
   const section = page ? index.section.get(page.sectionId) : undefined;
+  const doc = usePageDoc(page?.type === 'markdown' ? page.id : null);
   return (
     <section aria-label="Second pane" className="flex h-full min-h-0 flex-col">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line pr-2.5 pl-4 text-sm whitespace-nowrap text-fg-2">
@@ -312,6 +279,7 @@ export function SecondPane() {
           <b className="font-semibold text-fg">Second pane</b>
         )}
         <span className="flex-1" />
+        {page && <PageSaveIndicator page={page} doc={doc} compact />}
         {page && (
           <IconButton
             label="Open in the main pane"
@@ -329,7 +297,7 @@ export function SecondPane() {
           <p className="mb-4 text-sm text-fg-3">
             {section?.name} · edited {formatRelative(page.updatedAt)}
           </p>
-          <PageBody page={page} compact />
+          <PageBody key={page.id} page={page} doc={doc} compact />
         </div>
       ) : (
         <EmptyState

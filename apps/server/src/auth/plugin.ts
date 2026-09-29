@@ -191,10 +191,18 @@ declare module 'fastify' {
 /**
  * CSRF defence in depth (§11): a request that changes data must come from Memora's own origin.
  * Browsers always send `Origin` on such requests; tools like curl send none (and no cookies of
- * yours), so a missing header is judged by `Sec-Fetch-Site` when present.
+ * yours), so a missing header is judged by `Sec-Fetch-Site` when present. `required` refuses a
+ * missing header too: browsers always send one when opening a WebSocket.
  */
-function checkOrigin(request: FastifyRequest, baseOrigin: string | undefined): void {
+export function checkOrigin(
+  request: FastifyRequest,
+  baseOrigin: string | undefined,
+  required = false,
+): void {
   const origin = request.headers.origin;
+  if (!origin && required) {
+    throw new ApiError(403, 'forbidden', 'Requests from other sites are not allowed.');
+  }
   if (origin) {
     let host: string;
     try {

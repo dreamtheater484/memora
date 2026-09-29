@@ -220,6 +220,23 @@ export class AuthService {
     return { user, session, token };
   }
 
+  /**
+   * Whether a session is still good, without renewing it: for connections that stay open
+   * (the event channel), which must not keep an idle session alive on their own.
+   */
+  isActive(sessionId: string): boolean {
+    const found = this.repos.sessions.findById(sessionId);
+    if (!found) return false;
+    const { session, user } = found;
+    const now = this.now();
+    return (
+      session.expiresAt > now &&
+      session.absoluteExpiresAt > now &&
+      user.disabledAt === null &&
+      !user.mustChangePassword
+    );
+  }
+
   /** Finds the session for a cookie token, ending it if it has expired. Renews it (sliding). */
   resolve(token: string): AuthContext | null {
     if (token.length > 128) return null;

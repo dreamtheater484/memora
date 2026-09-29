@@ -12,7 +12,9 @@ import type { PasswordHasher } from '../auth/password';
 import { requestMeta } from '../auth/plugin';
 import { toCurrentUser, type AuthContext, type AuthService } from '../auth/service';
 import { csrfTokenFor } from '../auth/tokens';
+import type { Config } from '../config';
 import type { SqliteDatabase } from '../db/client';
+import type { EventHub } from '../events/hub';
 import { notFound, parse } from '../errors';
 import type { NotesService } from '../notes/service';
 import type { Repos } from '../repo';
@@ -22,6 +24,8 @@ export interface RouteDeps {
   repos: Repos;
   auth: AuthService;
   notes: NotesService;
+  events: EventHub;
+  config: Config;
   hasher: PasswordHasher;
   now: () => number;
 }

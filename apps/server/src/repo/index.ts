@@ -170,6 +170,15 @@ export class SessionsRepo {
       .get();
   }
 
+  findById(id: string): { session: SessionRow; user: UserRow } | undefined {
+    return this.orm
+      .select({ session: sessions, user: users })
+      .from(sessions)
+      .innerJoin(users, eq(users.id, sessions.userId))
+      .where(eq(sessions.id, id))
+      .get();
+  }
+
   touch(id: string, lastSeenAt: number, expiresAt: number): void {
     this.orm.update(sessions).set({ lastSeenAt, expiresAt }).where(eq(sessions.id, id)).run();
   }

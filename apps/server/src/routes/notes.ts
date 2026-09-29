@@ -1,14 +1,17 @@
 import {
   createGroupSchema,
   createNotebookSchema,
+  MAX_CONTENT,
   createPageSchema,
   createSectionSchema,
+  createVersionSchema,
   deletePagesSchema,
   moveGroupSchema,
   moveNotebookSchema,
   moveSectionSchema,
   placePagesSchema,
   restoreSchema,
+  saveContentSchema,
   uiStateSchema,
   updateGroupSchema,
   updateNotebookSchema,
@@ -21,12 +24,15 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { parse } from '../errors';
 import { authOf, type RouteDeps } from './auth';
+import { deviceOf } from './events';
 
 type Id = { Params: { id: string } };
 
 /** Notebooks, section groups, sections, pages, the recycle bin and per-user settings. */
-export function notesRoutes(app: FastifyInstance, { notes, repos }: RouteDeps): void {
+export function notesRoutes(app: FastifyInstance, { notes, repos, events }: RouteDeps): void {
   const config = { access: 'user' as const };
+  /** Routes that change the tree: the user's other browsers hear about it (§9.6). */
+  const changes = { access: 'user' as const, emits: 'tree' as const };
   const owner = (request: Parameters<typeof authOf>[0]) => authOf(request).user.id;
 
   app.get('/api/v1/tree', { config }, async (request, reply) => {
@@ -36,12 +42,12 @@ export function notesRoutes(app: FastifyInstance, { notes, repos }: RouteDeps): 
 
   // Notebooks
 
-  app.post('/api/v1/notebooks', { config }, async (request, reply) => {
+  app.post('/api/v1/notebooks', { config: changes }, async (request, reply) => {
     const body = parse(createNotebookSchema, request.body);
     return reply.code(201).send(notes.createNotebook(owner(request), body));
   });
 
-  app.patch<Id>('/api/v1/notebooks/:id', { config }, async (request) =>
+  app.patch<Id>('/api/v1/notebooks/:id', { config: changes }, async (request) =>
     notes.updateNotebook(
       owner(request),
       request.params.id,
@@ -49,7 +55,7 @@ export function notesRoutes(app: FastifyInstance, { notes, repos }: RouteDeps): 
     ),
   );
 
-  app.post<Id>('/api/v1/notebooks/:id/move', { config }, async (request) =>
+  app.post<Id>('/api/v1/notebooks/:id/move', { config: changes }, async (request) =>
     notes.moveNotebook(
       owner(request),
       request.params.id,
@@ -57,18 +63,18 @@ export function notesRoutes(app: FastifyInstance, { notes, repos }: RouteDeps): 
     ),
   );
 
-  app.delete<Id>('/api/v1/notebooks/:id', { config }, async (request) =>
+  app.delete<Id>('/api/v1/notebooks/:id', { config: changes }, async (request) =>
     notes.deleteNotebook(owner(request), request.params.id),
   );
 
   // Section groups
 
-  app.post('/api/v1/groups', { config }, async (request, reply) => {
+  app.post('/api/v1/groups', { config: changes }, async (request, reply) => {
     const body = parse(createGroupSchema, request.body);
     return reply.code(201).send(notes.createGroup(owner(request), body));
   });
 
-  app.patch<Id>('/api/v1/groups/:id', { config }, async (request) =>
+  app.patch<Id>('/api/v1/groups/:id', { config: changes }, async (request) =>
     notes.renameGroup(
       owner(request),
       request.params.id,
@@ -76,22 +82,22 @@ export function notesRoutes(app: FastifyInstance, { notes, repos }: RouteDeps): 
     ),
   );
 
-  app.post<Id>('/api/v1/groups/:id/move', { config }, async (request) =>
+  app.post<Id>('/api/v1/groups/:id/move', { config: changes }, async (request) =>
     notes.moveGroup(owner(request), request.params.id, parse(moveGroupSchema, request.body)),
   );
 
-  app.delete<Id>('/api/v1/groups/:id', { config }, async (request) =>
+  app.delete<Id>('/api/v1/groups/:id', { config: changes }, async (request) =>
     notes.deleteGroup(owner(request), request.params.id),
   );
 
   // Sections
 
-  app.post('/api/v1/sections', { config }, async (request, reply) => {
+  app.post('/api/v1/sections', { config: changes }, async (request, reply) => {
     const body = parse(createSectionSchema, request.body);
     return reply.code(201).send(notes.createSection(owner(request), body));
   });
 
-  app.patch<Id>('/api/v1/sections/:id', { config }, async (request) =>
+  app.patch<Id>('/api/v1/sections/:id', { config: changes }, async (request) =>
     notes.updateSection(
       owner(request),
       request.params.id,
@@ -99,17 +105,17 @@ export function notesRoutes(app: FastifyInstance, { notes, repos }: RouteDeps): 
     ),
   );
 
-  app.post<Id>('/api/v1/sections/:id/move', { config }, async (request) =>
+  app.post<Id>('/api/v1/sections/:id/move', { config: changes }, async (request) =>
     notes.moveSection(owner(request), request.params.id, parse(moveSectionSchema, request.body)),
   );
 
-  app.delete<Id>('/api/v1/sections/:id', { config }, async (request) =>
+  app.delete<Id>('/api/v1/sections/:id', { config: changes }, async (request) =>
     notes.deleteSection(owner(request), request.params.id),
   );
 
   // Pages
 
-  app.post('/api/v1/pages', { config }, async (request, reply) => {
+  app.post('/api/v1/pages', { config: changes }, async (request, reply) => {
     const body = parse(createPageSchema, request.body);
     return reply.code(201).send(notes.createPage(owner(request), body));
   });
@@ -119,30 +125,62 @@ export function notesRoutes(app: FastifyInstance, { notes, repos }: RouteDeps): 
     return notes.getPage(owner(request), request.params.id);
   });
 
-  app.patch<Id>('/api/v1/pages/:id', { config }, async (request) =>
+  app.patch<Id>('/api/v1/pages/:id', { config: changes }, async (request) =>
     notes.updatePage(owner(request), request.params.id, parse(updatePageSchema, request.body)),
   );
 
-  app.post('/api/v1/pages/move', { config }, async (request) =>
+  // Content (§9.6): JSON-escaped text can be several bytes per character.
+  app.put<Id>(
+    '/api/v1/pages/:id/content',
+    { config, bodyLimit: MAX_CONTENT * 4 },
+    async (request) => {
+      const { user, session } = authOf(request);
+      const body = parse(saveContentSchema, request.body);
+      const saved = notes.saveContent(user.id, request.params.id, body, session.deviceLabel);
+      if (saved.revision !== body.baseRevision) {
+        events.publish(user.id, {
+          type: 'page.updated',
+          page: saved.pages[0],
+          revision: saved.revision,
+          origin: deviceOf(request),
+        });
+      }
+      return saved;
+    },
+  );
+
+  app.post<Id>(
+    '/api/v1/pages/:id/versions',
+    { config, bodyLimit: MAX_CONTENT * 4 },
+    async (request, reply) => {
+      const { user, session } = authOf(request);
+      const body = parse(createVersionSchema, request.body);
+      return reply
+        .code(201)
+        .send(notes.createVersion(user.id, request.params.id, body, session.deviceLabel));
+    },
+  );
+
+  app.post('/api/v1/pages/move', { config: changes }, async (request) =>
     notes.movePages(owner(request), parse(placePagesSchema, request.body)),
   );
 
-  app.post('/api/v1/pages/copy', { config }, async (request, reply) => {
+  app.post('/api/v1/pages/copy', { config: changes }, async (request, reply) => {
     const body = parse(placePagesSchema, request.body);
     return reply.code(201).send(notes.copyPages(owner(request), body));
   });
 
-  app.post<Id>('/api/v1/pages/:id/duplicate', { config }, async (request, reply) =>
+  app.post<Id>('/api/v1/pages/:id/duplicate', { config: changes }, async (request, reply) =>
     reply.code(201).send(notes.duplicatePage(owner(request), request.params.id)),
   );
 
-  app.post('/api/v1/pages/delete', { config }, async (request) =>
+  app.post('/api/v1/pages/delete', { config: changes }, async (request) =>
     notes.deletePages(owner(request), parse(deletePagesSchema, request.body).ids),
   );
 
   // Recycle bin (browsing and emptying it arrive in Phase 7)
 
-  app.post('/api/v1/trash/restore', { config }, async (request) =>
+  app.post('/api/v1/trash/restore', { config: changes }, async (request) =>
     notes.restore(owner(request), parse(restoreSchema, request.body).items),
   );
 

@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance, InjectOptions, LightMyRequestResponse } from 'fastify';
+import type { WebSocket } from 'ws';
 import { buildApp } from '../app';
 import { loadConfig } from '../config';
 import { openDatabase, type SqliteDatabase } from '../db/client';
@@ -134,8 +135,28 @@ export class Client {
     body?: unknown,
     extra?: { headers?: Record<string, string>; csrf?: boolean },
   ) => this.request('PATCH', url, body, extra);
+  put = (
+    url: string,
+    body?: unknown,
+    extra?: { headers?: Record<string, string>; csrf?: boolean },
+  ) => this.request('PUT', url, body, extra);
   delete = (url: string, extra?: { headers?: Record<string, string>; csrf?: boolean }) =>
     this.request('DELETE', url, undefined, extra);
+
+  /** Opens the event channel like a browser's syncing tab; rejects when the upgrade is refused. */
+  events(query = '', headers: Record<string, string> = {}): Promise<WebSocket> {
+    return this.app.injectWS(`/api/v1/events${query}`, {
+      // The injected upgrade has no network socket; the address is what `request.ip` reads.
+      socket: { remoteAddress: '127.0.0.1' } as never,
+      headers: {
+        host: 'localhost',
+        origin: 'http://localhost',
+        ...this.headers,
+        ...(this.cookies.size > 0 ? { cookie: this.cookieHeader } : {}),
+        ...headers,
+      },
+    });
+  }
 
   async login(username: string, password = STRONG_PASSWORD, remember = false) {
     const res = await this.post('/api/v1/auth/login', { username, password, remember });

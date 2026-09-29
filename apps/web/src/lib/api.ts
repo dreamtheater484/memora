@@ -1,4 +1,5 @@
-import { CSRF_HEADER, isApiErrorBody, type ApiErrorCode } from '@memora/shared';
+import { CSRF_HEADER, DEVICE_HEADER, isApiErrorBody, type ApiErrorCode } from '@memora/shared';
+import { deviceId } from './device';
 
 /**
  * The API client. Every request goes to `/api/v1`, sends the session's CSRF token when it
@@ -13,6 +14,18 @@ export function setCsrfToken(token: string | null): void {
   csrfToken = token;
 }
 
+export const hasCsrfToken = (): boolean => csrfToken !== null;
+
+let csrfSource: (() => Promise<unknown>) | null = null;
+
+/**
+ * How to get a token when a change is about to go out without one: after starting offline,
+ * the session check that brings it hasn't happened yet.
+ */
+export function setCsrfSource(source: (() => Promise<unknown>) | null): void {
+  csrfSource = source;
+}
+
 export type ApiErrorKind = ApiErrorCode | 'network';
 
 export class ApiRequestError extends Error {
@@ -24,9 +37,19 @@ export class ApiRequestError extends Error {
     message: string,
     /** Messages per form field, keyed by field name. */
     readonly fields: Record<string, string> = {},
+    /** Anything else the server said about the error (a conflict's current content, …). */
+    readonly details?: unknown,
   ) {
     super(message);
   }
+}
+
+/** The request never got an answer from Memora itself: offline, or the server is down. */
+export function isUnreachable(error: unknown): boolean {
+  return (
+    error instanceof ApiRequestError &&
+    (error.status === 0 || error.status === 408 || error.status === 429 || error.status >= 500)
+  );
 }
 
 interface SessionEvents {
@@ -44,10 +67,23 @@ export function setSessionEvents(handlers: SessionEvents): void {
 
 type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
-export async function api<T>(method: Method, path: string, body?: unknown): Promise<T> {
+interface Options {
+  /** Let the request finish even if the tab closes (only for small bodies). */
+  keepalive?: boolean;
+}
+
+export async function api<T>(
+  method: Method,
+  path: string,
+  body?: unknown,
+  options: Options = {},
+): Promise<T> {
+  if (method !== 'GET' && !csrfToken && csrfSource) await csrfSource().catch(() => undefined);
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (method !== 'GET' && csrfToken) headers[CSRF_HEADER] = csrfToken;
+  const device = deviceId();
+  if (device) headers[DEVICE_HEADER] = device;
 
   let response: Response;
   try {
@@ -56,6 +92,7 @@ export async function api<T>(method: Method, path: string, body?: unknown): Prom
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       credentials: 'same-origin',
+      ...(options.keepalive ? { keepalive: true } : {}),
     });
   } catch {
     throw new ApiRequestError(0, 'network', 'Can’t reach Memora. Check your connection.');
@@ -74,7 +111,7 @@ export async function api<T>(method: Method, path: string, body?: unknown): Prom
   }
   const { code, message, details } = data.error;
   const fields = (details as { fields?: Record<string, string> } | undefined)?.fields ?? {};
-  const error = new ApiRequestError(response.status, code, message, fields);
+  const error = new ApiRequestError(response.status, code, message, fields, details);
 
   // Login failures are answered on the form; anything else means the session is gone.
   if (code === 'unauthenticated') events.onSignedOut?.();

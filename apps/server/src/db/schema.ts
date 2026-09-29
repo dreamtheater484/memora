@@ -228,9 +228,39 @@ export const pages = sqliteTable(
   ],
 );
 
+/**
+ * Earlier states of a page (§7.2, §9.7): kept on the server when a save replaces content that
+ * hasn't been kept for a while, and the browser's side of a conflict it couldn't merge.
+ */
+export const pageVersions = sqliteTable(
+  'page_versions',
+  {
+    id: text('id').primaryKey(),
+    ownerId: ownerId(),
+    pageId: text('page_id')
+      .notNull()
+      .references(() => pages.id, { onDelete: 'cascade' }),
+    /** The page revision this content had, or started from (a conflict copy). */
+    revision: integer('revision').notNull(),
+    type: text('type', { enum: ['markdown', 'rich'] }).notNull(),
+    title: text('title').notNull(),
+    content: text('content').notNull(),
+    reason: text('reason', {
+      enum: ['auto', 'conversion', 'import', 'restore', 'conflict', 'manual'],
+    }).notNull(),
+    deviceLabel: text('device_label').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [
+    index('page_versions_owner_id_idx').on(t.ownerId),
+    index('page_versions_page_id_created_at_idx').on(t.pageId, t.createdAt),
+  ],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type NotebookRow = typeof notebooks.$inferSelect;
 export type SectionGroupRow = typeof sectionGroups.$inferSelect;
 export type SectionRow = typeof sections.$inferSelect;
 export type PageRow = typeof pages.$inferSelect;
+export type PageVersionRow = typeof pageVersions.$inferSelect;

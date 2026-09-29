@@ -1,4 +1,5 @@
-@import 'tailwindcss';
+/* Class names are only looked for in the app's source, not in build or test output. */
+@import 'tailwindcss' source('..');
 @import '@fontsource-variable/figtree';
 @import '@fontsource-variable/bricolage-grotesque/opsz.css';
 @import '@fontsource-variable/jetbrains-mono';

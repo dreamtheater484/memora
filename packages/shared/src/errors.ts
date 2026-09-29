@@ -26,6 +26,7 @@ export const API_ERROR_CODES = [
   'last_admin',
   'invalid_move',
   'too_deep',
+  'revision_conflict',
   'internal',
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

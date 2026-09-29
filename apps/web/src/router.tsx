@@ -21,6 +21,8 @@ import { AppShell } from './shell/AppShell';
 
 export interface RouterContext {
   queryClient: QueryClient;
+  /** Starts syncing the signed-in user's notes (§9.6). */
+  startSync: (userId: string) => Promise<unknown>;
 }
 
 const me = (context: RouterContext): Promise<MeResponse> =>
@@ -89,11 +91,15 @@ const appRoute = createRoute({
 const notesRoute = createRoute({
   getParentRoute: () => appRoute,
   id: 'notes',
-  loader: ({ context }) =>
-    Promise.all([
+  loader: async ({ context }) => {
+    // The store first: without a connection, the tree and settings come from it.
+    const { user } = await me(context);
+    if (user) await context.startSync(user.id);
+    return Promise.all([
       context.queryClient.ensureQueryData(treeQuery),
       context.queryClient.ensureQueryData(settingsQuery),
-    ]),
+    ]);
+  },
   component: AppShell,
 });
 
@@ -169,10 +175,10 @@ const routeTree = rootRoute.addChildren([
   ]),
 ]);
 
-export function createAppRouter(queryClient: QueryClient) {
+export function createAppRouter(context: RouterContext) {
   return createRouter({
     routeTree,
-    context: { queryClient },
+    context,
     defaultPreload: 'intent',
     // The session check is fast; don't flash a loading screen for it.
     defaultPendingMs: 400,

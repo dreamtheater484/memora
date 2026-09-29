@@ -179,6 +179,28 @@ const RULES: Record<string, RouteRule> = {
       () => ({ title: 'Mine now' }),
     ),
   },
+  'PUT /api/v1/pages/:id/content': {
+    access: 'user',
+    foreign: probe(
+      (n) => `/api/v1/pages/${n.pageId}/content`,
+      () => ({ baseRevision: 1, content: 'Mine now' }),
+    ),
+  },
+  'POST /api/v1/pages/:id/versions': {
+    access: 'user',
+    foreign: (w) => ({
+      ...probe(
+        (n) => `/api/v1/pages/${n.pageId}/versions`,
+        () => ({ reason: 'conflict', content: 'Planted', baseRevision: 1 }),
+      )(w),
+      async intact() {
+        const count = w.t.db.prepare('SELECT count(*) AS n FROM page_versions').get() as {
+          n: number;
+        };
+        expect(count.n).toBe(0);
+      },
+    }),
+  },
   'POST /api/v1/pages/move': {
     access: 'user',
     // Alice's page into Bob's own section.
@@ -219,6 +241,8 @@ const RULES: Record<string, RouteRule> = {
     },
   },
   'PATCH /api/v1/settings': { access: 'user' },
+  // Scoped by the session itself: events.test.ts checks a user only hears their own events.
+  'GET /api/v1/events': { access: 'user' },
 };
 
 let w: World;
@@ -283,7 +307,7 @@ describe('authorisation gate', () => {
 
   const routes = Object.entries(RULES).map(([k, rule]) => {
     const [method = '', url = ''] = k.split(' ');
-    return { method: method as 'GET' | 'POST' | 'PATCH' | 'DELETE', url, rule };
+    return { method: method as 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', url, rule };
   });
 
   it.each(routes.filter((r) => r.rule.access !== 'public'))(

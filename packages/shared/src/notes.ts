@@ -131,6 +131,8 @@ export interface PageMeta {
   sortKey: string;
   /** The start of the page's text, for the page list. */
   snippet: string;
+  /** Goes up with every content save; tells a browser whether its copy is current. */
+  revision: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -138,7 +140,6 @@ export interface PageMeta {
 export interface Page extends PageMeta {
   /** Markdown text, or the rich editor's document as JSON. */
   content: string;
-  revision: number;
   viewMode: ViewMode | null;
 }
 
@@ -246,6 +247,8 @@ export type MoveSectionRequest = z.input<typeof moveSectionSchema>;
 
 export const createPageSchema = z
   .object({
+    /** Made by the browser, so a page created offline keeps its id when it syncs (D14). */
+    id: idSchema.optional(),
     sectionId: idSchema,
     parentPageId: optionalId,
     title: titleSchema.default(''),

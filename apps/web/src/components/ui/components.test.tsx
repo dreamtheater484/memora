@@ -15,30 +15,40 @@ describe('SaveIndicator', () => {
     expect(screen.getByText('Saved')).toBeTruthy();
     rerender(<SaveIndicator state="saving" compact={false} />);
     expect(screen.getByText('Saving…')).toBeTruthy();
-    rerender(<SaveIndicator state="dirty" compact={false} />);
-    expect(screen.getByText('Unsaved changes')).toBeTruthy();
-    rerender(<SaveIndicator state="offline" pending={3} />);
-    expect(screen.getByText('Offline · 3 pending')).toBeTruthy();
+    rerender(<SaveIndicator state="local" pending={3} />);
+    expect(screen.getByText('Saved on this device')).toBeTruthy();
     rerender(<SaveIndicator state="conflict" />);
-    expect(screen.getByText('Conflict')).toBeTruthy();
+    expect(screen.getByText('Changed elsewhere, review')).toBeTruthy();
+    rerender(<SaveIndicator state="failed" />);
+    expect(screen.getByText('Not saved, retrying')).toBeTruthy();
   });
 
-  it('announces only offline and conflict, not every autosave', () => {
+  it('says when the server confirmed, and what waits', () => {
+    const at = new Date(2026, 8, 29, 14, 32, 5).getTime();
+    const { rerender } = render(<SaveIndicator state="saved" savedAt={at} />);
+    expect(screen.getByTitle('Saved to server at 14:32:05')).toBeTruthy();
+    rerender(<SaveIndicator state="local" pending={3} />);
+    expect(screen.getByTitle(/3 changes wait on this device/)).toBeTruthy();
+  });
+
+  it('announces only the states that need attention, not every autosave', () => {
     const { rerender } = render(<SaveIndicator state="saving" />);
     const status = screen.getByRole('status');
     expect(status.textContent).toBe('');
     rerender(<SaveIndicator state="saved" />);
     expect(status.textContent).toBe('');
-    rerender(<SaveIndicator state="offline" pending={2} />);
-    expect(status.textContent).toMatch(/offline.*2 changes/i);
+    rerender(<SaveIndicator state="local" pending={2} />);
+    expect(status.textContent).toMatch(/saved on this device/i);
     rerender(<SaveIndicator state="conflict" />);
     expect(status.textContent).toMatch(/changed elsewhere/i);
+    rerender(<SaveIndicator state="failed" detail="The browser is out of space." />);
+    expect(status.textContent).toMatch(/not saved.*out of space/i);
   });
 
   it('is a button when it has an action', async () => {
     const onClick = vi.fn();
     render(<SaveIndicator state="conflict" onClick={onClick} />);
-    await userEvent.click(screen.getByRole('button', { name: /conflict/i }));
+    await userEvent.click(screen.getByRole('button', { name: /changed elsewhere/i }));
     expect(onClick).toHaveBeenCalledOnce();
   });
 });
