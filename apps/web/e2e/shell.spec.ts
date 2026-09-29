@@ -101,7 +101,7 @@ test.describe('behaviour', () => {
     await expect(pageList(page).getByRole('treeitem', { name: /^Open questions/ })).toHaveCount(0);
     expect(api.requests.some((r) => r.path === '/api/v1/pages/delete')).toBe(true);
 
-    await page.getByRole('button', { name: 'Undo' }).click();
+    await page.getByText('Undo', { exact: true }).click();
     await expect(pageList(page).getByRole('treeitem', { name: /^Open questions/ })).toBeVisible();
     await expect(pageList(page).getByRole('treeitem', { name: /^Pricing/ })).toBeVisible();
   });

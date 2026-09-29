@@ -406,7 +406,10 @@ export class FakeApi {
     const path = url.pathname;
     const headers = request.headers();
     if (path.startsWith('/api/v1/assets/')) return this.file(route, path.split('/').pop()!, url);
-    const body = (request.postDataJSON() as Record<string, unknown> | null) ?? {};
+    // A GET's query parameters come in as its body, like a request's fields.
+    const body =
+      (request.postDataJSON() as Record<string, unknown> | null) ??
+      (method === 'GET' ? Object.fromEntries(url.searchParams) : {});
     this.requests.push({ method, path, headers, body });
     const save = method === 'PUT' && path.endsWith('/content');
     if (this.latency) await new Promise((resolve) => setTimeout(resolve, this.latency));
