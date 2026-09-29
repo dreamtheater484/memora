@@ -152,9 +152,10 @@
   }
 }
 
-/* Frosted panel: translucent surface, blur, light edge and soft shadow. */
+/* Frosted panel: translucent surface, blur, light edge and soft shadow.
+   Set --glass-bg to change the fill (the editor pane uses var(--surface)). */
 @utility glass {
-  background-color: var(--panel);
+  background-color: var(--glass-bg, var(--panel));
   backdrop-filter: var(--glass-filter);
   border: 1px solid var(--glass-edge);
   box-shadow: var(--shadow-panel);

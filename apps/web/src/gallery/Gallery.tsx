@@ -107,7 +107,7 @@ const TREE: DemoNode[] = [
         label: 'Projects',
         kind: 'group',
         color: 'indigo',
-        disabled: true,
+        selectable: false,
         children: [
           { id: 'roadmap', label: 'Roadmap', kind: 'section', color: 'blue' },
           { id: 'research', label: 'Research', kind: 'section', color: 'teal' },

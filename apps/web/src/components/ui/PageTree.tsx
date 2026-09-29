@@ -7,7 +7,12 @@ export interface TreeNode {
   /** Plain text for type-ahead and the default row. */
   label: string;
   children?: readonly TreeNode[];
-  /** Not selectable (for example a section-group heading); still navigable. */
+  /**
+   * False for rows that only group others (a notebook, a section group):
+   * clicking or Enter toggles them instead of selecting.
+   */
+  selectable?: boolean;
+  /** Unavailable; still reachable with the keyboard. */
   disabled?: boolean;
 }
 
@@ -33,6 +38,8 @@ export interface PageTreeProps<N extends TreeNode> {
   rowClassName?: (node: N, state: TreeRowState) => string | undefined;
   /** Left padding per level, in rem. */
   indent?: number;
+  /** Rows with several lines: align to the top and add vertical padding. */
+  multiline?: boolean;
   className?: string;
 }
 
@@ -71,6 +78,7 @@ export function PageTree<N extends TreeNode>({
   renderRow,
   rowClassName,
   indent = 1.25,
+  multiline,
   className,
 }: PageTreeProps<N>) {
   const [ownExpanded, setOwnExpanded] = useState(() => new Set(defaultExpanded));
@@ -106,7 +114,10 @@ export function PageTree<N extends TreeNode>({
   }
 
   function select(node: N) {
-    if (!node.disabled) onSelect?.(node);
+    if (node.disabled) return;
+    if (node.selectable === false) {
+      if (node.children?.length) setOpen(node.id, !open.has(node.id));
+    } else onSelect?.(node);
   }
 
   function onKeyDown(e: KeyboardEvent, index: number) {
@@ -189,7 +200,7 @@ export function PageTree<N extends TreeNode>({
           aria-setsize={list.length}
           aria-posinset={i + 1}
           aria-expanded={hasChildren ? isOpen : undefined}
-          aria-selected={node.disabled ? undefined : state.selected}
+          aria-selected={node.selectable === false ? undefined : state.selected}
           aria-disabled={node.disabled || undefined}
           tabIndex={node.id === tabStop ? 0 : -1}
           onKeyDown={(e) => onKeyDown(e, index)}
@@ -201,12 +212,12 @@ export function PageTree<N extends TreeNode>({
           <div
             onClick={() => {
               focus(node.id);
-              if (node.disabled && hasChildren) setOpen(node.id, !isOpen);
-              else select(node);
+              select(node);
             }}
             style={{ paddingLeft: `${0.5 + (level - 1) * indent}rem` }}
             className={cn(
-              'flex min-h-[1.875rem] cursor-default items-center gap-2 rounded-sm pr-2 select-none',
+              'flex min-h-[1.875rem] cursor-default gap-2 rounded-sm pr-2 select-none',
+              multiline ? 'items-start py-2' : 'items-center',
               state.selected
                 ? 'bg-active font-semibold text-fg shadow-card'
                 : 'text-fg-2 hover:bg-hover hover:text-fg',

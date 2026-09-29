@@ -16,7 +16,16 @@ export interface TooltipProps {
 export function Tooltip({ content, shortcut, side = 'bottom', children }: TooltipProps) {
   return (
     <T.Root>
-      <T.Trigger asChild>{children}</T.Trigger>
+      <T.Trigger
+        asChild
+        // Only keyboard focus shows the tooltip, not focus moved by a dialog
+        // after a tap or click (Radix skips its handler when we prevent it).
+        onFocus={(e) => {
+          if (!e.currentTarget.matches(':focus-visible')) e.preventDefault();
+        }}
+      >
+        {children}
+      </T.Trigger>
       <T.Portal>
         <T.Content
           side={side}

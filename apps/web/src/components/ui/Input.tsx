@@ -26,10 +26,11 @@ export function Input({
     <div
       data-invalid={invalid || undefined}
       className={cn(
-        'flex h-8 items-center gap-2 border border-line bg-surface px-2.5 text-fg-3 transition-[border-color,box-shadow] duration-(--dur-fast)',
+        'flex h-8 items-center gap-2 border border-line px-2.5 text-fg-3 transition-[border-color,box-shadow] duration-(--dur-fast)',
         'focus-within:border-accent focus-within:ring-3 focus-within:ring-accent/20',
         'data-invalid:border-danger data-invalid:focus-within:ring-danger/20',
-        pill ? 'rounded-full' : 'rounded-sm',
+        // Pills (filters, search) sit on glass panels; form fields are solid.
+        pill ? 'rounded-full bg-panel' : 'rounded-sm bg-surface',
         '[&_svg]:size-4 [&_svg]:shrink-0',
         wrapperClassName,
       )}
