@@ -2,7 +2,7 @@
 
 A self-hosted notebook that runs in your browser. It combines OneNote-style organisation (notebooks, section tabs, page lists) with first-class Markdown, a Word-like rich editor and built-in Kanban boards. It is designed to look great on a phone, a laptop and an ultra-wide monitor.
 
-> **Status: Phase 5, the Markdown editor.** Accounts, notebook organisation and a save engine that keeps every keystroke (offline too) are in place, with an `:edge` image on GHCR. Markdown pages have a Notepad++-style source view beside a live preview (or either alone): tables line up as you type, even with emoji and Chinese, Japanese or Korean text; code is highlighted, maths and Mermaid diagrams render, and screenshots paste straight in. Rich pages come in Phase 6. See the [implementation plan](docs/IMPLEMENTATION_PLAN.md) for the roadmap.
+> **Status: Phase 6, the rich text editor.** Accounts, notebook organisation and a save engine that keeps every keystroke (offline too) are in place, with an `:edge` image on GHCR. Markdown pages have a Notepad++-style source view beside a live preview: tables line up as you type, even with emoji and Chinese, Japanese or Korean text; code is highlighted, maths and Mermaid diagrams render. Rich text pages work like a word processor, with a Word-like toolbar, tables with merged cells and colours, images you can resize and caption, and clean pasting from Word, Google Docs and the web (pictures included). Pages convert between the two, with a report of anything Markdown can't keep. See the [implementation plan](docs/IMPLEMENTATION_PLAN.md) for the roadmap.
 
 ## Planned highlights
 
