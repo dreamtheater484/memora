@@ -133,6 +133,8 @@ export interface PageMeta {
   snippet: string;
   /** Goes up with every content save; tells a browser whether its copy is current. */
   revision: number;
+  /** How the page was last shown (Markdown: source, split or preview); null for the default. */
+  viewMode?: ViewMode | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -140,7 +142,6 @@ export interface PageMeta {
 export interface Page extends PageMeta {
   /** Markdown text, or the rich editor's document as JSON. */
   content: string;
-  viewMode: ViewMode | null;
 }
 
 /** `GET /api/v1/tree`: everything the app needs to start, in one request. */
