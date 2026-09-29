@@ -14,6 +14,7 @@ import { toCurrentUser, type AuthContext, type AuthService } from '../auth/servi
 import { csrfTokenFor } from '../auth/tokens';
 import type { Config } from '../config';
 import type { FetchPolicy } from '../assets/fetch';
+import type { BackupService } from '../backup/service';
 import type { AssetsService } from '../assets/service';
 import type { SqliteDatabase } from '../db/client';
 import type { EventHub } from '../events/hub';
@@ -26,6 +27,9 @@ export interface RouteDeps {
   assets: AssetsService;
   /** How remote images are downloaded (tests allow their local server). */
   fetchPolicy: FetchPolicy;
+  backups: BackupService;
+  /** Restarts Memora, to put a restored backup in place. */
+  restart: () => void;
   repos: Repos;
   auth: AuthService;
   notes: NotesService;

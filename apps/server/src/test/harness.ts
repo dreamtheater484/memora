@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { FastifyInstance, InjectOptions, LightMyRequestResponse } from 'fastify';
 import type { WebSocket } from 'ws';
 import { buildApp, type AppOptions } from '../app';
-import { loadConfig } from '../config';
+import { loadConfig, type Config } from '../config';
 import { openDatabase, type SqliteDatabase } from '../db/client';
 import { runMigrations } from '../db/migrate';
 import { migrationsDir } from '../paths';
@@ -26,6 +26,7 @@ export interface TestApp {
   app: FastifyInstance;
   db: SqliteDatabase;
   clock: Clock;
+  config: Config;
   client(headers?: Record<string, string>): Client;
   /** Runs first-run setup and returns the signed-in admin's client. */
   setupAdmin(username?: string): Promise<Client>;
@@ -34,7 +35,7 @@ export interface TestApp {
 
 export async function createTestApp(
   env: Record<string, string> = {},
-  options: Pick<AppOptions, 'fetchPolicy'> = {},
+  options: Pick<AppOptions, 'fetchPolicy' | 'onRestart'> = {},
 ): Promise<TestApp> {
   const dir = mkdtempSync(join(tmpdir(), 'memora-test-'));
   const config = loadConfig({ MEMORA_DATA_DIR: dir, MEMORA_WEB_DIR: join(dir, 'web'), ...env });
@@ -59,6 +60,7 @@ export async function createTestApp(
     app,
     db,
     clock,
+    config,
     client,
     async setupAdmin(username = 'admin') {
       const code = app.authService.startSetupIfNeeded();
