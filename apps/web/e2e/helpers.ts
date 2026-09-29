@@ -330,6 +330,9 @@ export class FakeApi {
 
   /** Files pasted into pages, by id. */
   readonly files = new Map<string, { data: Buffer; type: string; name: string }>();
+  /** Images on "the web" that `POST /assets/fetch` can download; others fail. */
+  readonly web = new Map<string, Buffer>();
+  private fetched = 0;
 
   private async handle(route: Route) {
     const request = route.request();
@@ -357,16 +360,41 @@ export class FakeApi {
     );
   }
 
-  /** `PUT /assets/:id` keeps the file; `GET` gives it back. */
+  /** `PUT /assets/:id` keeps the file; `GET` gives it back; `POST /assets/fetch` downloads one. */
   private async file(route: Route, id: string, url: URL) {
     const request = route.request();
+    const body =
+      id === 'fetch' ? ((request.postDataJSON() as Record<string, unknown> | null) ?? {}) : {};
     this.requests.push({
       method: request.method(),
       path: url.pathname,
       headers: request.headers(),
-      body: {},
+      body,
     });
     if (this.down) return route.abort('connectionrefused').catch(() => undefined);
+    if (id === 'fetch' && request.method() === 'POST') {
+      const data = this.web.get(String(body.url));
+      if (!data) {
+        return route
+          .fulfill({
+            status: 422,
+            json: {
+              error: {
+                code: 'fetch_failed',
+                message: 'The website answered 404.',
+                details: { reason: 'status' },
+              },
+            },
+          })
+          .catch(() => undefined);
+      }
+      const newId = `0190e5a4-7c1d-7b3e-8a2f-${String(++this.fetched).padStart(12, '0')}`;
+      this.files.set(newId, { data, type: 'image/png', name: 'image.png' });
+      const meta = { id: newId, mime: 'image/png', size: data.length, width: 1, height: 1 };
+      return route
+        .fulfill({ status: 201, json: { ...meta, name: 'image.png', createdAt: NOW } })
+        .catch(() => undefined);
+    }
     if (request.method() === 'PUT') {
       const data = request.postDataBuffer() ?? Buffer.alloc(0);
       const type = request.headers()['content-type'] ?? 'application/octet-stream';
@@ -394,6 +422,12 @@ export class FakeApi {
       .catch(() => undefined);
   }
 }
+
+/** A tiny PNG, as a website would serve it. */
+export const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
 
 /** Waits until the self-hosted fonts are in, so text is measured and drawn final. */
 export async function fontsReady(page: Page) {
