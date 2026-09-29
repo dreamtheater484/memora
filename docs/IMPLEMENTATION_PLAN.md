@@ -1151,12 +1151,12 @@ Long lists (pages, search results, cards) render only what is visible on screen.
 
 - [x] Design principles and a moodboard (folded into the three mockup directions)
 - [x] 2–3 visual directions as clickable static mockups: phone 390 px, desktop 1440 px, ultra-wide 5120×1440; light and dark; screens for notebook, page (Markdown split view and rich), Kanban board and search
-- [ ] Review → choose → refine (one or two rounds). **Chosen: Aurora (D21)**; refinement pending
-- [ ] Design tokens as CSS variables: colour, type, spacing, radius, elevation, motion; 12 section colours
-- [ ] Self-hosted fonts (Figtree, Bricolage Grotesque, JetBrains Mono)
-- [ ] Core components: Button, IconButton, Input, Select, Checkbox, Switch, Menu, ContextMenu, Dialog, Sheet, Popover, Tooltip, SectionTabs, PageTree, Toast, CommandPalette shell, Chip/Badge, Avatar, Skeleton, EmptyState, **SaveIndicator**, SplitPane
-- [ ] Component gallery page with a visual-regression baseline (D22)
-- [ ] Responsive app shell with the breakpoints from §9.12 (placeholder content)
+- [ ] Review → choose → refine (one or two rounds). **Chosen: Aurora (D21)**; the final review happens on the built app shell
+- [x] Design tokens as CSS variables: colour, type, spacing, radius, elevation, motion; 12 section colours
+- [x] Self-hosted fonts (Figtree, Bricolage Grotesque, JetBrains Mono)
+- [x] Core components: Button, IconButton, Input, Select, Checkbox, Switch, Menu, ContextMenu, Dialog, Sheet, Popover, Tooltip, SectionTabs, PageTree, Toast, CommandPalette shell, Chip/Badge, Avatar, Skeleton, EmptyState, **SaveIndicator**, SplitPane
+- [x] Component gallery page with a visual-regression baseline (D22)
+- [x] Responsive app shell with the breakpoints from §9.12 (placeholder content)
 
 **Acceptance:** you approve the direction, and the app shell matches the mockups at all three sizes in both themes.
 
