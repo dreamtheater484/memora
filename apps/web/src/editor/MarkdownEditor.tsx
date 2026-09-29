@@ -112,6 +112,8 @@ export default function MarkdownEditor({
     if (!element) return;
     const proxyHost: EditorHost = {
       addFile: (file, name) => hostRef.current.addFile(file, name),
+      downloadImage: (url) =>
+        hostRef.current.downloadImage?.(url) ?? Promise.reject(new Error('Not available')),
       localFile: (id) => hostRef.current.localFile(id),
       pages: () => hostRef.current.pages(),
       pickFile: (v, images) => hostRef.current.pickFile(v, images),
