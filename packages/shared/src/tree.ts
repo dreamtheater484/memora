@@ -102,7 +102,13 @@ export function isWithin<T>(
  * HTML tags go, the words stay. Deliberately rough; it never needs to round-trip.
  */
 export function markdownToText(markdown: string): string {
+  // Escaped characters (`\#`, `\*`) are just characters: set aside, so no rule below sees them.
+  const escaped: string[] = [];
   return markdown
+    .replace(
+      /\\([\\`*_{}[\]()#+\-.!|~$<>])/g,
+      (_, c: string) => `\uE000${escaped.push(c) - 1}\uE001`,
+    )
     .replace(/^\s*(```|~~~).*$/gm, '')
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
@@ -115,7 +121,8 @@ export function markdownToText(markdown: string): string {
     .replace(/(\*\*|__|~~|==)(.+?)\1/g, '$2')
     .replace(/(^|[^\w*])[*_]([^*_\n]+)[*_](?=[^\w*]|$)/gm, '$1$2')
     .replace(/`+([^`]*)`+/g, '$1')
-    .replace(/<[^>]*>/g, '');
+    .replace(/<[^>]*>/g, '')
+    .replace(/\uE000(\d+)\uE001/g, (_, i: string) => escaped[Number(i)] ?? '');
 }
 
 /** The start of a page's text, on one line, for the page list. */
