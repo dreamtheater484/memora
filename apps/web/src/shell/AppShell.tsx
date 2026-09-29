@@ -1,5 +1,5 @@
 import type { UiState } from '@memora/shared';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Columns2,
   FilePlus,
@@ -18,7 +18,6 @@ import {
   Sun,
 } from 'lucide-react';
 import { useEffect, useMemo, type ReactNode } from 'react';
-import { fetchHealth } from '../api';
 import {
   CommandPalette,
   EmptyState,
@@ -47,6 +46,7 @@ import { ContainerList, NotebookList } from './PhoneViews';
 import { shortcutKeys, useShortcuts } from './shortcuts';
 import { Rail, Sidebar } from './Sidebar';
 import { useShell } from './store';
+import { SyncBanner } from './SyncStatus';
 import { TopBar } from './TopBar';
 
 const panel = 'glass min-h-0 overflow-hidden rounded-xl';
@@ -332,12 +332,6 @@ export function AppShell() {
   const tablet = useMediaQuery('(min-width: 40rem)');
   const ultra = useMediaQuery('(min-width: 200rem)');
   const paletteItems = usePaletteItems(current, commands);
-  const health = useQuery({
-    queryKey: ['health'],
-    queryFn: fetchHealth,
-    refetchInterval: 30_000,
-    retry: 1,
-  });
   useDropRules(commands);
 
   // The accent and the ambient glow follow the current section.
@@ -416,7 +410,8 @@ export function AppShell() {
 
   return (
     <div className="aurora-bg @container flex h-full flex-col">
-      <TopBar saveState={health.isError ? 'offline' : 'saved'} />
+      <TopBar />
+      <SyncBanner />
       <div
         className={cn(
           'grid min-h-0 flex-1 gap-2.5 px-2 pb-2 @tablet:px-2.5 @tablet:pb-2.5',

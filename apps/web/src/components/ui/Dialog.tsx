@@ -14,6 +14,7 @@ const WIDTH = {
   sm: 'tablet:w-[min(26rem,calc(100vw-2rem))]',
   md: 'tablet:w-[min(32rem,calc(100vw-2rem))]',
   lg: 'tablet:w-[min(45rem,calc(100vw-2rem))]',
+  xl: 'tablet:w-[min(64rem,calc(100vw-2rem))]',
 };
 
 export interface DialogContentProps extends Omit<ComponentProps<typeof D.Content>, 'title'> {

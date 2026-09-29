@@ -131,9 +131,9 @@ const TREE: DemoNode[] = [
 const SAVE_STATES: { state: SaveState; pending?: number }[] = [
   { state: 'saved' },
   { state: 'saving' },
-  { state: 'dirty' },
-  { state: 'offline', pending: 3 },
+  { state: 'local', pending: 3 },
   { state: 'conflict' },
+  { state: 'failed' },
 ];
 
 function Demo({

@@ -1,9 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { sectionHeading } from '../components/ui/styles';
 import { cn } from '../lib/cn';
 import { formatDateTime } from '../lib/time';
-import { pageQuery } from '../notes/queries';
+import { useDocSnapshot, usePageDoc } from '../sync/hooks';
 import { useCurrent } from './location';
 
 function Block({ title, children }: { title: string; children: ReactNode }) {
@@ -22,8 +21,10 @@ const Later = ({ children }: { children: ReactNode }) => (
 /** Page details on wide screens: information now; outline, links and history as they arrive. */
 export function Inspector() {
   const { page, path } = useCurrent();
-  const { data } = useQuery({ ...pageQuery(page?.id ?? ''), enabled: !!page });
-  const words = data?.content.trim() ? data.content.trim().split(/\s+/).length : 0;
+  const doc = usePageDoc(page?.type === 'markdown' ? page.id : null);
+  // As stored on this device: follows typing within a moment.
+  const text = useDocSnapshot(doc)?.record?.content.trim();
+  const words = text ? text.split(/\s+/).length : 0;
   return (
     <aside
       aria-label="Page details"
@@ -48,7 +49,7 @@ export function Inspector() {
             <dd>{formatDateTime(page.updatedAt)}</dd>
             <dt className="text-fg-3">Type</dt>
             <dd>{page.type === 'markdown' ? 'Markdown' : 'Rich text'}</dd>
-            {data && page.type === 'markdown' && (
+            {text !== undefined && page.type === 'markdown' && (
               <>
                 <dt className="text-fg-3">Words</dt>
                 <dd className="tabular-nums">{words}</dd>

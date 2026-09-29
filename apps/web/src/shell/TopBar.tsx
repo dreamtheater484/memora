@@ -31,8 +31,6 @@ import {
   MenuRadioItem,
   MenuSeparator,
   MenuTrigger,
-  SaveIndicator,
-  type SaveState,
 } from '../components/ui';
 import { hueStyle } from '../theme/sections';
 import { useTheme, type ThemeMode } from '../theme/theme';
@@ -41,6 +39,7 @@ import { PROJECTS } from './demo';
 import { useCurrent, useGo, type Current } from './location';
 import { shortcutKeys } from './shortcuts';
 import { useShell } from './store';
+import { GlobalSaveIndicator } from './SyncStatus';
 
 const THEME_ICON = { system: <Monitor />, light: <Sun />, dark: <Moon /> };
 
@@ -223,7 +222,7 @@ function AccountMenu() {
   );
 }
 
-export function TopBar({ saveState }: { saveState: SaveState }) {
+export function TopBar() {
   const current = useCurrent();
   const go = useGo();
   const commands = useCommands();
@@ -259,7 +258,7 @@ export function TopBar({ saveState }: { saveState: SaveState }) {
         <Kbd className="bg-transparent">{shortcutKeys('palette')}</Kbd>
       </button>
       <div className="flex flex-[1_0_0%] items-center justify-end gap-1.5">
-        <SaveIndicator state={saveState} />
+        <GlobalSaveIndicator />
         {notes && current.section && (
           <span className="hidden @tablet:contents @desktop:hidden">
             <IconButton label="Pages" icon={<PanelRight />} onClick={() => setPagesOpen(true)} />
