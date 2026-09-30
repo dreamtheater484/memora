@@ -227,7 +227,9 @@ test.describe('templates', () => {
       .getByRole('dialog', { name: 'Default template' })
       .getByRole('button', { name: 'To-do list' })
       .click();
-    await expect(page.getByText('New pages in Roadmap start from “To-do list”')).toBeVisible();
+    await expect(
+      page.getByText('New pages in Roadmap start from “To-do list”', { exact: true }),
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Page', exact: true }).click();
     await page.keyboard.press('Escape');
     await expect.poll(() => editorText(page)).toContain('## This week');
