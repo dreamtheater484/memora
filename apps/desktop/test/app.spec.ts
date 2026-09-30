@@ -1,7 +1,13 @@
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { _electron as electron, expect, test } from '@playwright/test';
+import {
+  _electron as electron,
+  expect,
+  test,
+  type ElectronApplication,
+  type Page,
+} from '@playwright/test';
 
 /** The app this system's build made (release/…), or an installed one (MEMORA_APP). */
 function appPath(): string {
@@ -24,17 +30,21 @@ function appPath(): string {
 const userData = mkdtempSync(path.join(tmpdir(), 'memora-desktop-'));
 /** What the app printed, each launch in turn: kept with the test results when a test fails. */
 let output = '';
+/** The app while it runs, so a failed test still closes it (Windows can't delete open files). */
+let running: ElectronApplication | undefined;
 
-test.afterEach(() => {
+test.afterEach(async () => {
   const testInfo = test.info();
-  if (testInfo.status === testInfo.expectedStatus) return;
-  const logs = path.join(testInfo.outputDir, 'logs');
-  mkdirSync(logs, { recursive: true });
-  writeFileSync(path.join(logs, 'electron.log'), output);
-  const serverLogs = path.join(userData, 'logs');
-  if (existsSync(serverLogs)) cpSync(serverLogs, logs, { recursive: true });
+  if (testInfo.status !== testInfo.expectedStatus) {
+    const logs = path.join(testInfo.outputDir, 'logs');
+    mkdirSync(logs, { recursive: true });
+    writeFileSync(path.join(logs, 'electron.log'), output);
+    const serverLogs = path.join(userData, 'logs');
+    if (existsSync(serverLogs)) cpSync(serverLogs, logs, { recursive: true });
+  }
+  await running?.close().catch(() => undefined);
 });
-test.afterAll(() => rmSync(userData, { recursive: true, force: true }));
+test.afterAll(() => rmSync(userData, { recursive: true, force: true, maxRetries: 5 }));
 
 async function launch() {
   output += `--- launch at ${new Date().toISOString()}\n`;
@@ -44,17 +54,27 @@ async function launch() {
     args: process.platform === 'linux' ? ['--no-sandbox'] : [],
     env: { ...process.env, MEMORA_USER_DATA: userData, MEMORA_NO_UPDATES: '1' },
   });
+  running = app;
   app.process().stdout?.on('data', (chunk: Buffer) => (output += chunk.toString()));
   app.process().stderr?.on('data', (chunk: Buffer) => (output += chunk.toString()));
   // The window opens once the server answers, which it may take up to a minute for.
   const page = await app.firstWindow({ timeout: 90_000 });
-  const nav = page.getByRole('navigation', { name: 'Navigation' });
-  await expect(nav).toBeVisible({ timeout: 90_000 });
-  return { app, page, nav };
+  // Shown and signed in. (Whether the sidebar shows depends on the screen: CI's Windows screen
+  // is 1024 pixels wide, where Memora lays out as on a tablet.)
+  await expect(page.getByRole('main')).toBeVisible({ timeout: 90_000 });
+  return { app, page };
 }
 
+/** The names in the notes' tree, as the window's own session sees them. */
+const notebooks = (page: Page) =>
+  page.evaluate(async () => {
+    const response = await fetch('/api/v1/tree');
+    if (!response.ok) throw new Error(`tree: ${response.status}`);
+    return JSON.stringify(await response.json());
+  });
+
 test('opens signed in, keeps the notes, and closes cleanly', async () => {
-  let { app, page, nav } = await launch();
+  let { app, page } = await launch();
   // Its name, which also names the folder of the notes (…/Memora/Data).
   expect(await app.evaluate(({ app }) => app.getName())).toBe('Memora');
 
@@ -65,6 +85,8 @@ test('opens signed in, keeps the notes, and closes cleanly', async () => {
     csrfToken: string;
   };
   expect(me).toMatchObject({ desktop: true, user: { role: 'admin' } });
+  // No service worker in the app: its server is always there.
+  expect(await page.evaluate(async () => (await fetch('/sw.js')).status)).toBe(404);
 
   await page.evaluate(async (csrf) => {
     const response = await fetch('/api/v1/notebooks', {
@@ -75,7 +97,8 @@ test('opens signed in, keeps the notes, and closes cleanly', async () => {
     if (!response.ok) throw new Error(await response.text());
   }, me.csrfToken);
   await page.reload();
-  await expect(nav.getByRole('treeitem', { name: 'From the desktop', exact: true })).toBeVisible();
+  await expect(page.getByRole('main')).toBeVisible();
+  expect(await notebooks(page)).toContain('From the desktop');
 
   // The licence list: the app's, the server's, the desktop app's own and Electron's.
   const notices = await page.evaluate(async () =>
@@ -88,9 +111,9 @@ test('opens signed in, keeps the notes, and closes cleanly', async () => {
   if (process.env.MEMORA_SHOT) await page.screenshot({ path: process.env.MEMORA_SHOT });
   await app.close();
 
-  // Started again: the same notes, at the same address (the web app's offline copy stays).
-  ({ app, page, nav } = await launch());
-  await expect(nav.getByRole('treeitem', { name: 'From the desktop', exact: true })).toBeVisible();
+  // Started again: the same notes, at the same address (the web app's own storage stays).
+  ({ app, page } = await launch());
+  expect(await notebooks(page)).toContain('From the desktop');
   expect(new URL(page.url()).origin).toBe(origin);
   await app.close();
 
