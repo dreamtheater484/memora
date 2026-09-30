@@ -5,6 +5,8 @@ dist-gallery/
 playwright-report/
 test-results/
 coverage/
+apps/desktop/build/
+apps/desktop/release/
 data/
 backups/
 

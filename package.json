@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "pnpm --parallel --filter \"./apps/*\" dev",
-    "build": "pnpm --filter \"./apps/*\" build && node scripts/licenses.mjs combine",
+    "build": "pnpm --filter @memora/server --filter @memora/web build && node scripts/licenses.mjs combine",
     "start": "pnpm --filter @memora/server start",
     "lint": "eslint .",
     "format": "prettier --write .",

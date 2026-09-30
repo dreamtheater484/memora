@@ -12,6 +12,10 @@ ignoredBuiltDependencies:
   - better-sqlite3
   # Git hooks are installed by scripts/install-hooks.mjs instead (skipped in CI and Docker builds).
   - lefthook
+  # The desktop app (apps/desktop): electron-builder downloads Electron itself when it packages
+  # the app, and makes the Windows installer with NSIS, not Squirrel.
+  - electron
+  - electron-winstaller
 
 # Patched versions of transitive dependencies with published advisories (`pnpm audit`).
 overrides:
