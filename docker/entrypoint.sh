@@ -1,7 +1,8 @@
 #!/bin/sh
 # Memora container entrypoint.
 #  - Caps the Node.js heap (MEMORA_MAX_HEAP_MB, default 256) to keep RAM use predictable.
-#  - When started as root: prepares the data folders, then runs Memora as PUID:PGID.
+#  - When started as root: prepares the data folders, then runs Memora as the owner of the
+#    data folder (or PUID:PGID when set; see memora-user.sh).
 #  - When started as a non-root user (compose `user:`): runs directly as that user.
 set -eu
 
@@ -18,13 +19,14 @@ if [ "$(id -u)" != "0" ]; then
   exec "$@"
 fi
 
-PUID="${PUID:-1000}"
-PGID="${PGID:-1000}"
+CHOSEN_PUID="${PUID:-}"
+. /usr/local/lib/memora-user.sh
+memora_user "$DATA_DIR"
 case "$PUID$PGID" in
   '' | *[!0-9]*) echo "memora: PUID and PGID must be numeric" >&2; exit 1 ;;
 esac
 if [ "$PUID" = "0" ]; then
-  echo "memora: refusing to run as root (PUID=0); set PUID/PGID to a regular user" >&2
+  echo "memora: refusing to run as root (PUID=0); leave PUID out, or set it to a regular user" >&2
   exit 1
 fi
 
@@ -43,8 +45,12 @@ for dir in "$DATA_DIR" "$BACKUP_DIR"; do
   # Never chown existing data recursively (a wrong mount could change a whole share);
   # explain the fix instead.
   if ! run_as_user test -w "$dir"; then
-    echo "memora: $dir is not writable by user $PUID:$PGID." >&2
-    echo "memora: give that user read/write access to the folder on the host, or change PUID/PGID." >&2
+    echo "memora: $dir is not writable by user $PUID:$PGID (the folder belongs to $(stat -c '%u:%g' "$dir"))." >&2
+    if [ -n "$CHOSEN_PUID" ]; then
+      echo "memora: leave PUID/PGID out to run as the folder's owner, or give user $PUID read/write access to it on the host." >&2
+    else
+      echo "memora: give user $PUID read/write access to the folder on the host, or set PUID/PGID to a user that has it." >&2
+    fi
     exit 1
   fi
 done

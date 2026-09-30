@@ -49,9 +49,7 @@ LABEL org.opencontainers.image.title="Memora" \
 
 ENV NODE_ENV=production \
     PORT=3000 \
-    MEMORA_DATA_DIR=/data \
-    PUID=1000 \
-    PGID=1000
+    MEMORA_DATA_DIR=/data
 
 COPY --from=build /usr/local/bin/node /usr/local/bin/node
 
@@ -66,12 +64,14 @@ COPY LICENSE ./
 COPY docker/healthcheck.mjs ./
 COPY docker/entrypoint.sh /usr/local/bin/memora-entrypoint
 COPY docker/memora-admin.sh /usr/local/bin/memora-admin
+COPY docker/memora-user.sh /usr/local/lib/memora-user.sh
 RUN chmod 0755 /usr/local/bin/memora-entrypoint /usr/local/bin/memora-admin && mkdir -p /data
 
 EXPOSE 3000
 HEALTHCHECK --interval=60s --timeout=5s --start-period=30s --retries=3 \
   CMD ["node", "/app/healthcheck.mjs"]
 
-# The entrypoint starts as root only to prepare /data, then drops to PUID:PGID.
+# The entrypoint starts as root only to prepare /data, then drops to the data folder's owner
+# (or PUID:PGID when set).
 ENTRYPOINT ["memora-entrypoint"]
 CMD ["node", "apps/server/dist/server.mjs"]

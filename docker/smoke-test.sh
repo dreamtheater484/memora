@@ -6,11 +6,13 @@ set -euo pipefail
 
 IMAGE="${1:-memora:local}"
 NAME="memora-smoke-$$"
+VOLUME="memora-smoke-$$"
 DATA_DIR="$(mktemp -d)"
 PORT="${SMOKE_PORT:-3990}"
 
 cleanup() {
   docker rm -f "$NAME" >/dev/null 2>&1 || true
+  docker volume rm -f "$VOLUME" >/dev/null 2>&1 || true
   # Files in the volume belong to the container user; remove them through Docker.
   docker run --rm -v "$DATA_DIR:/cleanup" --entrypoint sh "$IMAGE" -c 'rm -rf /cleanup/*' >/dev/null 2>&1 || true
   rmdir "$DATA_DIR" 2>/dev/null || true
@@ -31,9 +33,20 @@ expect() {
   out="$("${@:3}")" && grep -q -- "$1" <<<"$out" || fail "$2"
 }
 
-docker run -d --name "$NAME" -p "127.0.0.1:$PORT:3000" \
-  -e PUID="$(id -u)" -e PGID="$(id -g)" \
-  -v "$DATA_DIR:/data" "$IMAGE" >/dev/null
+# Which user Memora runs as (the entrypoint runs the given command in its place):
+# the data folder's owner when nothing is set,
+[ "$(docker run --rm -v "$DATA_DIR:/data" "$IMAGE" id -u)" = "$(id -u)" ] ||
+  fail "not running as the data folder's owner"
+# 1000 for a new Docker volume (root's, and empty),
+[ "$(docker run --rm -v "$VOLUME:/data" "$IMAGE" sh -c 'echo "$(id -u) $(stat -c %u /data)"')" = "1000 1000" ] ||
+  fail "a new volume is not handed to user 1000"
+docker volume rm -f "$VOLUME" >/dev/null
+# and PUID/PGID when they are set.
+[ "$(docker run --rm -e PUID=4321 -e PGID=4321 -v "$VOLUME:/data" "$IMAGE" sh -c 'echo "$(id -u) $(id -g)"')" = "4321 4321" ] ||
+  fail "PUID/PGID not used"
+
+# No PUID/PGID: Memora takes the data folder's owner.
+docker run -d --name "$NAME" -p "127.0.0.1:$PORT:3000" -v "$DATA_DIR:/data" "$IMAGE" >/dev/null
 
 for _ in $(seq 1 30); do
   if curl -fsS "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then break; fi
@@ -42,7 +55,7 @@ done
 
 expect '"status":"ok"' "health endpoint not ok" curl -fsS "http://127.0.0.1:$PORT/api/health"
 expect '<div id="root">' "web app not served" curl -fsS "http://127.0.0.1:$PORT/"
-[ "$(docker exec "$NAME" stat -c %u /proc/1)" = "$(id -u)" ] || fail "server is not running as PUID"
+[ "$(docker exec "$NAME" stat -c %u /proc/1)" = "$(id -u)" ] || fail "server is not running as the data folder's owner"
 [ -f "$DATA_DIR/memora.db" ] || fail "database not created in the data volume"
 
 docker exec "$NAME" node /app/healthcheck.mjs || fail "built-in healthcheck failed"
@@ -61,7 +74,7 @@ setup() {
 expect "^smoke " "admin account not listed" docker exec "$NAME" memora-admin list-users
 expect "One-time password" "memora-admin reset-password" \
   docker exec "$NAME" memora-admin reset-password smoke
-[ "$(stat -c %u "$DATA_DIR/memora.db-wal")" = "$(id -u)" ] || fail "database files not owned by PUID"
+[ "$(stat -c %u "$DATA_DIR/memora.db-wal")" = "$(id -u)" ] || fail "database files not owned by the data folder's owner"
 
 docker stop -t 10 "$NAME" >/dev/null
 [ "$(docker inspect -f '{{.State.ExitCode}}' "$NAME")" = "0" ] || fail "container did not shut down cleanly"
