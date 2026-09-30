@@ -13,6 +13,7 @@ import type {
   TreeChanges,
 } from '@memora/shared';
 import { expect, type Page, type Route, type WebSocketRoute } from '@playwright/test';
+import { FakeKanban } from './kanban';
 import { FakeNotes } from './notes';
 
 export const THEMES = ['light', 'dark'] as const;
@@ -193,6 +194,8 @@ export class FakeApi {
   loginAs: CurrentUser = ADMIN;
   /** Notebooks, sections and pages; replace before `install` for other content. */
   notes = new FakeNotes(NOW);
+  /** Projects, boards and cards; replace before `install` for other content. */
+  kanban = new FakeKanban(NOW);
 
   // Network control, for the resilience tests.
   /** Nothing answers: requests fail as if the server were gone, live channels close. */
@@ -214,6 +217,21 @@ export class FakeApi {
   async install(page: Page, label = 'Chrome on Linux') {
     this.notes.onChange = (changed, origin) =>
       this.publish({ type: 'page.updated', page: changed, revision: changed.revision, origin });
+    this.kanban.publish = (event) => this.publish(event);
+    this.kanban.pageOf = (id) => {
+      const live = this.notes.tree.pages.find((p) => p.id === id);
+      const gone = live
+        ? null
+        : this.notes.trash.flatMap((t) => t.rows.pages).find((p) => p.id === id);
+      const page = live ?? gone;
+      return page
+        ? { title: page.title, sectionId: page.sectionId, type: page.type, deleted: !live }
+        : null;
+    };
+    this.kanban.fileOf = (id) => {
+      const file = this.files.get(id);
+      return file ? { name: file.name, type: file.type, size: file.data.length } : null;
+    };
     await page.route('**/api/**', (route) => this.handle(route));
     await page.routeWebSocket(/\/api\/v1\/events/, (ws) => this.connect(ws, label));
   }
@@ -399,7 +417,15 @@ export class FakeApi {
             return { json: { restarting: true, safetyBackup: safety.name } };
           }
         }
+        if (route === 'GET /api/v1/search' && body.cards === '1') {
+          const found = this.notes.respond(method, path, body, origin)!;
+          return {
+            ...found,
+            json: { ...(found.json as object), cards: this.kanban.search(String(body.q ?? '')) },
+          };
+        }
         return (
+          this.kanban.respond(method, path, body, origin) ??
           this.notes.respond(method, path, body, origin) ??
           error(404, 'not_found', `No fake for ${route}.`)
         );
