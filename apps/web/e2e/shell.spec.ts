@@ -68,18 +68,21 @@ test.describe('behaviour', () => {
     );
   });
 
-  test('the page list opens pages, and Tab makes a subpage', async ({ page }) => {
+  test('the page list opens pages, and Alt+Shift+→ makes a subpage', async ({ page }) => {
     await openShell(page, 'light');
     await page.getByRole('treeitem', { name: /^Launch checklist/ }).click();
     await expect(title(page)).toHaveText('Launch checklist');
 
     const openq = page.getByRole('treeitem', { name: /^Open questions/ });
     await openq.click();
-    await page.keyboard.press('Tab');
+    await page.keyboard.press('Alt+Shift+ArrowRight');
     await expect(openq).toHaveAttribute('aria-level', '2');
     await expect(openq).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Alt+Shift+ArrowLeft');
     await expect(openq).toHaveAttribute('aria-level', '1');
+    // Tab leaves the list, as everywhere.
+    await page.keyboard.press('Tab');
+    await expect(openq).not.toBeFocused();
   });
 
   test('a new page starts with its title field, and lands in the list', async ({ page }) => {
