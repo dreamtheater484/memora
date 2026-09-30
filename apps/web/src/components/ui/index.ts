@@ -5,7 +5,7 @@ export { Badge, Chip } from './Chip';
 export { CommandPalette, type PaletteItem } from './CommandPalette';
 export { Dialog, DialogClose, DialogContent, DialogTrigger } from './Dialog';
 export { EmptyState } from './EmptyState';
-export { IconButton } from './IconButton';
+export { IconButton, type IconButtonSize } from './IconButton';
 export { Field, Input } from './Input';
 export { PasswordInput } from './PasswordInput';
 export { Kbd } from './Kbd';

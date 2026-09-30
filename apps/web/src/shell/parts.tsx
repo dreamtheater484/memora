@@ -1,12 +1,49 @@
 import type { NotebookIcon as NotebookIconId } from '@memora/shared';
-import { Notebook } from 'lucide-react';
+import { Ellipsis, Notebook } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { IconButton, type IconButtonSize } from '../components/ui';
+import { openContextMenu } from '../lib/contextMenu';
 import { useDropZone } from '../lib/dnd';
 import { cn } from '../lib/cn';
 import { useFocusOnMount } from '../lib/useFocusOnMount';
 import { NOTEBOOK_ICON } from './icons';
 
 /** The notebook's icon on a tile in its colour (the element needs the "hue" class). */
+/**
+ * "…" beside or on a row: opens the row's right-click (long-press) menu, for everyone who
+ * doesn't know that menu is there. `inRow` is for a button inside a tree row: it stays out of
+ * the row's accessible name and the tab order, since the menu key or Shift+F10 opens the same
+ * menu from the row.
+ */
+export function MoreButton({
+  label,
+  size = 'xs',
+  inRow,
+  className,
+}: {
+  label: string;
+  size?: IconButtonSize;
+  inRow?: boolean;
+  className?: string;
+}) {
+  return (
+    <IconButton
+      label={label}
+      icon={<Ellipsis />}
+      size={size}
+      tabIndex={inRow ? -1 : undefined}
+      aria-hidden={inRow || undefined}
+      className={className}
+      // Not a drag, and not a click on the row itself.
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        openContextMenu(e.currentTarget);
+      }}
+    />
+  );
+}
+
 export function NotebookTile({ icon, className }: { icon: NotebookIconId; className?: string }) {
   const Icon = NOTEBOOK_ICON[icon] ?? Notebook;
   return (

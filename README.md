@@ -1,6 +1,6 @@
 # Memora
 
-A self-hosted notebook that runs in your browser. It combines OneNote-style organisation (notebooks, section tabs, page lists) with first-class Markdown, a Word-like rich editor and built-in Kanban boards. It is designed to look great on a phone, a laptop and an ultra-wide monitor.
+A self-hosted notebook that runs in your browser: notebooks with coloured section tabs and page lists, first-class Markdown, a Word-like rich editor and built-in Kanban boards, in one app. It is designed to look great on a phone, a laptop and an ultra-wide monitor.
 
 > **Version 0.9: a public beta.** Everything planned for 1.0 is in and tested; 1.0 follows after time in real use. What's in it: [CHANGELOG.md](CHANGELOG.md).
 
@@ -8,7 +8,7 @@ A self-hosted notebook that runs in your browser. It combines OneNote-style orga
 
 ## What it does
 
-- **Organisation like OneNote, done better:** notebooks → section groups → coloured section tabs → pages and subpages, with drag and drop, an Inbox for quick notes, and a shortcut for everything.
+- **Organised your way:** notebooks → section groups → coloured section tabs → pages and subpages, with drag and drop, an Inbox for quick notes, and a shortcut for everything.
 - **Markdown notes:** a Notepad++-style source beside a live preview, tables that line up as you type, maths, diagrams and highlighted code.
 - **Rich notes:** a Word-like editor with tables, callouts and images. Paste screenshots straight in, and clean pastes from Word, Google Docs and the web.
 - **Never lose a keystroke:** autosave that works offline, an honest save indicator, merged edits from two devices, version history, a recycle bin, and scheduled backups (optionally encrypted).
@@ -76,6 +76,18 @@ The web app runs at `http://localhost:5173` and the API at `http://localhost:300
 - [Security policy](docs/SECURITY.md) and [security review](docs/SECURITY_REVIEW.md): threat model, OWASP ASVS Level 1
 - [Architecture decision records](docs/adr/)
 - [Changelog](CHANGELOG.md) and [making a release](docs/RELEASING.md)
+
+## Credits
+
+Memora is built on the work of many open-source projects. Among them:
+
+- **Interface:** [React](https://react.dev), [TanStack Router and Query](https://tanstack.com), [Radix UI](https://www.radix-ui.com), [Tailwind CSS](https://tailwindcss.com), [Lucide](https://lucide.dev) icons, and the [Figtree](https://github.com/erikdkennedy/figtree), [Bricolage Grotesque](https://github.com/ateliertriay/bricolage) and [JetBrains Mono](https://www.jetbrains.com/lp/mono/) fonts.
+- **Editors:** [CodeMirror](https://codemirror.net) for Markdown, and [TipTap](https://tiptap.dev) on [ProseMirror](https://prosemirror.net) for rich text.
+- **Markdown and more:** [unified](https://unifiedjs.com) (remark and rehype), [Shiki](https://shiki.style), [KaTeX](https://katex.org), [Mermaid](https://mermaid.js.org) and [DOMPurify](https://github.com/cure53/DOMPurify).
+- **Import and export:** [docx](https://docx.js.org), [mammoth](https://github.com/mwilliamson/mammoth.js), [Turndown](https://github.com/mixmark-io/turndown), [Paged.js](https://pagedjs.org) and [JSZip](https://stuk.github.io/jszip/).
+- **Server:** [Node.js](https://nodejs.org), [Fastify](https://fastify.dev), [SQLite](https://sqlite.org) through [better-sqlite3](https://github.com/WiseLibs/better-sqlite3), [Drizzle ORM](https://orm.drizzle.team), [Zod](https://zod.dev) and [Argon2](https://github.com/napi-rs/node-rs).
+
+Every package Memora ships, with its licence, is listed in the app (**Settings → Open-source licences**, or `/third-party-licenses.txt`). The list is made at build time from what the build contains, and the build stops on a licence nobody has reviewed yet (`scripts/licenses.mjs`).
 
 ## License
 

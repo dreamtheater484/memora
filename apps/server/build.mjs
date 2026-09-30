@@ -2,9 +2,12 @@
 // and the memora-admin command-line tool into dist/admin.mjs.
 // Only native modules stay external; they are listed under `dependencies` in package.json and are
 // the only packages installed in the Docker runtime image.
+import { readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { build } from 'esbuild';
+import { packageDirOf, section, SERVER_TITLE, withDependencies } from '../../scripts/licenses.mjs';
 
-await build({
+const result = await build({
   entryPoints: { server: 'src/index.ts', admin: 'src/admin-cli.ts' },
   outdir: 'dist',
   outExtension: { '.js': '.mjs' },
@@ -30,4 +33,18 @@ await build({
     ].join('\n'),
   },
   logLevel: 'info',
+  metafile: true,
 });
+
+// The open-source licences of what the server ships: every package bundled in, and the
+// native ones beside it with their dependencies (scripts/licenses.mjs).
+const dirs = new Set();
+for (const input of Object.keys(result.metafile.inputs)) {
+  const dir = packageDirOf(path.resolve(input));
+  if (dir) dirs.add(dir);
+}
+const { dependencies } = JSON.parse(readFileSync('package.json', 'utf8'));
+for (const name of Object.keys(dependencies)) {
+  for (const dir of withDependencies(path.join('node_modules', name))) dirs.add(dir);
+}
+writeFileSync('dist/third-party-licenses.txt', section(SERVER_TITLE, dirs));

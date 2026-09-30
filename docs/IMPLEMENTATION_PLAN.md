@@ -31,7 +31,7 @@
 
 ## 1. Vision & guiding principles
 
-**Memora** is a self-hosted notebook that runs in the browser. It takes OneNote's way of organising notes (notebooks, section tabs, page lists) and adds proper Markdown support, a Word-like rich-text editor and built-in Kanban boards. It should look great on a phone, on a laptop and on a 5120-pixel-wide monitor.
+**Memora** is a self-hosted notebook that runs in the browser. It organises notes in notebooks, section tabs and page lists, and adds proper Markdown support, a Word-like rich-text editor and built-in Kanban boards. It should look great on a phone, on a laptop and on a 5120-pixel-wide monitor.
 
 ### Guiding principles
 
@@ -54,7 +54,7 @@
 | Client OS / browsers | Any modern browser on Windows 11, Ubuntu 26.04, Android and iOS/iPadOS: Chromium-based (Chrome/Edge), Firefox and Safari.                                                       |
 | Server               | One Docker container. Synology Container Manager is the main target, but any Docker host works (Docker Engine on Ubuntu 26.04, Docker Desktop on Windows 11, other NAS brands). |
 | Users                | Accounts with username and password, starting with a single admin. Each user's data is private. Two-factor authentication (2FA) is optional.                                    |
-| Organisation         | OneNote-style hierarchy: notebooks → section groups → sections (tabs along the top) → pages and subpages (page list, on the right by default).                                  |
+| Organisation         | Hierarchy: notebooks → section groups → sections (tabs along the top) → pages and subpages (page list, on the right by default).                                                |
 | Markdown notes       | Notepad++-style source view, rendered preview and split view. Tables realign automatically. Toolbar, shortcuts and slash commands make writing easy.                            |
 | Rich notes           | Word-like editor. Images can be pasted, whether screenshots or images copied from a browser. Supports tables. Exports to Word and PDF.                                          |
 | Autosave             | Unsynced changes are kept on the device, the save indicator is always accurate, and conflicting edits are detected and resolved.                                                |
@@ -71,7 +71,7 @@ These are parked and listed in §17. The data model is designed so they can be a
 
 - Sharing notebooks or boards between users, card assignees, real-time co-editing.
 - End-to-end encryption.
-- Importers for OneNote, Joplin or Evernote.
+- Importers for other note-taking apps.
 - Native desktop or mobile apps.
 
 ---
@@ -95,7 +95,7 @@ These are parked and listed in §17. The data model is designed so they can be a
 | D13 | Remote access                           | **WireGuard VPN into the home network; no public domain.** HTTPS is still **required** (service workers, secure cookies and the clipboard API only work in a secure context, even over a VPN), so Memora is served over HTTPS with a certificate from a small local certificate authority trusted on each device. Set up in Phase 2. The guide also documents Tailscale and domain/Let's Encrypt setups for other users.                                                                                                                                                                      | Nothing exposed to the internet, and all browser features still work.                                                                                                                                                                                                                                       |
 | D14 | IDs & ordering                          | IDs are UUIDv7, which the client can generate. Ordering uses fractional-index sort keys.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Items can be created offline, and reordering by drag and drop is cheap.                                                                                                                                                                                                                                     |
 | D15 | Distribution                            | An image published to GitHub Container Registry (GHCR) by GitHub Actions, or built locally. **amd64 is the primary, tested target** (the reference NAS is an x86-64 Synology). arm64 is built too, for other users.                                                                                                                                                                                                                                                                                                                                                                           | Matches the real hardware, while still usable on ARM NAS models.                                                                                                                                                                                                                                            |
-| D16 | Page list position                      | On the right by default, like OneNote. Configurable to the left.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Your preference, with flexibility.                                                                                                                                                                                                                                                                          |
+| D16 | Page list position                      | On the right by default. Configurable to the left.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Your preference, with flexibility.                                                                                                                                                                                                                                                                          |
 | D17 | UI language                             | English only (confirmed). The code is ready for translations (i18n).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Other languages can be added later without refactoring.                                                                                                                                                                                                                                                     |
 | D18 | Repository & licence                    | **Public** GitHub repository under the **MIT** licence. The copyright holder is "Memora contributors", so no personal name is needed.                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Public was requested; MIT is the simplest permissive licence. It can still be changed to AGPL-3.0 before the first push, if you want forks that host Memora to publish their changes.                                                                                                                       |
 | D19 | RAM budget                              | Conservative by default: V8 heap capped at 256 MB (`MEMORA_MAX_HEAP_MB`), SQLite page cache left at its small default, no Chromium in the main image, streaming for large imports and exports. Measured in Phase 0: about 40 MB for the container at idle.                                                                                                                                                                                                                                                                                                                                    | The NAS is shared with other services. Every extra RAM use must be justified.                                                                                                                                                                                                                               |
@@ -510,7 +510,7 @@ My Notebook/
   - `memora-admin restore <file>`
 - **Isolation.** Users see only their own data. Tests try cross-user access (one user using another user's IDs) on every endpoint.
 
-### 9.2 Organisation (OneNote model, improved)
+### 9.2 Organisation
 
 - **Notebooks.**
   - Listed in a collapsible left rail, each with a colour and icon.
@@ -523,14 +523,14 @@ My Notebook/
   - Drag to reorder, or drag onto another notebook or group to move.
   - Double-click to rename.
   - When there are too many tabs, they scroll and an overflow menu appears.
-  - Each section's colour continues subtly into its page list and editor header, like OneNote but calmer.
+  - Each section's colour continues subtly into its page list and editor header, calmly.
 - **Page list: on the right by default, configurable.**
   - Subpages up to 3 levels deep. Drag to reorder and to indent/outdent; keyboard shortcuts `Alt+Shift+→`/`Alt+Shift+←` do the same (Tab kept the keyboard from leaving the list, D45).
   - Select several pages at once to move or delete them together.
   - Each entry shows a snippet of the content and the modified date.
 - **Page header.** Large title, created and modified dates, tags, the save indicator, and a menu with export, history, convert, move/copy, duplicate and delete.
 - **Move / copy dialog.** A searchable notebook → section picker. Also available by dragging pages onto a section tab.
-- **Inbox (like OneNote's Quick Notes).**
+- **Inbox (for quick notes).**
   - Every user has one.
   - "Quick note" (`Ctrl/Cmd+Alt+N`, or a floating button on phones) captures straight into the Inbox.
 - **Context menus** everywhere, plus keyboard shortcuts for every action and a shortcut reference sheet (`?`).
@@ -831,7 +831,7 @@ My Notebook/
 - **Readable text width.** Text in each pane is capped at a readable width (70–100 characters, configurable). A "Full width" toggle is available per note, for wide tables. On ultra-wide screens, spare space goes to more panes instead of absurdly long lines.
 - **Scaling.** Everything uses relative units, so the layout adapts to OS display scaling (100–200%) and browser zoom.
 
-### 9.13 Visual design ("OneNote, heavily improved")
+### 9.13 Visual design
 
 - **Design phase first (Phase 1).**
   - 2–3 visual directions as clickable static mockups for phone (390 px), desktop (1440 px) and ultra-wide (5120 px), in light and dark.
@@ -1433,7 +1433,7 @@ _Released as **0.9.0** rather than 1.0 (D48): everything planned for 1.0 is in, 
 | Real-time co-editing                                                                                          | Yjs CRDTs with TipTap and CodeMirror bindings. Would replace revision-based saving for shared pages. |
 | Inline "Live" Markdown mode (Typora/Obsidian style)                                                           | A v1.x candidate, built on CodeMirror decorations.                                                   |
 | End-to-end encryption                                                                                         | Conflicts with server-side search and export. Revisit together with sharing.                         |
-| Importers for OneNote, Joplin and Evernote                                                                    | Not needed now. The Markdown and DOCX importers cover many cases.                                    |
+| Importers for other note-taking apps                                                                          | Not needed now. The Markdown and DOCX importers cover many cases.                                    |
 | Kanban list/table view, calendar view, recurring cards, card dependencies, due-date reminders (push or email) | Candidates after v1.0.                                                                               |
 | Public read-only share links                                                                                  | Needs careful security design.                                                                       |
 | Browser extension (web clipper)                                                                               | Would save pages or selections straight into the Inbox.                                              |

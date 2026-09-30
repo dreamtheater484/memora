@@ -13,7 +13,7 @@ import type { ReactNode } from 'react';
 import { useCurrentUser } from '../auth/queries';
 import { HelpLink } from '../components/HelpLink';
 import { cn } from '../lib/cn';
-import { APP_VERSION, HELP } from '../lib/help';
+import { APP_VERSION, HELP, LICENSES_URL } from '../lib/help';
 
 interface NavItem {
   to:
@@ -88,6 +88,7 @@ export function SettingsLayout() {
           <HelpLink href={HELP.guide}>User guide</HelpLink>
           <HelpLink href={HELP.troubleshooting}>Troubleshooting</HelpLink>
           <HelpLink href={HELP.changes}>What’s new</HelpLink>
+          <HelpLink href={LICENSES_URL}>Open-source licences</HelpLink>
         </footer>
       </div>
     </div>

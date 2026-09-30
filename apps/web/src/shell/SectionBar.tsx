@@ -218,7 +218,7 @@ function OverflowMenu({
 }
 
 /**
- * OneNote-style coloured section tabs along the top: the notebook's own sections, then its
+ * Coloured section tabs along the top: the notebook's own sections, then its
  * section groups as tabs that open a menu. Arrow keys move between the section tabs; drag a
  * tab to reorder it, or onto the navigation to move it elsewhere.
  */

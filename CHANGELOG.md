@@ -4,6 +4,20 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-09-30
+
+### Added
+
+- A **…** button on notebooks, section groups and sections opens their menu (new section, rename, colour, export, delete), in the navigation and in the phone lists. It is the same menu a right-click or long-press opens.
+- **Settings → Open-source licences** lists every package Memora ships, with its licence, and Node.js's own. The list is made at build time from what each build contains and is in the container image too. A build stops on a licence nobody has reviewed yet.
+- Credits in the README.
+
+### Changed
+
+- The setup guide has a table of requirements: DSM 7.2 or later, a 64-bit processor, and 512 MB of free memory recommended. It also says how to check a Synology NAS, and the Synology steps include a complete compose file.
+- The memory figures in the guides now match what Container Manager shows: usually 100 to 150 MB, and more for a while during large imports and exports.
+- Memora is described in its own terms, without comparisons to other note apps.
+
 ## [0.9.1] - 2026-09-30
 
 ### Changed
@@ -89,6 +103,7 @@ The first release: a public beta. Everything planned for 1.0 is in; what's left 
 - Setup guides for Synology, Linux and Windows, with three ways to get HTTPS.
 - `memora-admin` inside the container for lost passwords, lost phones, backups and restores.
 
-[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/dreamtheater484/memora/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/dreamtheater484/memora/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/dreamtheater484/memora/releases/tag/v0.9.0

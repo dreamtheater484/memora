@@ -26,6 +26,10 @@ In production there is **one process in one container**. The server serves both 
 
 The server is bundled together with `@memora/shared` and every pure-JavaScript dependency, into two entry points: the server and the `memora-admin` command-line tool. Only native modules stay external: `better-sqlite3` and `@node-rs/argon2`. They are the only entries under `dependencies` in `apps/server/package.json`; everything else is a `devDependency`. Both ship prebuilt binaries, so nothing is compiled, in CI or in Docker.
 
+### Open-source licences
+
+Each build lists the packages it contains, with their licences (`scripts/licenses.mjs`). The Vite plugin in `apps/web/vite.config.ts` collects the web app's modules, including the Markdown worker's and the fonts, and writes `dist/third-party-licenses.txt`. `apps/server/build.mjs` does the same from esbuild's metafile, adding the native packages and their dependencies. The last step of `pnpm build` adds the server's list and Node.js's own licence to the web app's file, which Settings links to. A licence that isn't on the list in the script stops the build.
+
 ### Paths
 
 The dev entry (`src/*.ts`, run by `tsx`) and the bundle (`dist/server.mjs`) both sit one level below `apps/server/`. `src/paths.ts` resolves `drizzle/` (migrations) and `../web/dist` relative to that, and the Docker image keeps the same layout under `/app`. As a result there are no absolute paths in code and no differences between environments.

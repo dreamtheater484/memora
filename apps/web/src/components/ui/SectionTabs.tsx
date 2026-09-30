@@ -27,7 +27,7 @@ export interface SectionTabsProps {
 }
 
 /**
- * OneNote-style coloured section tabs along the top of the page.
+ * Coloured section tabs along the top of the page.
  * Arrow keys move between tabs and select them; Home and End jump to the ends.
  */
 export function SectionTabs({
