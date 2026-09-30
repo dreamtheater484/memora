@@ -1,0 +1,45 @@
+name: Download page
+
+# The download page at https://dreamtheater484.github.io/memora/ (site/): big buttons for the
+# desktop app, and the way to Memora Server. Its links point at the newest release's files, so
+# it only changes when the page itself does.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - docs/images/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Publish the download page
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: The page, with the screenshots from the documentation
+        run: |
+          mkdir -p _site/images
+          cp -R site/. _site/
+          cp docs/images/notes.png docs/images/board.png docs/images/phone.png _site/images/
+          cp apps/web/public/favicon.svg _site/
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v5
