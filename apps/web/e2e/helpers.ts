@@ -45,6 +45,13 @@ export const MEMBER: CurrentUser = {
 export const PASSWORD = 'violet-harbour-lantern';
 export const SETUP_CODE = 'QYN0-6352-XMM2';
 export const TEMPORARY_PASSWORD = 'k7wq-3mzp-x9rd-v2hn'; // gitleaks:allow (fake)
+/** The authenticator app's code the fake server accepts, its key, and recovery codes. */
+export const APP_CODE = '424242';
+export const TOTP_KEY = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP'; // gitleaks:allow (fake)
+export const RECOVERY_CODES = Array.from(
+  { length: 10 },
+  (_, i) => `r${i}k2-mx9d-4hw${i}`, // gitleaks:allow (fake)
+);
 
 const adminView = (user: CurrentUser, extra: Partial<AdminUser> = {}): AdminUser => ({
   ...user,
@@ -192,6 +199,8 @@ export class FakeApi {
   readonly requests: RecordedRequest[] = [];
   /** Who logging in with PASSWORD becomes. */
   loginAs: CurrentUser = ADMIN;
+  /** Two-step verification of the signed-in user; `enabled` makes logins ask for a code. */
+  twoFactor = { enabled: false, recoveryCodesLeft: 0, required: false };
   /** Notebooks, sections and pages; replace before `install` for other content. */
   notes = new FakeNotes(NOW);
   /** Projects, boards and cards; replace before `install` for other content. */
@@ -347,7 +356,63 @@ export class FakeApi {
         if (body.password !== PASSWORD) {
           return error(401, 'invalid_credentials', 'Wrong username or password.');
         }
+        if (this.twoFactor.enabled) return { json: { twoFactorRequired: true, ticket: 't-1' } };
         return { json: this.signIn(this.loginAs) };
+      case 'POST /api/v1/auth/login/two-factor': {
+        if (body.ticket !== 't-1') return error(401, 'login_expired', 'Log in again.');
+        const code = String(body.code);
+        const recovery = RECOVERY_CODES.includes(code) && this.twoFactor.recoveryCodesLeft > 0;
+        if (code !== APP_CODE && !recovery) {
+          return error(400, 'invalid_code', 'That code is not right.', {
+            code: 'That code is not right.',
+          });
+        }
+        if (recovery) this.twoFactor.recoveryCodesLeft -= 1;
+        return { json: this.signIn({ ...this.loginAs, twoFactor: true }) };
+      }
+      case 'GET /api/v1/auth/two-factor':
+        return { json: this.twoFactor };
+      case 'POST /api/v1/auth/two-factor/setup':
+      case 'POST /api/v1/auth/two-factor/recovery-codes':
+      case 'POST /api/v1/auth/two-factor/disable': {
+        if (body.password !== PASSWORD) {
+          return error(400, 'wrong_password', 'That password is not right.', {
+            password: 'That password is not right.',
+          });
+        }
+        if (path.endsWith('/setup')) {
+          return {
+            json: {
+              secret: TOTP_KEY,
+              uri: `otpauth://totp/Memora%3A${this.me.user?.username}?secret=${TOTP_KEY}&issuer=Memora&algorithm=SHA1&digits=6&period=30`,
+            },
+          };
+        }
+        if (path.endsWith('/disable')) {
+          this.twoFactor = { ...this.twoFactor, enabled: false, recoveryCodesLeft: 0 };
+          this.me = { ...this.me, user: { ...this.me.user!, twoFactor: false } };
+          return { status: 204 };
+        }
+        this.twoFactor.recoveryCodesLeft = 10;
+        return { json: { codes: RECOVERY_CODES } };
+      }
+      case 'POST /api/v1/auth/two-factor/enable':
+        if (body.code !== APP_CODE) {
+          return error(400, 'invalid_code', 'That code is not right.', {
+            code: 'That code is not right.',
+          });
+        }
+        this.twoFactor = { ...this.twoFactor, enabled: true, recoveryCodesLeft: 10 };
+        this.me = {
+          ...this.me,
+          user: { ...this.me.user!, twoFactor: true, mustSetUpTwoFactor: false },
+        };
+        return { json: { codes: RECOVERY_CODES } };
+      case 'GET /api/v1/admin/security':
+        return { json: { requireTwoFactor: this.twoFactor.required } };
+      case 'PATCH /api/v1/admin/security':
+        this.twoFactor.required = body.requireTwoFactor === true;
+        return { json: { requireTwoFactor: this.twoFactor.required } };
       case 'POST /api/v1/auth/logout':
         this.me = { setupRequired: false, user: null, csrfToken: null };
         return { status: 204 };
@@ -401,6 +466,13 @@ export class FakeApi {
         if (job) {
           const found = this.jobs.get(job[1]!);
           return found ? { json: found.job } : error(404, 'not_found', 'Job not found.');
+        }
+        const reset = path.match(/^\/api\/v1\/admin\/users\/([^/]+)\/two-factor\/reset$/);
+        if (reset && method === 'POST') {
+          const user = this.users.find((u) => u.id === reset[1]);
+          if (!user) return error(404, 'not_found', 'User not found.');
+          user.twoFactor = false;
+          return { json: user };
         }
         const named = path.match(/^\/api\/v1\/admin\/backups\/([^/]+?)(\/restore)?$/);
         if (named) {
