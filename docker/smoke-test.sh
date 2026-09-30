@@ -55,6 +55,13 @@ done
 
 expect '"status":"ok"' "health endpoint not ok" curl -fsS "http://127.0.0.1:$PORT/api/health"
 expect '<div id="root">' "web app not served" curl -fsS "http://127.0.0.1:$PORT/"
+# The open-source licences: the app's, the server's and, in its own section, Node.js's.
+NOTICES="$(curl -fsS "http://127.0.0.1:$PORT/third-party-licenses.txt")" || fail "no licence notices"
+for notice in '^react ' '^fastify ' '^The runtime: Node.js'; do
+  grep -q -- "$notice" <<<"$NOTICES" || fail "licence notices lack $notice"
+done
+RUNTIME="$(sed -n '/^The runtime: Node.js/,$p' <<<"$NOTICES")"
+grep -q 'Node.js is licensed' <<<"$RUNTIME" || fail "Node.js's own licence is missing"
 [ "$(docker exec "$NAME" stat -c %u /proc/1)" = "$(id -u)" ] || fail "server is not running as the data folder's owner"
 [ -f "$DATA_DIR/memora.db" ] || fail "database not created in the data volume"
 

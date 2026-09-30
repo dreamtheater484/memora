@@ -1,8 +1,11 @@
+import { createRequire } from 'node:module';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 import { CONTENT_SECURITY_POLICY, SECURITY_HEADERS } from '../../packages/shared/src/security';
+import { HEADER, packageDirOf, section } from '../../scripts/licenses.mjs';
 import { serviceWorker } from './sw/plugin';
 
 /**
@@ -39,6 +42,71 @@ function zodWithoutEval(): Plugin {
   };
 }
 
+/** Where package `name` is installed, as seen from `from`. */
+function installedDir(name: string, from: string) {
+  const require = createRequire(from);
+  try {
+    return path.dirname(require.resolve(`${name}/package.json`));
+  } catch {
+    return packageDirOf(require.resolve(name))!;
+  }
+}
+
+/**
+ * Code that is in every build without being imported: Vite's and Rolldown's helpers (module
+ * preloading, the runtime) and Tailwind's generated styles.
+ */
+function toolDirs() {
+  const here = import.meta.url;
+  const vite = installedDir('vite', here);
+  return [
+    vite,
+    installedDir('rolldown', path.join(vite, 'package.json')),
+    installedDir('tailwindcss', here),
+  ];
+}
+
+/**
+ * The open-source licences of every package bundled into the app (its workers included), in
+ * third-party-licenses.txt: the notices travel with the app. `pnpm build` then adds the
+ * server's (scripts/licenses.mjs). Stops the build on a licence that isn't on the list there.
+ */
+function licenses() {
+  const files = new Set<string>();
+  const collect = (ids: Iterable<string>) => {
+    for (const id of ids) files.add(id);
+  };
+  const worker: Plugin = {
+    name: 'memora-licenses-worker',
+    apply: 'build',
+    generateBundle() {
+      collect(this.getModuleIds());
+    },
+  };
+  const main: Plugin = {
+    name: 'memora-licenses',
+    apply: 'build',
+    generateBundle(_, bundle) {
+      collect(this.getModuleIds());
+      // Files that come in through CSS (the fonts) are assets, not modules.
+      for (const out of Object.values(bundle)) {
+        if (out.type === 'asset') collect(out.originalFileNames);
+      }
+      const dirs = new Set<string>(toolDirs());
+      for (const file of files) {
+        const dir = packageDirOf(file);
+        if (dir) dirs.add(dir);
+      }
+      this.emitFile({
+        type: 'asset',
+        fileName: 'third-party-licenses.txt',
+        source: `${HEADER}${section('The app in your browser', dirs)}`,
+      });
+    },
+  };
+  return { main, worker };
+}
+
 /**
  * Paged.js's polyfill (the print preview loads it into its frame) isn't in the package's
  * exports, so it gets a name of its own.
@@ -57,10 +125,18 @@ export const pagedPolyfill = [
 // in development the gallery is always served at /gallery.html.
 export default defineConfig(({ mode }) => {
   const gallery = mode === 'gallery';
+  const notices = licenses();
   return {
-    plugins: [withoutDocument(), zodWithoutEval(), react(), tailwindcss(), serviceWorker()],
+    plugins: [
+      withoutDocument(),
+      zodWithoutEval(),
+      react(),
+      tailwindcss(),
+      serviceWorker(),
+      notices.main,
+    ],
     resolve: { alias: pagedPolyfill },
-    worker: { plugins: () => [withoutDocument(), zodWithoutEval()] },
+    worker: { plugins: () => [withoutDocument(), zodWithoutEval(), notices.worker] },
     server: {
       port: 5173,
       // During development the API runs separately (`pnpm dev` starts both).
