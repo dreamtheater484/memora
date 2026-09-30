@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { _electron as electron, expect, test } from '@playwright/test';
@@ -22,16 +22,32 @@ function appPath(): string {
 }
 
 const userData = mkdtempSync(path.join(tmpdir(), 'memora-desktop-'));
+/** What the app printed, each launch in turn: kept with the test results when a test fails. */
+let output = '';
+
+test.afterEach(() => {
+  const testInfo = test.info();
+  if (testInfo.status === testInfo.expectedStatus) return;
+  const logs = path.join(testInfo.outputDir, 'logs');
+  mkdirSync(logs, { recursive: true });
+  writeFileSync(path.join(logs, 'electron.log'), output);
+  const serverLogs = path.join(userData, 'logs');
+  if (existsSync(serverLogs)) cpSync(serverLogs, logs, { recursive: true });
+});
 test.afterAll(() => rmSync(userData, { recursive: true, force: true }));
 
 async function launch() {
+  output += `--- launch at ${new Date().toISOString()}\n`;
   const app = await electron.launch({
     executablePath: appPath(),
     // An unpacked Linux app has no set-up Chromium sandbox helper (the .deb sets it up).
     args: process.platform === 'linux' ? ['--no-sandbox'] : [],
     env: { ...process.env, MEMORA_USER_DATA: userData, MEMORA_NO_UPDATES: '1' },
   });
-  const page = await app.firstWindow();
+  app.process().stdout?.on('data', (chunk: Buffer) => (output += chunk.toString()));
+  app.process().stderr?.on('data', (chunk: Buffer) => (output += chunk.toString()));
+  // The window opens once the server answers, which it may take up to a minute for.
+  const page = await app.firstWindow({ timeout: 90_000 });
   const nav = page.getByRole('navigation', { name: 'Navigation' });
   await expect(nav).toBeVisible({ timeout: 90_000 });
   return { app, page, nav };

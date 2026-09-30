@@ -210,7 +210,8 @@ jobs:
     name: Desktop app (${{ matrix.name }})
     needs: prepare
     strategy:
-      fail-fast: true
+      # Each system's result is worth having, even when another one fails.
+      fail-fast: false
       matrix:
         include:
           - name: Windows
