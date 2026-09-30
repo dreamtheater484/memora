@@ -15,8 +15,8 @@ This guide installs Memora with Docker: on a Synology NAS, on Linux, or on Windo
 
 ## Quick start (any Docker host)
 
-1. Create a folder for Memora, for example `memora`, and save [`docker/docker-compose.example.yml`](../docker/docker-compose.example.yml) in it as `docker-compose.yml`.
-2. Edit it: set `PUID`, `PGID` and `TZ` (see [Choosing PUID and PGID](#choosing-puid-and-pgid)).
+1. Create a folder for Memora, for example `memora`, with a folder `data` inside it. Save [`docker/docker-compose.example.yml`](../docker/docker-compose.example.yml) in `memora` as `docker-compose.yml`.
+2. Edit it: set `TZ` to your time zone.
 3. Start it:
 
    ```bash
@@ -33,10 +33,10 @@ This guide installs Memora with Docker: on a Synology NAS, on Linux, or on Windo
 
 > On Ubuntu, `docker compose` needs the Compose plugin: `sudo apt install docker-compose-v2`.
 
-Or with plain `docker run` (one line):
+Or with plain `docker run` (one line, in the `memora` folder):
 
 ```bash
-docker run -d --name memora --restart unless-stopped -p 3000:3000 -e PUID=1000 -e PGID=1000 -v ./data:/data ghcr.io/dreamtheater484/memora:latest
+mkdir -p data && docker run -d --name memora --restart unless-stopped -p 3000:3000 -v ./data:/data ghcr.io/dreamtheater484/memora:latest
 ```
 
 ### Images
@@ -110,15 +110,13 @@ docker exec memora memora-admin reset-2fa <username>
 
 `memora-admin hash-benchmark` shows how long one password check takes on your hardware. Around 100–500 ms is right; logins are slow on purpose, to make guessing expensive.
 
-## Choosing PUID and PGID
+## Which user Memora runs as
 
-Memora never runs as root. It runs as the user and group given by `PUID` and `PGID`. **That user must be able to read and write the data folder** on the host.
+Memora never runs as root. There's nothing to set: it runs as **the owner of the data folder**, so it can always write there. Create the `data` folder yourself (in File Station, Explorer or with `mkdir`), and Memora's files belong to you.
 
-- **Linux:** run `id` in a terminal and use the `uid` and `gid` it shows.
-- **Synology:** connect over SSH and run `id <your-dsm-user>`, or create a dedicated DSM user for Memora and use its IDs. Give that user read/write access to the Memora folder in **Control Panel → Shared Folder**.
-- **Docker Desktop (Windows):** the defaults (`1000`) are fine.
+If Docker creates the folder instead (it didn't exist when the container started), the folder belongs to root. Memora then runs as user `1000` and hands the empty folder to it.
 
-If the folder isn't writable, Memora stops with a clear message instead of changing permissions itself.
+To choose the user yourself, set `PUID` and `PGID` to its numeric user and group ID (`id` shows them on Linux). That user must be able to read and write the data folder. If it can't, Memora stops with a message that says who owns the folder, instead of changing permissions itself.
 
 ## Where your data lives
 
@@ -143,7 +141,7 @@ Set these as environment variables (the `environment:` section of the compose fi
 
 | Variable                      | Default                          | Purpose                                                                                                                    |
 | ----------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `PUID` / `PGID`               | `1000` / `1000`                  | User and group Memora runs as (see above)                                                                                  |
+| `PUID` / `PGID`               | the data folder's owner          | User and group Memora runs as ([see above](#which-user-memora-runs-as)). Leave them out unless you need another user.      |
 | `TZ`                          | `Etc/UTC`                        | Timezone, for example `Europe/Paris`                                                                                       |
 | `PORT`                        | `3000`                           | Port inside the container                                                                                                  |
 | `MEMORA_BASE_URL`             | —                                | The address you open Memora at, for example `https://<nas-ip>:8443`. Used for the origin check on every change.            |
@@ -186,16 +184,16 @@ Gotenberg runs a headless Chromium and uses a few hundred MB of RAM, so it is wo
 ## Synology step by step
 
 1. Install **Container Manager** from Package Center.
-2. In **File Station**, create the folder `docker/memora`, with a `data` folder inside it.
-3. Find the IDs for `PUID`/`PGID`: connect over SSH and run `id <your-dsm-user>`, or create a dedicated user for Memora. That user needs read/write access to `docker/memora` (**Control Panel → Shared Folder → docker → Edit → Permissions**).
-4. **Container Manager → Project → Create**:
+2. In **File Station**, create the folder `docker/memora`, with a `data` folder inside it. Container Manager doesn't create a missing folder: it stops with _"Bind mount failed"_. Memora runs as the account that creates the `data` folder.
+3. **Container Manager → Project → Create**:
    - Project name: `memora`.
    - Path: `docker/memora`.
-   - Source: **Create docker-compose.yml**, and paste the example compose file with your values.
+   - Source: **Create docker-compose.yml**, and paste the example compose file with your time zone. If port 3000 is taken on the NAS, change only the first number of the port line, for example `'3003:3000'`, and use that port below.
+   - Leave **Web portal via Web Station** off: the reverse proxy in [HTTPS](#https) does that job, with the WebSocket header Memora needs.
    - Start it. The first start downloads the image.
-5. **Container Manager → Container → memora → Log** shows the setup code.
-6. Open `http://<nas-ip>:3000` and create your administrator account.
-7. Set up [HTTPS](#https), then change the port line to `'127.0.0.1:3000:3000'`, so only the reverse proxy can reach Memora directly.
+4. **Container Manager → Container → memora → Log** shows the setup code.
+5. Open `http://<nas-ip>:3000` and create your administrator account.
+6. Set up [HTTPS](#https), then change the port line to `'127.0.0.1:3000:3000'`, so only the reverse proxy can reach Memora directly.
 
 ### Images from your own fork
 
@@ -219,13 +217,13 @@ Paste a **fine-grained or classic token with only `read:packages`** as the passw
    sudo usermod -aG docker "$USER"
    ```
 
-2. Make a folder for Memora and download the example compose file into it:
+2. Make a folder for Memora, with its `data` folder, and download the example compose file into it:
 
    ```bash
-   mkdir -p ~/memora && cd ~/memora && curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/dreamtheater484/memora/main/docker/docker-compose.example.yml
+   mkdir -p ~/memora/data && cd ~/memora && curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/dreamtheater484/memora/main/docker/docker-compose.example.yml
    ```
 
-3. In `docker-compose.yml`, set `PUID` and `PGID` to the numbers `id -u` and `id -g` print, and `TZ` to your time zone.
+3. In `docker-compose.yml`, set `TZ` to your time zone.
 4. Start it, and read the setup code:
 
    ```bash
@@ -243,7 +241,7 @@ Paste a **fine-grained or classic token with only `read:packages`** as the passw
    mkdir C:\memora; cd C:\memora; Invoke-WebRequest https://raw.githubusercontent.com/dreamtheater484/memora/main/docker/docker-compose.example.yml -OutFile docker-compose.yml
    ```
 
-3. Set `TZ` in the file. Leave `PUID` and `PGID` at `1000`: Docker Desktop takes care of the file permissions.
+3. Set `TZ` in the file.
 4. Start it, and read the setup code:
 
    ```powershell
@@ -367,7 +365,7 @@ Memora backs up the database before it changes it. [UPGRADE.md](UPGRADE.md) cove
 
 The most common problems:
 
-- **The container stops at start:** `docker logs memora` says why, usually that the data folder isn't writable by `PUID`/`PGID` ([above](#choosing-puid-and-pgid)).
+- **The container stops at start:** `docker logs memora` says why, for example that the data folder isn't writable ([above](#which-user-memora-runs-as)).
 - **Changes from other devices take 30 seconds:** the reverse proxy doesn't pass WebSockets; add the **WebSocket** custom header to the rule ([HTTPS](#a-vpn-plus-a-local-certificate), step 3).
 - **Offline mode or installing the app doesn't work:** that needs [HTTPS](#https).
 - **A forgotten password or a lost phone:** [`memora-admin`](#locked-out-memora-admin).

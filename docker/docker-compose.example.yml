@@ -15,9 +15,9 @@ services:
     ports:
       - '3000:3000' # host:container. Behind a reverse proxy on the same host: '127.0.0.1:3000:3000'
     environment:
-      PUID: '1000' # change me: numeric user id that owns ./data on the host
-      PGID: '1000' # change me: numeric group id
       TZ: 'Etc/UTC' # change me: e.g. Europe/Paris
+      # PUID: '1000' # Memora runs as the owner of ./data; set these only to choose another user
+      # PGID: '1000'
       # MEMORA_BASE_URL: 'https://<nas-ip>:8443' # the address you open Memora at, once HTTPS is set up
       # MEMORA_TRUST_PROXY: 'loopback,linklocal,uniquelocal' # reverse proxies allowed to pass on visitor addresses
       # MEMORA_SESSION_DAYS: '30' # "remember this device": days without use before logging out
@@ -25,4 +25,4 @@ services:
       # MEMORA_MAX_HEAP_MB: '256' # Node.js heap cap in MB (default 256)
       # MEMORA_GOTENBERG_URL: 'http://gotenberg:3000' # one-click PDFs: see "Optional: one-click PDFs" in docs/SETUP.md
     volumes:
-      - ./data:/data # everything Memora stores lives here
+      - ./data:/data # everything Memora stores lives here; create the folder first

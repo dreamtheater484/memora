@@ -27,7 +27,7 @@ A self-hosted notebook that runs in your browser. It combines OneNote-style orga
 ### Run with Docker
 
 ```bash
-docker run -d --name memora --restart unless-stopped -p 3000:3000 -e PUID=1000 -e PGID=1000 -v ./data:/data ghcr.io/dreamtheater484/memora:latest
+mkdir -p data && docker run -d --name memora --restart unless-stopped -p 3000:3000 -v ./data:/data ghcr.io/dreamtheater484/memora:latest
 ```
 
 Then run `docker logs memora` for the setup code, and open `http://localhost:3000`. [docs/SETUP.md](docs/SETUP.md) is the full guide: Docker Compose, Synology, Linux, Windows, and HTTPS.

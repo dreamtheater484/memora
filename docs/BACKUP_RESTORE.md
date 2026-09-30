@@ -97,7 +97,7 @@ docker restart memora
 
 Memora updates the database if the backup came from an older version (taking a backup first), and everything is there: sign in with your usual account.
 
-**Two-step verification** needs the instance key, `secret.key`, which is not in the backup. Copy yours into the new data folder (readable by the `PUID` user) before step 3 to keep everyone's authenticator app working; the restart in step 3 reads it. Without it, Memora makes a new key; people log in with a recovery code and set up their app again in **Settings → Account** (or an administrator turns it off for them).
+**Two-step verification** needs the instance key, `secret.key`, which is not in the backup. Copy yours into the new data folder (readable by the user Memora runs as) before step 3 to keep everyone's authenticator app working; the restart in step 3 reads it. Without it, Memora makes a new key; people log in with a recovery code and set up their app again in **Settings → Account** (or an administrator turns it off for them).
 
 ### Restoring one page
 
