@@ -1,4 +1,6 @@
+import path from 'node:path';
 import {
+  app,
   BrowserWindow,
   clipboard,
   dialog,
@@ -47,6 +49,11 @@ export function createWindow(server: () => RunningServer): BrowserWindow {
     title: 'Memora',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0f1117' : '#f6f6fb',
     autoHideMenuBar: process.platform !== 'darwin',
+    // Linux desktops take the icon from the desktop entry when there is one; an AppImage or
+    // another window manager shows the window's own.
+    ...(process.platform === 'linux' && app.isPackaged
+      ? { icon: path.join(process.resourcesPath, 'icon.png') }
+      : {}),
     webPreferences: {
       contextIsolation: true,
       sandbox: true,

@@ -1,6 +1,7 @@
 {
   "name": "@memora/desktop",
   "productName": "Memora",
+  "desktopName": "memora.desktop",
   "version": "0.9.3",
   "private": true,
   "description": "Memora for your computer: the server and the web app in one app, with Electron.",

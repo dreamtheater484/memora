@@ -45,7 +45,11 @@ module.exports = {
   copyright: 'Copyright © 2026 Memora contributors',
   directories: { output: 'release', buildResources: 'build-resources' },
   files: ['dist/**', 'package.json'],
-  extraResources: [{ from: 'build/memora', to: 'memora' }],
+  extraResources: [
+    { from: 'build/memora', to: 'memora' },
+    // The window's own icon on Linux (src/window.ts), where no desktop entry names one.
+    { from: 'build-resources/icons/512x512.png', to: 'icon.png' },
+  ],
   asar: true,
   // The app itself has no native packages; the server's are in its resources (scripts/resources.mjs).
   npmRebuild: false,
@@ -58,6 +62,8 @@ module.exports = {
       ...(store ? [{ target: 'appx', arch: ['x64'] }] : []),
     ],
     artifactName: 'Memora-Setup.${ext}',
+    // Icons from scripts/icon.mjs: Windows and Linux fill their square, macOS keeps Apple's margin.
+    icon: 'build-resources/icon-win.png',
     ...azure,
   },
   ...(store ? { appx: store } : {}),
@@ -79,6 +85,7 @@ module.exports = {
     ],
     category: 'public.app-category.productivity',
     artifactName: 'Memora-mac.${ext}',
+    icon: 'build-resources/icon.png',
     // The SQLite driver's builds for both processors are in both halves of the universal app,
     // the same files in each, which the merge refuses unless they're named here.
     x64ArchFiles:
@@ -95,6 +102,11 @@ module.exports = {
     target: ['deb', 'AppImage'],
     category: 'Office',
     executableName: 'memora',
+    // One name for the desktop entry and the running window (desktopName in package.json),
+    // so the dock shows Memora's icon for its window too, on Wayland as on X11.
+    syncDesktopName: true,
+    // Every size the icon theme has a folder for: a 1024 px icon alone isn't found.
+    icon: 'build-resources/icons',
     synopsis: 'Notebooks, Markdown, rich notes and Kanban boards',
     description:
       'Memora keeps notebooks, Markdown and rich notes, and Kanban boards on your computer.',
