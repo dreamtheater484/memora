@@ -11,7 +11,8 @@ export type ShellDialog =
   | { kind: 'save-version'; pageId: string }
   | { kind: 'save-template'; pageId: string }
   | { kind: 'templates' }
-  | { kind: 'insert-template'; onPick: (template: Template) => void }
+  | { kind: 'insert-template'; onPick: (template: Template) => void; title?: string }
+  | { kind: 'section-template'; sectionId: string }
   | { kind: 'export'; scope: ExportScope; id?: string }
   | { kind: 'print'; scope: 'page' | 'section'; id: string }
   // Kanban (§9.11)

@@ -39,6 +39,7 @@ import { formatDateTime, formatRelative } from '../lib/time';
 import { isFavorite, toggleFavorite, toggleFullWidth } from '../notes/places';
 import { useNotesActions, useUiState } from '../notes/queries';
 import type { PageDoc } from '../sync/doc';
+import { pickTemplate, useTemplates } from '../templates/templates';
 import { usePageDoc } from '../sync/hooks';
 import { useCommands } from './commands';
 import { ConvertDialog } from './ConvertDialog';
@@ -232,6 +233,8 @@ export function NotesPane() {
   const commands = useCommands();
   const go = useGo();
   const doc = usePageDoc(page?.id ?? null);
+  const sectionTemplates = useUiState().sectionTemplates;
+  const templates = useTemplates();
 
   if (missing) {
     return (
@@ -268,6 +271,7 @@ export function NotesPane() {
     );
   }
 
+  const defaultTemplate = templates.find((t) => t.id === sectionTemplates?.[section.id]);
   return (
     <section aria-label="Editor" className="flex h-full min-h-0 flex-col">
       <SectionBar panelId="page-panel" />
@@ -290,11 +294,27 @@ export function NotesPane() {
             icon={<FilePlus />}
             color={section.color}
             title={`No pages in ${section.name} yet`}
-            description="Start with a blank page: write in Markdown, and it saves as you type."
+            description={
+              defaultTemplate
+                ? `New pages here start from the template “${defaultTemplate.name}”.`
+                : 'Start with a blank page: write in Markdown, and it saves as you type.'
+            }
             actions={
-              <Button variant="primary" onClick={() => void commands.newPage()}>
-                <FilePlus /> New page
-              </Button>
+              <>
+                <Button variant="primary" onClick={() => void commands.newPage()}>
+                  <FilePlus /> New page
+                </Button>
+                <Button
+                  onClick={() =>
+                    pickTemplate(
+                      (template) => void commands.newPage({ sectionId: section.id, template }),
+                      'New page from a template',
+                    )
+                  }
+                >
+                  <LayoutTemplate /> From a template
+                </Button>
+              </>
             }
           />
         )}

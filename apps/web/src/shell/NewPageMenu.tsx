@@ -1,4 +1,3 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, FilePlus, LayoutTemplate, Plus } from 'lucide-react';
 import {
   Button,
@@ -6,34 +5,30 @@ import {
   MenuContent,
   MenuItem,
   MenuLabel,
-  MenuRadioGroup,
-  MenuRadioItem,
   MenuSeparator,
-  MenuSub,
-  MenuSubContent,
-  MenuSubTrigger,
   MenuTrigger,
 } from '../components/ui';
-import { saveUiState, useUiState } from '../notes/queries';
-import { useTemplates } from '../templates/templates';
+import { useUiState } from '../notes/queries';
+import { chooseSectionTemplate, useTemplates } from '../templates/templates';
 import { useCommands } from './commands';
 import { useShell } from './store';
 
 /*
- * "New page ▾" (§9.9): a new page (from the section's default template, if it has one), or a
+ * "+ Page ▾" (§9.9): a new page (from the section's default template, if it has one), or a
  * blank one, or one from any template; and which template is the section's default.
  */
 export function NewPageMenu({ sectionId }: { sectionId: string }) {
   const commands = useCommands();
-  const queryClient = useQueryClient();
   const templates = useTemplates();
-  const chosen = useUiState().sectionTemplates?.[sectionId] ?? null;
+  const chosenId = useUiState().sectionTemplates?.[sectionId];
+  const chosen = templates.find((t) => t.id === chosenId);
   return (
     <div className="flex shrink-0">
       <Button
         size="sm"
         variant="primary"
         className="rounded-r-none pr-2"
+        title={chosen ? `New page from “${chosen.name}”` : 'New page'}
         onClick={() => void commands.newPage({ sectionId })}
       >
         <Plus /> Page
@@ -74,26 +69,9 @@ export function NewPageMenu({ sectionId }: { sectionId: string }) {
             </MenuItem>
           ))}
           <MenuSeparator />
-          <MenuSub>
-            <MenuSubTrigger icon={<LayoutTemplate />}>Default for this section</MenuSubTrigger>
-            <MenuSubContent>
-              <MenuRadioGroup
-                value={chosen ?? 'none'}
-                onValueChange={(v) =>
-                  saveUiState(queryClient, {
-                    sectionTemplates: { [sectionId]: v === 'none' ? null : v },
-                  })
-                }
-              >
-                <MenuRadioItem value="none">Blank page</MenuRadioItem>
-                {templates.map((t) => (
-                  <MenuRadioItem key={t.id} value={t.id}>
-                    {t.name}
-                  </MenuRadioItem>
-                ))}
-              </MenuRadioGroup>
-            </MenuSubContent>
-          </MenuSub>
+          <MenuItem icon={<LayoutTemplate />} onSelect={() => chooseSectionTemplate(sectionId)}>
+            {chosen ? `Default template: ${chosen.name}…` : 'Default template…'}
+          </MenuItem>
           <MenuItem onSelect={() => useShell.getState().openDialog({ kind: 'templates' })}>
             Manage templates…
           </MenuItem>

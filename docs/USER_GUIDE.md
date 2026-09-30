@@ -91,7 +91,7 @@ Converting a rich page to Markdown first lists what Markdown can't keep (colours
 - **Card keys** such as `WEB-42` link to that Kanban card by themselves.
 - **Tags:** add them in the page header. Search's start screen lists every tag with its number of pages, where you can rename, recolour or delete it.
 - **Favourites:** the star in the page header. Favourites and recent pages are at the top of the navigation.
-- **Templates:** **New page ▾** starts a page from a template, and `/template` inserts one into a page. Memora has five built in; **Save as template…** in a page's menu adds your own, and a section can have a default template. `{{title}}`, `{{date}}` and `{{time}}` are filled in.
+- **Templates:** start a page from one with **▾** beside **+ Page**, **From a template** in an empty section, or **New page from a template…** in a section's right-click menu. **Default template…**, in the same menus, makes every new page in a section start from one. `/template` inserts a template into a page. Memora has five built in; **Save as template…** in a page's **⋯** menu adds your own. `{{title}}`, `{{date}}` and `{{time}}` are filled in.
 
 ## Saving and syncing
 

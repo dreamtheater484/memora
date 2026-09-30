@@ -29,6 +29,9 @@ const TemplatesDialog = lazy(() => templateDialogs().then((m) => ({ default: m.T
 const InsertTemplateDialog = lazy(() =>
   templateDialogs().then((m) => ({ default: m.InsertTemplateDialog })),
 );
+const SectionTemplateDialog = lazy(() =>
+  templateDialogs().then((m) => ({ default: m.SectionTemplateDialog })),
+);
 const exportDialogs = () => import('../transfer/ExportDialog');
 const ExportDialog = lazy(() => exportDialogs().then((m) => ({ default: m.ExportDialog })));
 const PrintDialog = lazy(() => exportDialogs().then((m) => ({ default: m.PrintDialog })));
@@ -445,7 +448,12 @@ export function ShellDialogs() {
         {dialog?.kind === 'save-version' && <SaveVersionDialog pageId={dialog.pageId} />}
         {dialog?.kind === 'save-template' && <SaveTemplateDialog pageId={dialog.pageId} />}
         {dialog?.kind === 'templates' && <TemplatesDialog />}
-        {dialog?.kind === 'insert-template' && <InsertTemplateDialog onPick={dialog.onPick} />}
+        {dialog?.kind === 'insert-template' && (
+          <InsertTemplateDialog onPick={dialog.onPick} title={dialog.title} />
+        )}
+        {dialog?.kind === 'section-template' && (
+          <SectionTemplateDialog sectionId={dialog.sectionId} />
+        )}
         {dialog?.kind === 'export' && <ExportDialog scope={dialog.scope} id={dialog.id} />}
         {dialog?.kind === 'print' && <PrintDialog scope={dialog.scope} id={dialog.id} />}
         {dialog?.kind === 'new-project' && <NewProjectDialog />}
