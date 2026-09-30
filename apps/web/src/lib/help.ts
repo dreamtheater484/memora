@@ -19,5 +19,8 @@ export const HELP = {
   changes: `${REPO}/blob/v${APP_VERSION}/CHANGELOG.md`,
 } as const;
 
+/** Served by Memora itself: the licences of the software it includes (scripts/licenses.mjs). */
+export const LICENSES_URL = '/third-party-licenses.txt';
+
 /** Opens a guide in a new tab, without giving it a handle on this one. */
 export const openHelp = (url: string) => window.open(url, '_blank', 'noopener,noreferrer');
