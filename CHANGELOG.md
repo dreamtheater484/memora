@@ -4,6 +4,20 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-09-30
+
+### Added
+
+- **Memora for your computer:** the desktop app for Windows, macOS and Ubuntu. Download it, open it, start writing: no Docker, no server and no account. It's the same Memora, with its built-in server listening on the computer only. On Windows it updates itself; elsewhere it says when a new version is out. It backs up by itself too, catching up on the nightly backup when it was closed at night. [DESKTOP.md](docs/DESKTOP.md)
+- A [download page](https://dreamtheater484.github.io/memora/) that offers the right download for the visitor's computer, and the way to Memora Server.
+- Every release now has the installers too: `Memora-Setup.exe`, `Memora.dmg`, `.deb` packages for Ubuntu on amd64 and arm64, and AppImages. The release workflow builds each on its own system, installs it and tests it there.
+- Signing is ready for Windows and macOS: it turns on once the certificates are set up. Until then, the app needs one extra step on its first start. A Microsoft Store package can be made too. [SIGNING.md](docs/SIGNING.md)
+
+### Changed
+
+- The documentation presents the two variants: Memora for your computer, and Memora Server for Docker and a NAS. [SETUP.md](docs/SETUP.md) is now the server guide.
+- The open-source licences: packages without a licence file are listed with the full standard text of the licence they name. The list notes where Shiki's grammars and themes come from, and the Docker image's list names its Debian base system.
+
 ## [0.9.2] - 2026-09-30
 
 ### Added
@@ -103,7 +117,8 @@ The first release: a public beta. Everything planned for 1.0 is in; what's left 
 - Setup guides for Synology, Linux and Windows, with three ways to get HTTPS.
 - `memora-admin` inside the container for lost passwords, lost phones, backups and restores.
 
-[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.9.3...HEAD
+[0.9.3]: https://github.com/dreamtheater484/memora/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/dreamtheater484/memora/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/dreamtheater484/memora/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/dreamtheater484/memora/releases/tag/v0.9.0
