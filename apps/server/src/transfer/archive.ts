@@ -21,6 +21,7 @@ import {
   type Collected,
   type SectionItem,
 } from './collect';
+import { boardFile, boardIds, cardAssetIds, projectFiles } from './kanban';
 import { ZipWriter } from './zip';
 
 /*
@@ -154,10 +155,12 @@ export async function writeArchive(
 
   // Files, each stored once however many pages or ids refer to it.
   context.progress(0.8, 'Files');
+  const everything = collected.scope.type === 'everything';
   const assets = assetsOf(
     db,
     owner,
     collected.pages.map((p) => p.id),
+    everything ? cardAssetIds(db, owner) : [],
   );
   const assetFiles = new Map<string, string>();
   const written = new Set<string>();
@@ -185,6 +188,20 @@ export async function writeArchive(
     for (const row of rows) zip.add(`templates/${row.id}.json`, () => json(row));
   }
 
+  // Kanban, with everything (§9.11): a file per project and per board.
+  let kanban = { projects: 0, boards: 0, cards: 0 };
+  if (everything) {
+    const projects = projectFiles(db, owner);
+    for (const project of projects)
+      zip.add(`kanban/projects/${project.id}.json`, () => json(project));
+    const boards = boardIds(db, owner);
+    for (const id of boards) zip.add(`kanban/boards/${id}.json`, () => json(boardFile(db, id)));
+    const { n } = db.prepare('SELECT count(*) AS n FROM cards WHERE owner_id = ?').get(owner) as {
+      n: number;
+    };
+    kanban = { projects: projects.length, boards: boards.length, cards: n };
+  }
+
   // Last: it lists the others, which are all written by the time it is.
   zip.add('manifest.json', () =>
     json({
@@ -201,6 +218,7 @@ export async function writeArchive(
         assets: assets.length,
         templates,
         versions,
+        ...(everything ? kanban : {}),
       },
       sha256: { ...zip.hashes },
     } satisfies ArchiveManifest),

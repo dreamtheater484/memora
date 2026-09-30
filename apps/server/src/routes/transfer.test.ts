@@ -2,7 +2,10 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import {
   uuidv7,
+  type BoardData,
+  type CardDetail,
   type ImportReport,
+  type Projects,
   type Job,
   type Page,
   type PageVersionMeta,
@@ -127,6 +130,36 @@ async function fill(me: Client) {
     type: 'markdown',
     content: '## Yesterday',
   });
+  // A Kanban project whose cards hold a bit of everything.
+  const made = (
+    await me.post('/api/v1/projects', {
+      name: 'Launch',
+      key: 'LCH',
+      color: 'violet',
+      template: 'extended',
+    })
+  ).json();
+  const board = (await me.get(`/api/v1/boards/${made.board.id}`)).json() as BoardData;
+  const label = (
+    await me.post(`/api/v1/projects/${made.project.id}/labels`, { name: 'Copy', color: 'amber' })
+  ).json();
+  await me.patch(`/api/v1/columns/${board.columns[2]!.id}`, { wipLimit: 3, wipStrict: true });
+  await me.post(`/api/v1/boards/${made.board.id}/lanes`, { name: 'Web' });
+  const card = (
+    await me.post('/api/v1/cards', { columnId: board.columns[1]!.id, title: 'Hero text' })
+  ).json();
+  await me.post('/api/v1/cards', { columnId: board.columns[4]!.id, title: 'Kick-off' });
+  await me.patch(`/api/v1/cards/${card.id}`, {
+    labelIds: [label.id],
+    priority: 'high',
+    dueDate: '2026-02-01',
+    description: `Tone: calm.\n\n![Mood](asset:${imageId})`,
+  });
+  const detail = (await me.post(`/api/v1/cards/${card.id}/checklists`, { title: 'Steps' })).json();
+  await me.post(`/api/v1/checklists/${detail.checklists[0].id}/items`, { text: 'Draft' });
+  await me.post(`/api/v1/cards/${card.id}/comments`, { body: 'First pass done' });
+  await me.put(`/api/v1/cards/${card.id}/pages/${plans}`);
+  await me.post(`/api/v1/cards/${card.id}/attachments`, { assetId: imageId });
   return { notebookId, section, plans, imageId };
 }
 
@@ -200,7 +233,64 @@ async function snapshot(me: Client) {
     ),
     inbox: await pages(tree.inboxId, null),
     templates: templates.map((t) => `${t.name}:${t.content}`),
+    kanban: await kanban(),
   };
+
+  async function kanban() {
+    const list = (await me.get('/api/v1/projects')).json() as Projects;
+    const titleOf = (id: string) => tree.pages.find((p) => p.id === id)?.title;
+    return Promise.all(
+      list.projects.map(async (p) => ({
+        name: p.name,
+        key: p.key,
+        color: p.color,
+        labels: list.labels.filter((l) => l.projectId === p.id).map((l) => `${l.name}:${l.color}`),
+        boards: await Promise.all(
+          list.boards
+            .filter((b) => b.projectId === p.id)
+            .map(async (b) => {
+              const data = (await me.get(`/api/v1/boards/${b.id}`)).json() as BoardData;
+              return {
+                name: b.name,
+                lanes: data.swimlanes.map((l) => l.name),
+                columns: await Promise.all(
+                  data.columns.map(async (c) => ({
+                    name: c.name,
+                    done: c.isDone,
+                    wip: `${c.wipLimit}:${c.wipStrict}`,
+                    cards: await Promise.all(
+                      data.cards
+                        .filter((x) => x.columnId === c.id)
+                        .map(async (x) => {
+                          const d = (await me.get(`/api/v1/cards/${x.id}`)).json() as CardDetail;
+                          return {
+                            key: d.key,
+                            title: x.title,
+                            priority: x.priority,
+                            due: x.dueDate,
+                            done: !!x.completedAt,
+                            labels: x.labelIds.map(
+                              (id) => data.labels.find((l) => l.id === id)?.name,
+                            ),
+                            description: await withFiles(d.description),
+                            checklists: d.checklists.map((l) => [
+                              l.title,
+                              l.items.map((i) => i.text),
+                            ]),
+                            comments: d.comments.map((m) => m.body),
+                            notes: d.pages.map((n) => titleOf(n.pageId)),
+                            files: d.attachments.map((a) => a.name),
+                          };
+                        }),
+                    ),
+                  })),
+                ),
+              };
+            }),
+        ),
+      })),
+    );
+  }
 }
 
 function unzip(file: Buffer): Promise<Map<string, Buffer>> {
@@ -261,6 +351,9 @@ describe('.memora archives', () => {
       files: 1,
       templates: 1,
       skipped: [],
+      projects: 1,
+      boards: 1,
+      cards: 2,
     } satisfies Partial<ImportReport>);
     expect(await snapshot(b.me)).toEqual(await snapshot(a.me));
 
