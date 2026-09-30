@@ -1,6 +1,6 @@
 import { MAX_TEMPLATE_LENGTH, type Template } from '@memora/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { Ellipsis, LayoutTemplate, Pencil, Trash2 } from 'lucide-react';
+import { Check, Ellipsis, FilePlus, LayoutTemplate, Pencil, Trash2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import {
   Button,
@@ -15,7 +15,7 @@ import {
   toast,
 } from '../components/ui';
 import { errorMessage } from '../lib/api';
-import { useNotes } from '../notes/queries';
+import { flushUiState, saveUiState, useNotes, useUiState } from '../notes/queries';
 import { deleteTemplate, saveTemplate, updateTemplate } from '../search/api';
 import { useShell } from '../shell/store';
 import { usePageDoc } from '../sync/hooks';
@@ -52,7 +52,7 @@ export function SaveTemplateDialog({ pageId }: { pageId: string }) {
       close();
       toast({
         title: 'Saved as a template',
-        description: 'Find it in the “New page” menu.',
+        description: 'Start a page from it with ▾ beside “+ Page”, or from a section’s menu.',
         tone: 'success',
       });
     } catch (err) {
@@ -168,10 +168,24 @@ function TemplateRow({ template }: { template: Template }) {
 export function TemplatesDialog() {
   const templates = useTemplates();
   return (
-    <DialogContent
-      title="Templates"
-      description="New pages can start from one: pick it in the “New page” menu, set one as a section’s default, or type /template in a page. Save any page as a template from its menu."
-    >
+    <DialogContent title="Templates" description="Pages can start from one of these.">
+      <ul className="mb-3 flex list-disc flex-col gap-1 pl-5 text-sm text-fg-2">
+        <li>
+          <strong className="font-medium text-fg">A new page from one:</strong> ▾ beside “+ Page”,
+          “From a template” in an empty section, or a section’s right-click menu.
+        </li>
+        <li>
+          <strong className="font-medium text-fg">A section’s default:</strong> “Default template…”
+          in the same menus. Every new page in that section starts from it.
+        </li>
+        <li>
+          <strong className="font-medium text-fg">Into a page:</strong> type /template.
+        </li>
+        <li>
+          <strong className="font-medium text-fg">Your own:</strong> “Save as template…” in a page’s
+          ⋯ menu.
+        </li>
+      </ul>
       <ul aria-label="Templates" className="divide-y divide-line">
         {templates.map((t) => (
           <TemplateRow key={t.id} template={t} />
@@ -181,10 +195,16 @@ export function TemplatesDialog() {
   );
 }
 
-export function InsertTemplateDialog({ onPick }: { onPick: (template: Template) => void }) {
+export function InsertTemplateDialog({
+  onPick,
+  title = 'Insert a template',
+}: {
+  onPick: (template: Template) => void;
+  title?: string;
+}) {
   const templates = useTemplates();
   return (
-    <DialogContent size="sm" title="Insert a template">
+    <DialogContent size="sm" title={title}>
       <ul aria-label="Templates" className="flex flex-col gap-px">
         {templates.map((t) => (
           <li key={t.id}>
@@ -201,6 +221,65 @@ export function InsertTemplateDialog({ onPick }: { onPick: (template: Template) 
             </button>
           </li>
         ))}
+      </ul>
+    </DialogContent>
+  );
+}
+
+/** The template a section's new pages start from, or none (§9.9). Choosing one saves it. */
+export function SectionTemplateDialog({ sectionId }: { sectionId: string }) {
+  const index = useNotes();
+  const queryClient = useQueryClient();
+  const templates = useTemplates();
+  const chosen = useUiState().sectionTemplates?.[sectionId] ?? null;
+  const name = index.section.get(sectionId)?.name ?? 'this section';
+  const choose = (template: Template | null) => {
+    saveUiState(queryClient, { sectionTemplates: { [sectionId]: template?.id ?? null } });
+    flushUiState();
+    close();
+    toast({
+      title: template
+        ? `New pages in ${name} start from “${template.name}”`
+        : `New pages in ${name} start blank`,
+      tone: 'success',
+    });
+  };
+  const options: { template: Template | null; label: string }[] = [
+    { template: null, label: 'Blank page' },
+    ...templates.map((template) => ({ template, label: template.name })),
+  ];
+  return (
+    <DialogContent
+      size="sm"
+      title="Default template"
+      description={`Every new page in “${name}” starts from this.`}
+    >
+      <ul aria-label="Templates" className="flex flex-col gap-px">
+        {options.map(({ template, label }) => {
+          const current = (template?.id ?? null) === chosen;
+          return (
+            <li key={template?.id ?? 'blank'}>
+              <button
+                type="button"
+                aria-current={current || undefined}
+                onClick={() => choose(template)}
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-hover"
+              >
+                {template ? (
+                  <LayoutTemplate aria-hidden className="size-4 shrink-0 text-fg-3" />
+                ) : (
+                  <FilePlus aria-hidden className="size-4 shrink-0 text-fg-3" />
+                )}
+                <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
+                {current && (
+                  <span className="flex items-center gap-1 text-xs text-fg-3">
+                    <Check aria-hidden className="size-3.5" /> Current
+                  </span>
+                )}
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </DialogContent>
   );

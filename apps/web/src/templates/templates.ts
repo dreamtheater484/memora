@@ -36,6 +36,11 @@ export async function contentFor(
 }
 
 /** Opens the template picker; `onPick` gets the chosen one. */
-export function pickTemplate(onPick: (template: Template) => void): void {
-  useShell.getState().openDialog({ kind: 'insert-template', onPick });
+export function pickTemplate(onPick: (template: Template) => void, title?: string): void {
+  useShell.getState().openDialog({ kind: 'insert-template', onPick, title });
+}
+
+/** Opens the choice of the template a section's new pages start from. */
+export function chooseSectionTemplate(sectionId: string): void {
+  useShell.getState().openDialog({ kind: 'section-template', sectionId });
 }

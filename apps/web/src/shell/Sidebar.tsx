@@ -45,6 +45,7 @@ import { isFavorite, toggleFavorite } from '../notes/places';
 import { saveUiState, useNotesActions, useUiState } from '../notes/queries';
 import { hueStyle, sectionColor } from '../theme/sections';
 import { BoardsNav } from '../kanban/BoardsNav';
+import { chooseSectionTemplate, pickTemplate } from '../templates/templates';
 import { openBoards, useProjects } from '../kanban/projects';
 import { useCommands } from './commands';
 import { isNotesLevel, useCurrent, useGo } from './location';
@@ -366,6 +367,17 @@ export function SectionMenuItems({ sectionId, where }: { sectionId: string; wher
       >
         New page
       </ContextMenuItem>
+      <ContextMenuItem
+        icon={<LayoutTemplate />}
+        onSelect={() =>
+          pickTemplate(
+            (template) => void commands.newPage({ sectionId: section.id, template }),
+            'New page from a template',
+          )
+        }
+      >
+        New page from a template…
+      </ContextMenuItem>
       <FavoriteItem place={{ type: 'section', id: section.id }} />
       {!section.isInbox && (
         <ContextMenuItem
@@ -401,6 +413,9 @@ export function SectionMenuItems({ sectionId, where }: { sectionId: string; wher
           ))}
         </ContextMenuSubContent>
       </ContextMenuSub>
+      <ContextMenuItem icon={<LayoutTemplate />} onSelect={() => chooseSectionTemplate(section.id)}>
+        Default template…
+      </ContextMenuItem>
       <ContextMenuItem
         icon={<Share2 />}
         onSelect={() =>

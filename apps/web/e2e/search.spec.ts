@@ -220,12 +220,14 @@ test.describe('templates', () => {
     await expect.poll(() => editorText(page)).toContain('## Agenda');
     await expect.poll(() => editorText(page)).toContain('**Date:** 2026-09-29');
 
+    // The section's default, chosen with the mouse in a dialog of its own.
     await page.getByRole('button', { name: 'New page from a template' }).click();
-    await page.getByRole('menuitem', { name: 'Default for this section' }).click();
-    const todo = page.getByRole('menuitemradio', { name: 'To-do list' });
-    await todo.focus();
-    await page.keyboard.press('Enter');
-    await page.keyboard.press('Escape');
+    await page.getByRole('menuitem', { name: 'Default template…' }).click();
+    await page
+      .getByRole('dialog', { name: 'Default template' })
+      .getByRole('button', { name: 'To-do list' })
+      .click();
+    await expect(page.getByText('New pages in Roadmap start from “To-do list”')).toBeVisible();
     await page.getByRole('button', { name: 'Page', exact: true }).click();
     await page.keyboard.press('Escape');
     await expect.poll(() => editorText(page)).toContain('## This week');
@@ -236,6 +238,34 @@ test.describe('templates', () => {
         ),
       )
       .toBe(true);
+  });
+
+  test('an empty section offers templates, and its menu sets the default', async ({ page }) => {
+    await open(page, '/s/meetings');
+    const main = page.getByRole('main');
+    await expect(main.getByText('Start with a blank page')).toBeVisible();
+
+    // Its tab's menu: the default, for every new page in the section.
+    await page.getByRole('tab', { name: 'Meetings' }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Default template…' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Default template' });
+    await expect(dialog.getByRole('button', { name: /Blank page/ })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    await dialog.getByRole('button', { name: 'Meeting notes' }).click();
+    await expect(
+      main.getByText('New pages here start from the template “Meeting notes”.'),
+    ).toBeVisible();
+
+    // "From a template" beside "New page": any template, just this once.
+    await main.getByRole('button', { name: 'From a template' }).click();
+    await page
+      .getByRole('dialog', { name: 'New page from a template' })
+      .getByRole('button', { name: 'Decision record' })
+      .click();
+    await page.keyboard.press('Escape');
+    await expect.poll(() => editorText(page)).toContain('## Decision');
   });
 
   test('saves a page as a template, and inserts one with /template', async ({ page }) => {
