@@ -3,6 +3,9 @@ node_modules/
 dist/
 dist-gallery/
 build/
+# the desktop app's installers and its tests' screenshots (apps/desktop)
+release/
+apps/desktop/screenshots/
 coverage/
 *.tsbuildinfo
 .vite/

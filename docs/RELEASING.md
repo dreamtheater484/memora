@@ -13,7 +13,7 @@ Memora follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`.
 
 ## Steps
 
-1. **On a branch:** set the version in the four `package.json` files (root, `apps/server`, `apps/web`, `packages/shared`).
+1. **On a branch:** set the version in the five `package.json` files (root, `apps/server`, `apps/web`, `apps/desktop`, `packages/shared`).
 2. In [CHANGELOG.md](../CHANGELOG.md), rename `## [Unreleased]` to `## [x.y.z] - YYYY-MM-DD`, add a new empty `## [Unreleased]` above it, and update the links at the bottom. Check it the way the workflow will:
 
    ```bash
@@ -26,7 +26,7 @@ Memora follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`.
    docker build -f docker/Dockerfile -t memora:local . && node scripts/check-image.mjs memora:local
    ```
 
-4. Open a pull request. Merge it once CI is green, and wait for CI on `main` to pass too.
+4. Open a pull request. Its **Release** run (a dry run: nothing is published) builds the desktop app on Windows, macOS and Ubuntu, installs it and tests it there, and builds and checks the images. Merge it once all of that and CI are green, and wait for CI on `main` to pass too.
 5. **Tag the merge commit** and push the tag:
 
    ```bash
@@ -34,10 +34,14 @@ Memora follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`.
    ```
 
 6. Watch the **Release** workflow. It checks that the tag, the packages and the changelog agree, and that CI passed for that commit on `main`. It then:
-   - builds and smoke-tests both architectures, checks the images and lists their contents (SPDX);
+   - builds the desktop app on Windows, macOS and Ubuntu (amd64 and arm64), signed once the signing secrets are set ([SIGNING.md](SIGNING.md)), then tests the app, installs the installer as people will, and tests that too;
+   - builds and smoke-tests both architectures of the image, checks the images and lists their contents (SPDX);
    - tags the images: `x.y.z`, `x.y` and `latest`, or only its own tag for a pre-release;
-   - creates the GitHub release with the changelog's notes.
-7. Check the release page, and pull the new image once:
+   - creates the GitHub release with the changelog's notes, the installers and the update files (`latest*.yml`) the desktop app checks.
+
+   Each desktop job also keeps screenshots of the app it tested, as built and as installed, in the run's `desktop-screenshot-…` artifacts: a way to see the Mac app without a Mac. With the Microsoft Store's values set, the Windows job keeps a Store package too, for uploading in Partner Center.
+
+7. Check the release page (the installers are there), open the [download page](https://dreamtheater484.github.io/memora/), and pull the new image once:
 
    ```bash
    docker pull ghcr.io/dreamtheater484/memora:x.y.z

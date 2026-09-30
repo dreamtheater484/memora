@@ -39,7 +39,13 @@ const envSchema = z.object({
   MEMORA_MAX_IMPORT_MB: z.coerce.number().int().min(1).max(16384).default(1024),
   MEMORA_GOTENBERG_URL: z.url({ protocol: /^https?$/ }).optional(),
   MEMORA_SECRET_KEY_FILE: z.string().min(1).optional(),
+  /** Set by the desktop app (apps/desktop): the secret its window signs in with. */
+  MEMORA_DESKTOP_TOKEN: z.string().min(32).optional(),
+  MEMORA_DESKTOP_NAME: z.string().max(100).optional(),
 });
+
+/** Addresses only this computer can reach: the desktop app listens on nothing else. */
+const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost']);
 
 export interface Config {
   nodeEnv: 'development' | 'production' | 'test';
@@ -83,6 +89,12 @@ export interface Config {
   maxImportBytes: number;
   /** A Gotenberg service that makes PDFs (§9.10); none: the browser prints them. */
   gotenbergUrl: string | undefined;
+  /**
+   * Set when the desktop app runs this server (Phase 14): one person on one computer. There
+   * are no passwords: the app's window signs in with `token`, a secret made at each launch,
+   * and the owner's account is made on the first start, named `name`.
+   */
+  desktop: { token: string; name: string } | null;
 }
 
 export class ConfigError extends Error {
@@ -117,6 +129,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     ? null
     : setting('MEMORA_BACKUP_SCHEDULE', () => parseSchedule(e.MEMORA_BACKUP_SCHEDULE));
   const [daily = 7, weekly = 4, monthly = 12] = e.MEMORA_BACKUP_KEEP.split(',').map(Number);
+  if (e.MEMORA_DESKTOP_TOKEN && !LOOPBACK.has(e.HOST)) {
+    throw new ConfigError(
+      'Invalid configuration:\n✖ HOST: the desktop app listens on this computer only (127.0.0.1).',
+    );
+  }
 
   // Production (Docker) keeps everything in the /data volume; development uses ./data (gitignored).
   const dataDir = resolve(e.MEMORA_DATA_DIR ?? (e.NODE_ENV === 'production' ? '/data' : 'data'));
@@ -143,6 +160,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     maxImportBytes: e.MEMORA_MAX_IMPORT_MB * 1024 * 1024,
     gotenbergUrl: e.MEMORA_GOTENBERG_URL?.replace(/\/+$/, ''),
     secretKeyFile: resolve(e.MEMORA_SECRET_KEY_FILE ?? join(dataDir, 'secret.key')),
+    desktop: e.MEMORA_DESKTOP_TOKEN
+      ? { token: e.MEMORA_DESKTOP_TOKEN, name: e.MEMORA_DESKTOP_NAME?.trim() || 'Me' }
+      : null,
   };
 }
 

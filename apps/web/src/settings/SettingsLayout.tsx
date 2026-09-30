@@ -10,7 +10,7 @@ import {
   Users,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useCurrentUser } from '../auth/queries';
+import { useCurrentUser, useDesktop } from '../auth/queries';
 import { HelpLink } from '../components/HelpLink';
 import { cn } from '../lib/cn';
 import { APP_VERSION, HELP, LICENSES_URL } from '../lib/help';
@@ -27,15 +27,17 @@ interface NavItem {
   label: string;
   icon: ReactNode;
   admin?: boolean;
+  /** Only on a server, not in the desktop app. */
+  server?: boolean;
 }
 
 const NAV: NavItem[] = [
   { to: '/settings/account', label: 'Account', icon: <UserRound /> },
   { to: '/settings/editing', label: 'Editing', icon: <PenLine /> },
   { to: '/settings/data', label: 'Import & export', icon: <ArrowUpDown /> },
-  { to: '/settings/device', label: 'This device', icon: <MonitorSmartphone /> },
-  { to: '/settings/users', label: 'Users', icon: <Users />, admin: true },
-  { to: '/settings/audit', label: 'Audit log', icon: <ScrollText />, admin: true },
+  { to: '/settings/device', label: 'This device', icon: <MonitorSmartphone />, server: true },
+  { to: '/settings/users', label: 'Users', icon: <Users />, admin: true, server: true },
+  { to: '/settings/audit', label: 'Audit log', icon: <ScrollText />, admin: true, server: true },
   { to: '/settings/backups', label: 'Backups', icon: <DatabaseBackup />, admin: true },
 ];
 
@@ -45,7 +47,10 @@ const NAV: NavItem[] = [
  */
 export function SettingsLayout() {
   const user = useCurrentUser();
-  const items = NAV.filter((item) => !item.admin || user.role === 'admin');
+  const desktop = useDesktop();
+  const items = NAV.filter(
+    (item) => (!item.admin || user.role === 'admin') && !(desktop && item.server),
+  );
   return (
     <div className="aurora-bg flex h-full flex-col overflow-y-auto">
       <div className="mx-auto flex w-full max-w-[64rem] flex-1 flex-col gap-4 px-3 py-3 tablet:gap-6 tablet:px-6 tablet:py-6">

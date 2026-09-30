@@ -47,8 +47,15 @@ describe('licences', () => {
     expect(text.indexOf('alpha 1.0.0')).toBeLessThan(text.indexOf('beta 1.0.0'));
     expect(text).toContain('Source: https://github.com/someone/alpha');
     expect(text).toContain('Copyright (c) Alpha');
-    expect(text).toContain('Licensed under ISC by Beta Author.');
+    // No licence file: the standard text of the licence it names, with its author.
+    expect(text).toContain('ISC License\n\nCopyright (c) Beta Author');
+    expect(text).toContain('ships no licence file');
     expect(text).not.toContain('beta@example.com');
+  });
+
+  it('notes where Shiki’s grammars come from', () => {
+    const langs = pkg('@shikijs/langs', 'MIT');
+    expect(section('The app', [langs])).toContain('NOTE: The language grammars');
   });
 
   it('stops at a licence that is not on the list', () => {
@@ -61,10 +68,11 @@ describe('licences', () => {
     const server = path.join(work, 'server.txt');
     writeFileSync(web, 'header\n\nweb list\n');
     writeFileSync(server, `${'='.repeat(78)}\n${SERVER_TITLE} (1 packages)\n\nserver list\n`);
-    combine(web, server);
-    combine(web, server);
+    combine(web, server, 'Debian test');
+    combine(web, server, 'Debian test');
     const text = readFileSync(web, 'utf8');
     expect(text.match(/server list/g)).toHaveLength(1);
+    expect(text.match(/The base system: Debian test/g)).toHaveLength(1);
     expect(text).toMatch(/^header\n\nweb list\n\n=+\nThe server/);
     expect(text).toContain('The runtime: Node.js');
   });

@@ -27,7 +27,9 @@ COPY packages/shared/package.json packages/shared/
 RUN pnpm install --frozen-lockfile
 
 COPY . .
-RUN pnpm build
+# The licence list (scripts/licenses.mjs) names the image's base system too.
+ARG DEBIAN_RELEASE
+RUN MEMORA_IMAGE_BASE="Debian ${DEBIAN_RELEASE} (slim)" pnpm build
 
 # The server bundle's only runtime dependencies are native modules: the SQLite driver and
 # Argon2 (the platform's own package is installed). better-sqlite3 ships prebuilt binaries for

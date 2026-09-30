@@ -1,4 +1,6 @@
-# Updating Memora
+# Updating Memora Server
+
+> **Memora for your computer** updates itself: see [DESKTOP.md](DESKTOP.md#updates). This page is about Memora Server.
 
 Updating takes a minute: download the new image, and recreate the container with it. Memora backs up your database before it changes anything, and your notes live in the data folder, not in the container.
 

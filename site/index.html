@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Memora: notebooks, Markdown and Kanban on your computer</title>
+    <meta
+      name="description"
+      content="Memora keeps notebooks, Markdown and rich notes, and Kanban boards on your own computer. Free and open source."
+    />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="./">
+        <svg viewBox="0 0 64 64" width="32" height="32" aria-hidden="true">
+          <rect width="64" height="64" rx="14" fill="#4f46e5" />
+          <path d="M16 46V18h6l10 14 10-14h6v28h-6V29l-10 13-10-13v17z" fill="#fff" />
+        </svg>
+        Memora
+      </a>
+      <a class="quiet" href="https://github.com/dreamtheater484/memora">Source on GitHub</a>
+    </header>
+
+    <main>
+      <section class="hero">
+        <h1>Your notes, on your computer</h1>
+        <p class="lede">
+          Notebooks with coloured section tabs, Markdown and rich notes, and Kanban boards, in one
+          app. Private: your notes stay with you. Free and open source.
+        </p>
+      </section>
+
+      <section class="choices" aria-label="Get Memora">
+        <article class="choice primary">
+          <p class="badge">For everyone</p>
+          <h2>Memora for your computer</h2>
+          <p>Download it, open it, start writing. It updates itself.</p>
+          <a id="download" class="button" href="#all-downloads">Download Memora</a>
+          <p id="download-note" class="small">For Windows, macOS and Ubuntu.</p>
+          <details id="all-downloads">
+            <summary>All downloads</summary>
+            <ul class="files">
+              <li>
+                Windows 10 and 11:
+                <a data-file="Memora-Setup.exe" href="#">Memora-Setup.exe</a>
+              </li>
+              <li>
+                macOS, Intel and Apple Silicon: <a data-file="Memora.dmg" href="#">Memora.dmg</a>
+              </li>
+              <li>
+                Ubuntu: <a data-file="Memora-amd64.deb" href="#">Memora-amd64.deb</a>, or
+                <a data-file="Memora-arm64.deb" href="#">Memora-arm64.deb</a> on ARM
+              </li>
+              <li>
+                Other Linux:
+                <a data-file="Memora-x86_64.AppImage" href="#">Memora-x86_64.AppImage</a>,
+                <a data-file="Memora-arm64.AppImage" href="#">Memora-arm64.AppImage</a>
+              </li>
+              <li>
+                <a href="https://github.com/dreamtheater484/memora/releases">Every release</a>
+              </li>
+            </ul>
+          </details>
+          <p class="small">
+            <a href="https://github.com/dreamtheater484/memora/blob/main/docs/DESKTOP.md"
+              >Installing, step by step</a
+            >
+          </p>
+        </article>
+
+        <article class="choice">
+          <p class="badge quiet-badge">For enthusiasts</p>
+          <h2>Memora Server</h2>
+          <p>
+            Run it with Docker, or on a Synology NAS, and use it in the browser. Every device stays
+            in sync, your phone included.
+          </p>
+          <a
+            class="button secondary"
+            href="https://github.com/dreamtheater484/memora/blob/main/docs/SETUP.md"
+            >Read the server guide</a
+          >
+          <p class="small">Needs Docker and a little setup.</p>
+        </article>
+      </section>
+
+      <section class="shots" aria-label="Screenshots">
+        <figure>
+          <img
+            src="images/notes.png"
+            alt="A Markdown page beside its preview, with notebooks and section tabs"
+            loading="lazy"
+          />
+          <figcaption>Markdown beside its preview, with maths and diagrams</figcaption>
+        </figure>
+        <figure>
+          <img src="images/board.png" alt="A Kanban board with swimlanes" loading="lazy" />
+          <figcaption>Kanban boards, linked to your notes</figcaption>
+        </figure>
+        <figure class="phone">
+          <img src="images/phone.png" alt="A recipe page on a phone" loading="lazy" />
+          <figcaption>Memora Server on a phone</figcaption>
+        </figure>
+      </section>
+
+      <section class="points">
+        <div>
+          <h3>Organised your way</h3>
+          <p>Notebooks, section groups, coloured tabs and pages, with drag and drop.</p>
+        </div>
+        <div>
+          <h3>Never lose a word</h3>
+          <p>It saves as you type, keeps a history of every page, and backs up every night.</p>
+        </div>
+        <div>
+          <h3>Open formats</h3>
+          <p>Markdown, Word, HTML and PDF, in and out. Your notes are never locked in.</p>
+        </div>
+        <div>
+          <h3>Start small, grow later</h3>
+          <p>Begin on one computer. Move everything to Memora Server whenever you like.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Memora is free and open source (MIT licence), made by
+        <a href="https://github.com/dreamtheater484">dreamtheater484</a>.
+        <a href="https://github.com/dreamtheater484/memora/blob/main/CHANGELOG.md">What's new</a>
+      </p>
+    </footer>
+
+    <script src="download.js"></script>
+  </body>
+</html>

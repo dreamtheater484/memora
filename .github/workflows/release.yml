@@ -1,10 +1,12 @@
 name: Release
 
 # A version tag (`v0.9.0`) publishes that version (plan §13.3, docs/RELEASING.md):
+# - the desktop app: installers for Windows, macOS and Ubuntu, each built, installed and tested
+#   on its own system, signed once the signing secrets are set (docs/SIGNING.md);
 # - images on GHCR for amd64 and arm64, tagged `0.9.0`, `0.9` and `latest` (a pre-release such
 #   as `1.0.0-rc.1` gets its own tag only);
 # - a software bill of materials (SPDX) for each architecture;
-# - a GitHub release with the notes from CHANGELOG.md.
+# - a GitHub release with the installers and the notes from CHANGELOG.md.
 # Pull requests that change how releases are made run all of it except publishing.
 
 on:
@@ -16,7 +18,9 @@ on:
       - CHANGELOG.md
       - docker/**
       - scripts/check-image.mjs
+      - scripts/licenses.mjs
       - scripts/release-notes.mjs
+      - apps/desktop/**
 
 permissions:
   contents: read
@@ -91,10 +95,18 @@ jobs:
             images+=")"
           fi
           docs="https://github.com/$GITHUB_REPOSITORY/blob/v$VERSION/docs"
+          files="https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION"
           {
-            echo "$images."
+            echo "**Memora for your computer:** download, open, done."
             echo
-            echo "New here? Read [SETUP.md]($docs/SETUP.md). Updating? Read [UPGRADE.md]($docs/UPGRADE.md)."
+            echo "- Windows: [Memora-Setup.exe]($files/Memora-Setup.exe)"
+            echo "- macOS, Intel and Apple Silicon: [Memora.dmg]($files/Memora.dmg)"
+            echo "- Ubuntu: [Memora-amd64.deb]($files/Memora-amd64.deb), or [Memora-arm64.deb]($files/Memora-arm64.deb) for ARM"
+            echo "- Other Linux: [Memora-x86_64.AppImage]($files/Memora-x86_64.AppImage), [Memora-arm64.AppImage]($files/Memora-arm64.AppImage)"
+            echo
+            echo "Installing, and the first start: [DESKTOP.md]($docs/DESKTOP.md)."
+            echo
+            echo "**Memora Server**, for Docker and a NAS: $images. New here? Read [SETUP.md]($docs/SETUP.md). Updating? Read [UPGRADE.md]($docs/UPGRADE.md)."
             echo
             cat notes.md
           } > release-notes.md
@@ -194,10 +206,160 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  desktop:
+    name: Desktop app (${{ matrix.name }})
+    needs: prepare
+    strategy:
+      # Each system's result is worth having, even when another one fails.
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            runner: windows-latest
+            target: --win
+          - name: macOS
+            runner: macos-latest
+            target: --mac
+          - name: Ubuntu amd64
+            runner: ubuntu-latest
+            target: --linux
+          - name: Ubuntu arm64
+            runner: ubuntu-24.04-arm
+            target: --linux
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      - run: pnpm build
+        working-directory: .
+      - name: What Electron needs on Linux, and a screen for the tests
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb libgtk-3-0t64 libnss3 libgbm1 libasound2t64
+      - name: Build the installers
+        env:
+          # Signing, once its secrets are set (docs/SIGNING.md), and only for a release: a pull
+          # request's run never sees them. Without them, Windows is unsigned and macOS is signed
+          # ad hoc, which electron-builder would skip for a pull request unless told otherwise:
+          # the dry run then checks the same kind of app a release makes.
+          CSC_FOR_PULL_REQUEST: 'true'
+          CSC_LINK: ${{ runner.os == 'macOS' && github.event_name == 'push' && secrets.MAC_CERTIFICATE || '' }}
+          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && github.event_name == 'push' && secrets.MAC_CERTIFICATE_PASSWORD || '' }}
+          APPLE_ID: ${{ github.event_name == 'push' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ github.event_name == 'push' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ github.event_name == 'push' && secrets.APPLE_TEAM_ID || '' }}
+          WIN_CSC_LINK: ${{ github.event_name == 'push' && secrets.WIN_CERTIFICATE || '' }}
+          WIN_CSC_KEY_PASSWORD: ${{ github.event_name == 'push' && secrets.WIN_CERTIFICATE_PASSWORD || '' }}
+          AZURE_TENANT_ID: ${{ github.event_name == 'push' && secrets.AZURE_TENANT_ID || '' }}
+          AZURE_CLIENT_ID: ${{ github.event_name == 'push' && secrets.AZURE_CLIENT_ID || '' }}
+          AZURE_CLIENT_SECRET: ${{ github.event_name == 'push' && secrets.AZURE_CLIENT_SECRET || '' }}
+          MEMORA_AZURE_ENDPOINT: ${{ github.event_name == 'push' && vars.MEMORA_AZURE_ENDPOINT || '' }}
+          MEMORA_AZURE_ACCOUNT: ${{ vars.MEMORA_AZURE_ACCOUNT }}
+          MEMORA_AZURE_PROFILE: ${{ vars.MEMORA_AZURE_PROFILE }}
+          MEMORA_AZURE_PUBLISHER: ${{ vars.MEMORA_AZURE_PUBLISHER }}
+          # The Microsoft Store's identity for the app: then a Store package is built too.
+          MEMORA_STORE_IDENTITY: ${{ vars.MEMORA_STORE_IDENTITY }}
+          MEMORA_STORE_PUBLISHER: ${{ vars.MEMORA_STORE_PUBLISHER }}
+          MEMORA_STORE_PUBLISHER_NAME: ${{ vars.MEMORA_STORE_PUBLISHER_NAME }}
+        run: |
+          # electron-builder takes a variable that is set but empty as a certificate's path:
+          # the ones without a value are removed.
+          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID \
+            WIN_CSC_LINK WIN_CSC_KEY_PASSWORD AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET; do
+            [ -n "${!name}" ] || unset "$name"
+          done
+          pnpm build
+          pnpm resources
+          pnpm app ${{ matrix.target }}
+          ls -la release
+      - name: Test the app
+        env:
+          # Outside test-results, which each Playwright run empties.
+          MEMORA_SHOT: screenshots/packaged.png
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then xvfb-run -a pnpm test; else pnpm test; fi
+      - name: Install it, as people will, and test that
+        env:
+          MEMORA_SHOT: screenshots/installed.png
+        run: |
+          case "$RUNNER_OS" in
+            Windows)
+              ./release/Memora-Setup.exe //S
+              # The installer starts Memora when it's done: close it for the test's own start.
+              sleep 10
+              taskkill //IM Memora.exe //F || true
+              app="$(find "$(cygpath "$LOCALAPPDATA")/Programs" -iname Memora.exe | head -n 1)"
+              [ -n "$app" ] || { echo "Memora.exe isn't installed"; exit 1; }
+              app="$(cygpath -w "$app")"
+              ;;
+            macOS)
+              hdiutil attach release/Memora.dmg -nobrowse -mountpoint "$RUNNER_TEMP/dmg"
+              cp -R "$RUNNER_TEMP/dmg/Memora.app" "$RUNNER_TEMP/"
+              hdiutil detach "$RUNNER_TEMP/dmg"
+              codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/Memora.app"
+              app="$RUNNER_TEMP/Memora.app/Contents/MacOS/Memora"
+              ;;
+            Linux)
+              sudo apt-get install -y "./release/Memora-$(dpkg --print-architecture).deb"
+              app=/opt/Memora/memora
+              ;;
+          esac
+          echo "Installed at $app"
+          if [ "$RUNNER_OS" = Linux ]; then
+            MEMORA_APP="$app" xvfb-run -a pnpm test
+          else
+            MEMORA_APP="$app" pnpm test
+          fi
+      - name: Screenshots of the app on ${{ matrix.name }}, and the logs of a failed test
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-screenshot-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            apps/desktop/screenshots
+            apps/desktop/test-results
+          retention-days: 14
+      - name: The Microsoft Store package, to upload in Partner Center (docs/SIGNING.md)
+        if: runner.os == 'Windows' && vars.MEMORA_STORE_IDENTITY != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: microsoft-store-package
+          path: apps/desktop/release/Memora-Store.appx
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            apps/desktop/release/Memora-Setup.exe
+            apps/desktop/release/Memora-Setup.exe.blockmap
+            apps/desktop/release/Memora.dmg
+            apps/desktop/release/Memora.dmg.blockmap
+            apps/desktop/release/Memora-mac.zip
+            apps/desktop/release/Memora-mac.zip.blockmap
+            apps/desktop/release/Memora-*.deb
+            apps/desktop/release/Memora-*.AppImage
+            apps/desktop/release/latest*.yml
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     name: Publish ${{ needs.prepare.outputs.version }}
     if: github.event_name == 'push'
-    needs: [prepare, build]
+    needs: [prepare, build, desktop]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -212,6 +374,11 @@ jobs:
         with:
           path: release
           pattern: '{sbom-*,release-notes}'
+          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          path: release
+          pattern: installers-*
           merge-multiple: true
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
@@ -238,4 +405,5 @@ jobs:
           [ "${{ needs.prepare.outputs.prerelease }}" = true ] && flags+=(--prerelease) || flags+=(--latest)
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "Memora ${{ needs.prepare.outputs.version }}" \
-            --notes-file release/release-notes.md "${flags[@]}" release/*.spdx.json
+            --notes-file release/release-notes.md "${flags[@]}" \
+            release/*.spdx.json release/Memora* release/latest*.yml

@@ -46,6 +46,35 @@ export const ALLOWED = new Set([
 /** Packages whose package.json doesn't say the licence their licence file has. */
 const KNOWN = { khroma: 'MIT' };
 
+/**
+ * Notes a package's own licence file leaves out: Shiki's grammars and themes come from many
+ * projects, each under its own licence, which Shiki lists.
+ */
+const NOTES = {
+  '@shikijs/langs':
+    'The language grammars in this package come from many projects, each under its own ' +
+    'licence (most of them MIT). Shiki lists them, with their sources and licences, at ' +
+    'https://github.com/shikijs/textmate-grammars-themes',
+  '@shikijs/themes':
+    'The colour themes in this package come from many projects, each under its own licence ' +
+    '(most of them MIT). Shiki lists them at https://github.com/shikijs/textmate-grammars-themes',
+};
+
+/** Standard licence texts, for packages that name a licence but ship no licence file. */
+const TEXTS = path.join(root, 'scripts', 'licence-texts');
+
+/** The licence text for a package without a licence file, when it names a common one. */
+function standardText(p) {
+  const file = path.join(TEXTS, `${p.license}.txt`);
+  if (!existsSync(file)) return null;
+  const holder = p.author ?? `the ${p.name} authors`;
+  return (
+    readFileSync(file, 'utf8').replace('{holder}', holder).trim() +
+    '\n\n(The package ships no licence file. This is the standard text of the licence it ' +
+    'names, with its author as the copyright holder.)'
+  );
+}
+
 /** A licence, or an SPDX expression of them, that may ship: one side of an OR, all of an AND. */
 export function allowed(expression) {
   const inner = expression.trim().replace(/^\((.*)\)$/, '$1');
@@ -173,10 +202,12 @@ export function section(title, dirs) {
   const entries = packages.map((p) => {
     const text = p.texts.length
       ? p.texts.join('\n\n')
-      : `Licensed under ${p.license}${p.author ? ` by ${p.author}` : ''}. The package has no ` +
-        `licence file; the licence's text is at https://spdx.org/licenses/${p.license}.html`;
+      : (standardText(p) ??
+        `Licensed under ${p.license}${p.author ? ` by ${p.author}` : ''}. The package has no ` +
+          `licence file; the licence's text is at https://spdx.org/licenses/${p.license}.html`);
     const notices = p.notices.map((n) => `\n\nNOTICE:\n${n}`).join('');
-    return `${RULE}\n${p.name} ${p.version}\nLicence: ${p.license}\nSource: ${p.source}\n\n${text}${notices}\n`;
+    const note = NOTES[p.name] ? `\n\nNOTE: ${NOTES[p.name]}` : '';
+    return `${RULE}\n${p.name} ${p.version}\nLicence: ${p.license}\nSource: ${p.source}\n\n${text}${notices}${note}\n`;
   });
   return `${'='.repeat(78)}\n${title} (${packages.length} packages)\n${'='.repeat(78)}\n\n${entries.join('\n')}`;
 }
@@ -206,8 +237,25 @@ function nodeSection() {
   return `${'='.repeat(78)}\nThe runtime: Node.js ${process.version}\n${'='.repeat(78)}\n\n${text}\n`;
 }
 
+/**
+ * The Docker image's base system (MEMORA_IMAGE_BASE, set by docker/Dockerfile): its packages
+ * keep their licences in the image, and Debian publishes their sources.
+ */
+function baseSection(base) {
+  return (
+    `${'='.repeat(78)}\nThe base system: ${base}\n${'='.repeat(78)}\n\n` +
+    `The Docker image is built on ${base}. Each of its packages keeps its copyright and\n` +
+    'licence in the image, in /usr/share/doc/<package>/copyright, and its source code is at\n' +
+    'https://sources.debian.org\n'
+  );
+}
+
 /** Adds the server's list and Node.js's licence to the web app's file (again, if run twice). */
-export function combine(web = WEB_FILE, server = SERVER_FILE) {
+export function combine(
+  web = WEB_FILE,
+  server = SERVER_FILE,
+  base = process.env.MEMORA_IMAGE_BASE,
+) {
   if (!existsSync(web))
     throw new Error(`${path.relative(root, web)} is missing: build the web app`);
   if (!existsSync(server)) {
@@ -215,8 +263,13 @@ export function combine(web = WEB_FILE, server = SERVER_FILE) {
   }
   const current = readFileSync(web, 'utf8');
   const cut = current.indexOf(`${'='.repeat(78)}\n${SERVER_TITLE}`);
-  const base = (cut < 0 ? current : current.slice(0, cut)).trimEnd();
-  writeFileSync(web, `${base}\n\n${readFileSync(server, 'utf8').trim()}\n\n${nodeSection()}`);
+  const parts = [
+    cut < 0 ? current : current.slice(0, cut),
+    readFileSync(server, 'utf8'),
+    nodeSection(),
+  ];
+  if (base) parts.push(baseSection(base));
+  writeFileSync(web, `${parts.map((part) => part.trim()).join('\n\n')}\n`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

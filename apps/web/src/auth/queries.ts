@@ -89,6 +89,14 @@ export function useCurrentUser(): CurrentUser {
   return data.user;
 }
 
+/**
+ * Memora runs in the desktop app (Phase 14): one person on one computer, signed in by the app.
+ * What belongs to a server (logging out, passwords, users, devices) is hidden there.
+ */
+export function useDesktop(): boolean {
+  return useSuspenseQuery(meQuery).data.desktop === true;
+}
+
 export function signedIn(queryClient: QueryClient, response: SessionResponse): void {
   setCsrfToken(response.csrfToken);
   rememberUser(response.user);

@@ -6,4 +6,4 @@ export function allowed(expression: string): boolean;
 export function packageDirOf(file: string): string | null;
 export function withDependencies(dir: string, seen?: Set<string>): Set<string>;
 export function section(title: string, dirs: Iterable<string>): string;
-export function combine(web?: string, server?: string): void;
+export function combine(web?: string, server?: string, base?: string): void;

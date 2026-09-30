@@ -18,6 +18,7 @@ import {
   twoFactorQuery,
   useChangePassword,
   useCurrentUser,
+  useDesktop,
   useDisableTwoFactor,
   useLogout,
   useNewRecoveryCodes,
@@ -45,12 +46,18 @@ import { HelpLink } from '../components/HelpLink';
 import { HELP } from '../lib/help';
 
 export function AccountPage() {
+  // The desktop app signs its one person in by itself: no passwords, codes or other devices.
+  const desktop = useDesktop();
   return (
     <>
-      <ProfileSection />
-      <PasswordSection />
-      <TwoFactorSection />
-      <SessionsSection />
+      <ProfileSection desktop={desktop} />
+      {!desktop && (
+        <>
+          <PasswordSection />
+          <TwoFactorSection />
+          <SessionsSection />
+        </>
+      )}
     </>
   );
 }
@@ -59,7 +66,7 @@ function fieldsOf(error: unknown): Record<string, string> {
   return error instanceof ApiRequestError ? error.fields : {};
 }
 
-function ProfileSection() {
+function ProfileSection({ desktop }: { desktop: boolean }) {
   const user = useCurrentUser();
   const update = useUpdateProfile();
   const [displayName, setDisplayName] = useState(user.displayName);
@@ -77,10 +84,13 @@ function ProfileSection() {
           <Avatar name={displayName.trim() || user.displayName} size="lg" decorative />
           <div className="min-w-0">
             <div className="truncate font-semibold">{user.displayName}</div>
-            <div className="flex items-center gap-2 text-sm text-fg-2">
-              <span className="truncate">@{user.username}</span>
-              {user.role === 'admin' && <Badge tone="accent">Administrator</Badge>}
-            </div>
+            {/* One person on one computer: no user name to sign in with, nobody to administer. */}
+            {!desktop && (
+              <div className="flex items-center gap-2 text-sm text-fg-2">
+                <span className="truncate">@{user.username}</span>
+                {user.role === 'admin' && <Badge tone="accent">Administrator</Badge>}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex flex-col gap-3 tablet:flex-row tablet:items-end">

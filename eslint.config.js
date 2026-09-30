@@ -14,6 +14,9 @@ export default defineConfig(
     '**/playwright-report/',
     '**/test-results/',
     'apps/server/drizzle/',
+    // The desktop app's packaged builds and the resources put beside them (apps/desktop).
+    'apps/desktop/build/',
+    'apps/desktop/release/',
   ]),
   js.configs.recommended,
   tseslint.configs.recommended,
@@ -40,6 +43,13 @@ export default defineConfig(
     rules: {
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+    },
+  },
+  {
+    // The download page's script (site/), which runs in the visitor's browser.
+    files: ['site/**/*.js'],
+    languageOptions: {
+      globals: { ...globals.browser },
     },
   },
   {

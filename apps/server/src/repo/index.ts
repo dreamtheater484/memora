@@ -53,6 +53,17 @@ export class UsersRepo {
     );
   }
 
+  /** The first admin who can log in: the owner of a desktop app's data. */
+  firstActiveAdmin(): UserRow | undefined {
+    return this.orm
+      .select()
+      .from(users)
+      .where(and(eq(users.role, 'admin'), isNull(users.disabledAt)))
+      .orderBy(users.createdAt)
+      .limit(1)
+      .get();
+  }
+
   findById(id: string): UserRow | undefined {
     return this.orm.select().from(users).where(eq(users.id, id)).get();
   }

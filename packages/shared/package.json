@@ -1,6 +1,6 @@
 {
   "name": "@memora/shared",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "private": true,
   "description": "Code shared by the Memora server and web app: schemas, types and pure helpers.",
   "type": "module",

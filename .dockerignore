@@ -9,6 +9,9 @@
 .vscode
 .idea
 docs
+# The desktop app and the download page: not part of the image (their builds are large).
+apps/desktop
+site
 data
 backups
 secrets

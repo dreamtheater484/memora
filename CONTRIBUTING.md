@@ -98,12 +98,32 @@ The resilience suite (`e2e/resilience.spec.ts`) checks that no keystroke is lost
 ```
 apps/server       Fastify API, SQLite database, migrations (bundled into one file with esbuild)
 apps/web          React + Vite web app (Playwright tests and screenshot baselines in apps/web/e2e)
+apps/desktop      The desktop app: Electron around the server and the web app (docs/DESKTOP.md)
 packages/shared   Code used by both: schemas, types, pure helpers
 design/mockups    Phase 1 clickable design mockups (view with `node design/mockups/serve.mjs`)
 docker/           Dockerfile, entrypoint, compose example, smoke test
 scripts/          Privacy guards and cross-platform helper scripts
 docs/             Plan, setup guide, architecture, decision records
+site/             The download page (GitHub Pages)
 ```
+
+## The desktop app
+
+The desktop app packages the server and the web app ([ARCHITECTURE.md](docs/ARCHITECTURE.md#desktop-app-appsdesktop-phase-14)). To build it for the computer you're on, and test it:
+
+```bash
+pnpm build
+```
+
+```bash
+cd apps/desktop && pnpm build && pnpm resources && pnpm app:dir
+```
+
+```bash
+pnpm test
+```
+
+The test opens the app's window; on Linux without a screen, run it as `xvfb-run -a pnpm test`. `pnpm app` makes the installers for this system in `release/`. The release workflow does all of this on Windows, macOS and Ubuntu; its runs keep a screenshot of the app on each.
 
 ## Privacy guards (read this)
 

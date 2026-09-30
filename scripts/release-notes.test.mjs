@@ -64,7 +64,7 @@ describe('release notes', () => {
     const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
     expect(notesFor(readFileSync('CHANGELOG.md', 'utf8'), version).length).toBeGreaterThan(100);
     expect(mismatchedPackages(version)).toEqual([]);
-    expect(mismatchedPackages('99.0.0')).toHaveLength(4);
+    expect(mismatchedPackages('99.0.0')).toHaveLength(5);
   });
 });
 

@@ -1,4 +1,3 @@
-import { hash, verify } from '@node-rs/argon2';
 import { PASSWORD_MIN_LENGTH } from '@memora/shared';
 import { ApiError } from '../errors';
 import { isCommonPassword } from './common-passwords';
@@ -19,6 +18,10 @@ export const DEFAULT_HASH_PARAMS: HashParams = { memoryCost: 19_456, timeCost: 8
 
 /** Each hash holds `memoryCost` of RAM while it runs; cap how many run at once. */
 const MAX_CONCURRENT_HASHES = 2;
+
+let argon2: Promise<typeof import('@node-rs/argon2')> | undefined;
+/** Loaded when first needed: the desktop app has no passwords and ships without it. */
+const loadArgon2 = () => (argon2 ??= import('@node-rs/argon2'));
 
 let running = 0;
 const waiting: (() => void)[] = [];
@@ -46,12 +49,14 @@ export class PasswordHasher {
 
   hash(password: string): Promise<string> {
     // `algorithm: 2` is Argon2id (the package's `Algorithm` const enum can't be imported here).
-    return limited(() => hash(password, { algorithm: 2, ...this.params }));
+    return limited(async () =>
+      (await loadArgon2()).hash(password, { algorithm: 2, ...this.params }),
+    );
   }
 
   async verify(storedHash: string, password: string): Promise<boolean> {
     try {
-      return await limited(() => verify(storedHash, password));
+      return await limited(async () => (await loadArgon2()).verify(storedHash, password));
     } catch {
       return false; // malformed hash
     }
