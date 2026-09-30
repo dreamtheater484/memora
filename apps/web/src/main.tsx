@@ -41,11 +41,11 @@ const router = createAppRouter({
     }),
 });
 
-// A request found the session gone, or a new password required: the route guards send the
-// user to the right screen.
+// A request found the session gone, or a new password or two-step verification required: the
+// route guards send the user to the right screen.
 setSessionEvents({
   onSignedOut,
-  onPasswordChangeRequired: () => {
+  onSetUpRequired: () => {
     void queryClient.invalidateQueries({ queryKey: meKey }).then(() => router.invalidate());
   },
 });

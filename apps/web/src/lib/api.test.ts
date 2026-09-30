@@ -82,10 +82,10 @@ describe('api', () => {
     await expect(api('GET', '/auth/me')).rejects.toMatchObject({ status: 0, code: 'network' });
   });
 
-  it('tells the app when the session is gone or needs a new password', async () => {
+  it('tells the app when the session is gone or needs a new password or two-step', async () => {
     const onSignedOut = vi.fn();
-    const onPasswordChangeRequired = vi.fn();
-    setSessionEvents({ onSignedOut, onPasswordChangeRequired });
+    const onSetUpRequired = vi.fn();
+    setSessionEvents({ onSignedOut, onSetUpRequired });
 
     reply(401, { error: { code: 'unauthenticated', message: 'Log in first.' } });
     await expect(api('GET', '/auth/sessions')).rejects.toThrow();
@@ -93,7 +93,11 @@ describe('api', () => {
 
     reply(403, { error: { code: 'password_change_required', message: 'Choose one.' } });
     await expect(api('GET', '/auth/sessions')).rejects.toThrow();
-    expect(onPasswordChangeRequired).toHaveBeenCalledOnce();
+    expect(onSetUpRequired).toHaveBeenCalledOnce();
+
+    reply(403, { error: { code: 'two_factor_required', message: 'Set it up.' } });
+    await expect(api('GET', '/auth/sessions')).rejects.toThrow();
+    expect(onSetUpRequired).toHaveBeenCalledTimes(2);
   });
 
   it('answers a wrong password on the form, without signing out', async () => {

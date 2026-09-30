@@ -1,20 +1,36 @@
-import { PASSWORD_MIN_LENGTH, type SessionInfo } from '@memora/shared';
+import type { SessionInfo } from '@memora/shared';
 import { useQuery } from '@tanstack/react-query';
-import { Laptop, LogOut, Monitor, Smartphone, Tablet } from 'lucide-react';
+import { useNavigate } from '@tanstack/react-router';
+import {
+  KeyRound,
+  Laptop,
+  LogOut,
+  Monitor,
+  ShieldCheck,
+  ShieldOff,
+  Smartphone,
+  Tablet,
+} from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { FormError } from '../auth/AuthLayout';
 import {
   sessionsQuery,
+  twoFactorQuery,
   useChangePassword,
   useCurrentUser,
+  useDisableTwoFactor,
   useLogout,
+  useNewRecoveryCodes,
   useRevokeSession,
   useUpdateProfile,
 } from '../auth/queries';
+import { PasswordStep, SaveCodesStep, TwoFactorSetup } from '../auth/TwoFactor';
 import {
   Avatar,
   Badge,
   Button,
+  Dialog,
+  DialogContent,
   Field,
   Input,
   PasswordInput,
@@ -24,12 +40,14 @@ import {
 import { ApiRequestError, errorMessage } from '../lib/api';
 import { formatDateTime, formatRelative } from '../lib/time';
 import { SettingsSection } from './SettingsLayout';
+import { NewPasswordHint } from '../auth/NewPasswordHint';
 
 export function AccountPage() {
   return (
     <>
       <ProfileSection />
       <PasswordSection />
+      <TwoFactorSection />
       <SessionsSection />
     </>
   );
@@ -138,7 +156,7 @@ function PasswordSection() {
         <Field
           label="New password"
           error={fields.newPassword}
-          hint={`At least ${PASSWORD_MIN_LENGTH} characters. A few unrelated words work well.`}
+          hint={<NewPasswordHint password={newPassword} username={user.username} />}
         >
           {({ id, describedBy, invalid }) => (
             <PasswordInput
@@ -162,6 +180,151 @@ function PasswordSection() {
         </Button>
       </form>
     </SettingsSection>
+  );
+}
+
+type TwoFactorDialog = 'set-up' | 'codes' | 'off' | null;
+
+function TwoFactorSection() {
+  const user = useCurrentUser();
+  const status = useQuery(twoFactorQuery);
+  const [dialog, setDialog] = useState<TwoFactorDialog>(null);
+  const on = status.data?.enabled ?? user.twoFactor ?? false;
+  const left = status.data?.recoveryCodesLeft ?? 0;
+  const close = () => setDialog(null);
+
+  return (
+    <SettingsSection
+      title="Two-step verification"
+      description="Logging in also asks for a code from an app on your phone, so your password alone isn’t enough."
+    >
+      {status.isPending ? (
+        <Skeleton className="h-12" />
+      ) : (
+        <div className="flex flex-col gap-4 tablet:flex-row tablet:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <span
+              className={`grid size-9 shrink-0 place-items-center rounded-lg [&_svg]:size-[1.125rem] ${on ? 'bg-ok/15 text-ok' : 'bg-hover text-fg-2'}`}
+            >
+              {on ? <ShieldCheck /> : <ShieldOff />}
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 font-medium">
+                {on ? 'On' : 'Off'}
+                {status.data?.required && <Badge>Required here</Badge>}
+              </div>
+              <div className="text-xs text-fg-3">
+                {on
+                  ? `${left} recovery code${left === 1 ? '' : 's'} left${left <= 3 ? ': make new ones soon' : ''}`
+                  : 'Anyone with your password can log in.'}
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {on ? (
+              <>
+                <Button size="sm" onClick={() => setDialog('codes')}>
+                  <KeyRound />
+                  New recovery codes
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setDialog('off')}>
+                  Turn off
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" variant="primary" onClick={() => setDialog('set-up')}>
+                <ShieldCheck />
+                Set up
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+      <Dialog open={dialog !== null} onOpenChange={(open) => !open && close()}>
+        {dialog === 'set-up' && (
+          <DialogContent
+            title="Set up two-step verification"
+            size="sm"
+            // The recovery codes are shown once: a stray click beside the dialog mustn't lose them.
+            onInteractOutside={(event) => event.preventDefault()}
+          >
+            <TwoFactorSetup username={user.username} onDone={close} />
+          </DialogContent>
+        )}
+        {dialog === 'codes' && <NewCodesDialog username={user.username} onDone={close} />}
+        {dialog === 'off' && (
+          <TurnOffDialog
+            username={user.username}
+            required={status.data?.required ?? false}
+            onDone={close}
+          />
+        )}
+      </Dialog>
+    </SettingsSection>
+  );
+}
+
+function NewCodesDialog({ username, onDone }: { username: string; onDone: () => void }) {
+  const make = useNewRecoveryCodes();
+  return (
+    <DialogContent
+      title="New recovery codes"
+      description={make.data ? undefined : 'Your old recovery codes stop working.'}
+      size="sm"
+      onInteractOutside={(event) => event.preventDefault()}
+    >
+      {make.data ? (
+        <SaveCodesStep codes={make.data.codes} onDone={onDone} />
+      ) : (
+        <PasswordStep
+          username={username}
+          pending={make.isPending}
+          error={make.error}
+          action="Make new codes"
+          onSubmit={(password) => make.mutate(password)}
+        />
+      )}
+    </DialogContent>
+  );
+}
+
+function TurnOffDialog({
+  username,
+  required,
+  onDone,
+}: {
+  username: string;
+  required: boolean;
+  onDone: () => void;
+}) {
+  const off = useDisableTwoFactor();
+  const navigate = useNavigate();
+  return (
+    <DialogContent
+      title="Turn off two-step verification?"
+      description={
+        required
+          ? 'Your administrator requires it: you’ll set it up again straight away (for example on a new phone).'
+          : 'Your password alone will be enough to log in. Your recovery codes stop working.'
+      }
+      size="sm"
+    >
+      <PasswordStep
+        username={username}
+        pending={off.isPending}
+        error={off.error}
+        action="Turn off"
+        onSubmit={(password) =>
+          off.mutate(password, {
+            onSuccess: () => {
+              onDone();
+              if (required) void navigate({ to: '/set-up-two-factor' });
+              else toast('Two-step verification is off.');
+            },
+          })
+        }
+      />
+    </DialogContent>
   );
 }
 
