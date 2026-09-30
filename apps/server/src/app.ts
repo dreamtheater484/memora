@@ -187,6 +187,11 @@ export async function buildApp({
           .code(421)
           .send(new ApiError(421, 'forbidden', 'Memora answers on this computer only.').toBody());
       }
+      // No service worker: it keeps the app for when the server can't be reached, and this one
+      // is always there. Without it, the app also starts each new version as it's installed.
+      if (request.url.split('?')[0] === '/sw.js') {
+        return reply.code(404).send(new ApiError(404, 'not_found', 'Not found.').toBody());
+      }
     });
   }
 

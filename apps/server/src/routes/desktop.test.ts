@@ -74,6 +74,15 @@ describe('the desktop app (Phase 14)', () => {
     expect((await t.client({ host: 'localhost:3000' }).get('/api/health')).statusCode).toBe(200);
   });
 
+  it('has no service worker: its server is always there', async () => {
+    t = await createTestApp(DESKTOP);
+    for (const url of ['/sw.js', '/sw.js?v=2']) {
+      const response = await t.client(HOST).get(url);
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toMatchObject({ error: { code: 'not_found' } });
+    }
+  });
+
   it('takes the backup it missed while closed, once a day at most', async () => {
     t = await createTestApp(DESKTOP);
     const quiet = { info: () => undefined, error: () => undefined };
