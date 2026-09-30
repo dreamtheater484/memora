@@ -4,6 +4,18 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-30
+
+### Changed
+
+- No more `PUID` and `PGID`: Memora runs as the owner of its data folder, so creating the folder is all the setup it needs, on a Synology NAS too. `PUID`/`PGID` still work to choose another user. Existing installs keep working as they are.
+- When the data folder isn't writable, the message says who owns it and what to change.
+- The Synology guide: create the `data` folder before starting (Container Manager stops with _"Bind mount failed"_ otherwise), how to use another port, and to leave the Web Station portal off.
+
+### Fixed
+
+- Links in the release notes on GitHub lead to the documents again.
+
 ## [0.9.0] - 2026-09-30
 
 The first release: a public beta. Everything planned for 1.0 is in; what's left is time in real use (see Phase 13 in [the plan](docs/IMPLEMENTATION_PLAN.md)).
@@ -77,5 +89,6 @@ The first release: a public beta. Everything planned for 1.0 is in; what's left 
 - Setup guides for Synology, Linux and Windows, with three ways to get HTTPS.
 - `memora-admin` inside the container for lost passwords, lost phones, backups and restores.
 
-[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/dreamtheater484/memora/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/dreamtheater484/memora/releases/tag/v0.9.0

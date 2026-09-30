@@ -1,6 +1,6 @@
 {
   "name": "memora",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "private": true,
   "description": "Self-hosted notebook with OneNote-style organisation, Markdown and rich notes, and Kanban boards.",
   "license": "MIT",
