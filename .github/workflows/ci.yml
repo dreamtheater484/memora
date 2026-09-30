@@ -96,8 +96,14 @@ jobs:
     needs: [privacy]
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
       - name: Build image
         run: docker build -f docker/Dockerfile -t memora:ci .
+      - name: Image privacy check
+        # Build-machine paths in the history, labels and Memora's own files (plan §6.3).
+        run: node scripts/check-image.mjs memora:ci
       - name: Vulnerability scan (§11)
         # Fails on high or critical findings that have a fix: in the base image's packages
         # and in the Node modules inside.
