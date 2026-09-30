@@ -156,8 +156,12 @@ describe('search', () => {
       }
     })();
     const times: number[] = [];
-    for (const q of ['garden', 'plan bud', '"travel recipe"', 'idea -review', 'note 99', 'meet']) {
-      for (let i = 0; i < 5; i += 1) {
+    const queries = ['garden', 'plan bud', '"travel recipe"', 'idea -review', 'note 99', 'meet'];
+    // Warmed up first, and enough samples that one pause of a shared CI machine (other test
+    // files run at the same time) doesn't decide the 95th percentile.
+    for (const q of queries) await me.get(`/api/v1/search?q=${encodeURIComponent(q)}`);
+    for (const q of queries) {
+      for (let i = 0; i < 10; i += 1) {
         const started = performance.now();
         const res = await me.get(`/api/v1/search?q=${encodeURIComponent(q)}`);
         times.push(performance.now() - started);
