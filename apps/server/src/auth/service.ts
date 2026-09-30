@@ -3,6 +3,7 @@ import type {
   CurrentUser,
   LoginRequest,
   SetupRequest,
+  TwoFactorLoginRequest,
 } from '@memora/shared';
 import type { Config } from '../config';
 import type { SqliteDatabase } from '../db/client';
@@ -12,6 +13,7 @@ import type { Repos } from '../repo';
 import { deviceLabel } from './device';
 import { assertStrongPassword, type PasswordHasher } from './password';
 import { Throttle } from './throttle';
+import { type TwoFactorService, wrongCode } from './twoFactor';
 import {
   hashToken,
   newReadableCode,
@@ -40,17 +42,24 @@ export interface NewSessionResult {
   token: string;
 }
 
+/** The password was right; the code from the authenticator app comes next. */
+export interface CodeNeeded {
+  ticket: string;
+}
+
 /** However often it is used, a session ends after this long; you log in again. */
 const ABSOLUTE_SESSION_MS = 90 * 24 * 3_600_000;
 /** Sliding renewal writes at most this often per session: every write is a disk flush. */
 export const TOUCH_INTERVAL_MS = 5 * 60_000;
 
-export const toCurrentUser = (user: UserRow): CurrentUser => ({
+export const toCurrentUser = (user: UserRow, twoFactorRequired = false): CurrentUser => ({
   id: user.id,
   username: user.username,
   displayName: user.displayName,
   role: user.role,
   mustChangePassword: user.mustChangePassword,
+  twoFactor: user.totpEnabled,
+  mustSetUpTwoFactor: twoFactorRequired && !user.totpEnabled,
 });
 
 export function tooManyAttempts(waitMs: number): ApiError {
@@ -70,6 +79,11 @@ export class AuthService {
   readonly loginByUsername: Throttle;
   readonly loginByIp: Throttle;
   readonly setupByIp: Throttle;
+  /**
+   * Wrong codes per account. Not reset by a right password: someone who has the password
+   * still waits longer and longer between guesses at the code.
+   */
+  readonly codeByUser: Throttle;
 
   constructor(
     private readonly db: SqliteDatabase,
@@ -77,10 +91,17 @@ export class AuthService {
     readonly hasher: PasswordHasher,
     private readonly config: Config,
     private readonly now: () => number,
+    readonly twoFactor: TwoFactorService,
   ) {
     this.loginByUsername = new Throttle({ freeAttempts: 5 }, now);
     this.loginByIp = new Throttle({ freeAttempts: 20 }, now);
     this.setupByIp = new Throttle({ freeAttempts: 5 }, now);
+    this.codeByUser = new Throttle({ freeAttempts: 5 }, now);
+  }
+
+  /** The signed-in user as the web app sees it. */
+  currentUser(user: UserRow): CurrentUser {
+    return toCurrentUser(user, this.twoFactor.required());
   }
 
   isSetupRequired(): boolean {
@@ -147,7 +168,7 @@ export class AuthService {
     return this.createSession(user, true, meta);
   }
 
-  async login(input: LoginRequest, meta: RequestMeta): Promise<NewSessionResult> {
+  async login(input: LoginRequest, meta: RequestMeta): Promise<NewSessionResult | CodeNeeded> {
     const username = input.username.trim().toLowerCase();
     const wait = Math.max(
       this.loginByIp.retryAfter(meta.ip),
@@ -194,6 +215,11 @@ export class AuthService {
           passwordHash: await this.hasher.hash(input.password),
         }) ?? user;
     }
+    if (current.totpEnabled) {
+      const wait = this.codeByUser.retryAfter(user.id);
+      if (wait > 0) throw tooManyAttempts(wait);
+      return { ticket: this.twoFactor.challenge(user.id, input.remember ?? false) };
+    }
     const result = this.createSession(current, input.remember ?? false, meta);
     this.repos.audit.record('login', {
       userId: user.id,
@@ -202,6 +228,63 @@ export class AuthService {
       meta: { device: result.session.deviceLabel, remember: result.session.remember },
     });
     return result;
+  }
+
+  /** The second step of a login: the code from the authenticator app, or a recovery code. */
+  loginWithCode(input: TwoFactorLoginRequest, meta: RequestMeta): NewSessionResult {
+    const ticket = this.twoFactor.ticket(input.ticket);
+    const user = ticket ? this.repos.users.findById(ticket.userId) : undefined;
+    if (!ticket || !user || user.disabledAt !== null) {
+      throw new ApiError(401, 'login_expired', 'That took too long. Log in again.');
+    }
+    const wait = this.codeByUser.retryAfter(user.id);
+    if (wait > 0) throw tooManyAttempts(wait);
+    this.codeByUser.fail(user.id);
+
+    const verified = this.twoFactor.verify(user, input.code);
+    if (!verified) {
+      this.repos.audit.record('login_failed', {
+        userId: user.id,
+        username: user.username,
+        ip: meta.ip,
+        meta: { reason: 'wrong_code' },
+      });
+      throw wrongCode();
+    }
+    this.codeByUser.reset(user.id);
+    this.twoFactor.finish(input.ticket);
+    const result = this.createSession(user, ticket.remember, meta);
+    if (verified === 'recovery') {
+      this.repos.audit.record('recovery_code_used', {
+        userId: user.id,
+        username: user.username,
+        ip: meta.ip,
+      });
+    }
+    this.repos.audit.record('login', {
+      userId: user.id,
+      username: user.username,
+      ip: meta.ip,
+      meta: {
+        device: result.session.deviceLabel,
+        remember: result.session.remember,
+        twoFactor: verified,
+      },
+    });
+    return result;
+  }
+
+  /** Asks for the password again before a change to how the account is protected. */
+  async confirmPassword(user: UserRow, password: string): Promise<void> {
+    const wait = this.loginByUsername.retryAfter(user.username);
+    if (wait > 0) throw tooManyAttempts(wait);
+    this.loginByUsername.fail(user.username);
+    if (!(await this.hasher.verify(user.passwordHash, password))) {
+      throw new ApiError(400, 'wrong_password', 'That password is not right.', {
+        fields: { password: 'That password is not right.' },
+      });
+    }
+    this.loginByUsername.reset(user.username);
   }
 
   createSession(user: UserRow, remember: boolean, meta: RequestMeta): NewSessionResult {
@@ -233,7 +316,8 @@ export class AuthService {
       session.expiresAt > now &&
       session.absoluteExpiresAt > now &&
       user.disabledAt === null &&
-      !user.mustChangePassword
+      !user.mustChangePassword &&
+      !this.twoFactor.mustSetUp(user)
     );
   }
 

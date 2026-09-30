@@ -129,6 +129,7 @@ export const toAdminUser = (
   role: user.role,
   mustChangePassword: user.mustChangePassword,
   disabled: user.disabledAt !== null,
+  twoFactor: user.totpEnabled,
   createdAt: user.createdAt,
   lastSeenAt,
   sessionCount,

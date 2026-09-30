@@ -21,6 +21,8 @@ declare module 'fastify' {
     access?: Access;
     /** Reachable while the user still has to replace a temporary password. */
     allowPendingPasswordChange?: boolean;
+    /** Reachable while two-step verification is required and not set up yet. */
+    allowPendingTwoFactor?: boolean;
   }
   interface FastifyRequest {
     auth: AuthContext | null;
@@ -78,7 +80,8 @@ export function registerAuth(
 
   app.addHook('onRequest', async (request, reply) => {
     if (!request.url.startsWith('/api/')) return;
-    const { access, allowPendingPasswordChange } = request.routeOptions.config;
+    const { access, allowPendingPasswordChange, allowPendingTwoFactor } =
+      request.routeOptions.config;
     const unsafe = !SAFE_METHODS.has(request.method);
 
     if (access && request.url !== '/api/health') {
@@ -119,6 +122,13 @@ export function registerAuth(
         403,
         'password_change_required',
         'Choose a new password before you continue.',
+      );
+    }
+    if (!allowPendingTwoFactor && auth.twoFactor.mustSetUp(current.user)) {
+      throw new ApiError(
+        403,
+        'two_factor_required',
+        'Set up two-step verification before you continue.',
       );
     }
     if (access === 'admin' && current.user.role !== 'admin') {

@@ -1,7 +1,10 @@
 import {
   createUserRequestSchema,
+  securitySettingsSchema,
   updateUserRequestSchema,
+  type AdminUser,
   type AuditPage,
+  type SecuritySettings,
   type TemporaryPasswordResponse,
 } from '@memora/shared';
 import type { FastifyInstance } from 'fastify';
@@ -19,7 +22,10 @@ const auditQuerySchema = z.object({
 const lastAdmin = () =>
   new ApiError(409, 'last_admin', 'Memora needs at least one active administrator.');
 
-export function adminRoutes(app: FastifyInstance, { db, repos, hasher, now }: RouteDeps): void {
+export function adminRoutes(
+  app: FastifyInstance,
+  { db, repos, hasher, auth, now }: RouteDeps,
+): void {
   const config = { access: 'admin' as const };
 
   const findUser = (id: string): UserRow => {
@@ -147,6 +153,55 @@ export function adminRoutes(app: FastifyInstance, { db, repos, hasher, now }: Ro
       return reply.code(204).send();
     },
   );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/admin/users/:id/two-factor/reset',
+    { config },
+    async (request) => {
+      const admin = authOf(request).user;
+      const target = findUser(request.params.id);
+      if (target.id === admin.id) {
+        throw new ApiError(409, 'conflict', 'Turn your own off on the Account page.');
+      }
+      db.transaction(() => {
+        auth.twoFactor.disable(target.id);
+        repos.sessions.deleteAllForUser(target.id);
+      })();
+      repos.audit.record('two_factor_reset', {
+        userId: admin.id,
+        username: admin.username,
+        ip: request.ip,
+        meta: { targetId: target.id, target: target.username },
+      });
+      return repos.users.adminView(findUser(target.id)) satisfies AdminUser;
+    },
+  );
+
+  app.get('/api/v1/admin/security', { config }, async () => {
+    return { requireTwoFactor: auth.twoFactor.required() } satisfies SecuritySettings;
+  });
+
+  app.patch('/api/v1/admin/security', { config }, async (request) => {
+    const admin = authOf(request).user;
+    const body = parse(securitySettingsSchema, request.body);
+    if (body.requireTwoFactor && !admin.totpEnabled) {
+      throw new ApiError(
+        409,
+        'two_factor_off',
+        'Turn on two-step verification for your own account first.',
+      );
+    }
+    if (body.requireTwoFactor !== auth.twoFactor.required()) {
+      auth.twoFactor.setRequired(body.requireTwoFactor);
+      repos.audit.record('security_changed', {
+        userId: admin.id,
+        username: admin.username,
+        ip: request.ip,
+        meta: { requireTwoFactor: body.requireTwoFactor },
+      });
+    }
+    return { requireTwoFactor: auth.twoFactor.required() } satisfies SecuritySettings;
+  });
 
   app.get('/api/v1/admin/audit', { config }, async (request) => {
     const query = parse(auditQuerySchema, request.query);

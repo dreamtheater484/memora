@@ -44,7 +44,7 @@ export async function transferRoutes(
   app: FastifyInstance,
   deps: RouteDeps & { jobs: JobService; version: string },
 ): Promise<void> {
-  const { db, jobs, assets, backups, config, events, notes, now } = deps;
+  const { db, jobs, assets, backups, config, events, notes, repos, now } = deps;
   const access = { access: 'user' as const };
   const uploads = join(jobs.dir, '.uploads');
 
@@ -63,6 +63,12 @@ export async function transferRoutes(
         ? writeArchive(db, user.id, collected, { ...options, now: now() }, context)
         : writeMarkdown(db, user.id, collected, now(), context),
     );
+    repos.audit.record('export_created', {
+      userId: user.id,
+      username: user.username,
+      ip: request.ip,
+      meta: { format: body.format, scope: body.scope, encrypted: !!body.password },
+    });
     return reply.code(202).send(job);
   });
 
@@ -153,6 +159,12 @@ export async function transferRoutes(
             context,
           );
           events.publish(user.id, { type: 'tree.changed', origin: null });
+          repos.audit.record('import_completed', {
+            userId: user.id,
+            username: user.username,
+            ip: request.ip,
+            meta: { name: query.name ?? null, merged: !!query.notebookId },
+          });
           return { importReport };
         } finally {
           await rm(path, { force: true });

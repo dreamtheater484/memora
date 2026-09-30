@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { DEFAULT_HASH_PARAMS, PasswordHasher } from './auth/password';
 import { newTemporaryPassword } from './auth/tokens';
+import { TwoFactorService } from './auth/twoFactor';
 import { BackupService } from './backup/service';
 import { ConfigError, loadConfig, type Config } from './config';
 import { openDatabase, type SqliteDatabase } from './db/client';
@@ -22,6 +23,8 @@ Commands:
   list-users                  Show all accounts
   reset-password <username>   Set a one-time password (to be replaced at the next login)
                               and sign the user out everywhere
+  reset-2fa <username>        Turn off two-step verification for someone who lost their
+                              phone and their recovery codes, and sign them out everywhere
   backup                      Make a backup now (safe while Memora runs)
   list-backups                Show the backups in the backup folder
   restore <backup>            Get a backup from the backup folder ready to restore; it is
@@ -73,10 +76,19 @@ function listUsers(): void {
     u.displayName,
     u.role,
     u.disabled ? 'disabled' : u.mustChangePassword ? 'must change password' : 'active',
+    u.twoFactor ? 'on' : 'off',
     date(u.lastSeenAt),
     date(u.createdAt),
   ]);
-  const header = ['USERNAME', 'NAME', 'ROLE', 'STATUS', 'LAST SEEN (UTC)', 'CREATED (UTC)'];
+  const header = [
+    'USERNAME',
+    'NAME',
+    'ROLE',
+    'STATUS',
+    'TWO-STEP',
+    'LAST SEEN (UTC)',
+    'CREATED (UTC)',
+  ];
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i]!.length)));
   for (const row of [header, ...rows]) {
     console.log(
@@ -113,6 +125,41 @@ async function resetPassword(username: string | undefined): Promise<void> {
   if (user.disabledAt !== null) {
     console.log(
       'Note: this account is disabled. An administrator can enable it on the Users page.',
+    );
+  }
+}
+
+function resetTwoFactor(username: string | undefined): void {
+  if (!username) fail('which user? Usage: memora-admin reset-2fa <username>');
+  const db = openExisting();
+  const repos = createRepos(createOrm(db), Date.now);
+  const user = repos.users.findByUsername(username);
+  if (!user) {
+    db.close();
+    fail(`no user called "${username}". See: memora-admin list-users`);
+  }
+  // Turning it off needs no key: nothing is opened.
+  const twoFactor = new TwoFactorService(
+    db,
+    () => {
+      throw new Error('the secret key is not needed here');
+    },
+    Date.now,
+  );
+  db.transaction(() => {
+    twoFactor.disable(user.id);
+    repos.sessions.deleteAllForUser(user.id);
+    repos.audit.record('two_factor_reset', {
+      username: 'memora-admin',
+      meta: { targetId: user.id, target: user.username, via: 'command line' },
+    });
+  })();
+  const required = twoFactor.required();
+  db.close();
+  console.log(`Two-step verification is off for ${user.username}. All their sessions were ended.`);
+  if (required) {
+    console.log(
+      'Two-step verification is required here: they set it up again at their next login.',
     );
   }
 }
@@ -198,6 +245,9 @@ async function main(): Promise<void> {
       break;
     case 'reset-password':
       await resetPassword(args[0]);
+      break;
+    case 'reset-2fa':
+      resetTwoFactor(args[0]);
       break;
     case 'backup':
       await backup();

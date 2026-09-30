@@ -1,16 +1,23 @@
 import {
   changePasswordRequestSchema,
+  confirmPasswordSchema,
+  enableTwoFactorSchema,
   loginRequestSchema,
   setupRequestSchema,
+  twoFactorLoginSchema,
   updateProfileRequestSchema,
+  type LoginResponse,
   type MeResponse,
+  type RecoveryCodesResponse,
   type SessionInfo,
   type SessionResponse,
+  type TwoFactorSetup,
+  type TwoFactorStatus,
 } from '@memora/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { PasswordHasher } from '../auth/password';
 import { requestMeta } from '../auth/plugin';
-import { toCurrentUser, type AuthContext, type AuthService } from '../auth/service';
+import { type AuthContext, type AuthService } from '../auth/service';
 import { csrfTokenFor } from '../auth/tokens';
 import type { Config } from '../config';
 import type { FetchPolicy } from '../assets/fetch';
@@ -18,7 +25,7 @@ import type { BackupService } from '../backup/service';
 import type { AssetsService } from '../assets/service';
 import type { SqliteDatabase } from '../db/client';
 import type { EventHub } from '../events/hub';
-import { notFound, parse } from '../errors';
+import { ApiError, notFound, parse } from '../errors';
 import type { NotesService } from '../notes/service';
 import type { TemplatesService } from '../notes/templates';
 import type { SearchService } from '../search/service';
@@ -58,14 +65,14 @@ export function authRoutes(app: FastifyInstance, { auth, repos, dataId }: RouteD
     result: Pick<AuthContext, 'user' | 'session' | 'token'>,
   ): SessionResponse => {
     app.sessionCookies.set(request, reply, result);
-    return { user: toCurrentUser(result.user), csrfToken: csrfTokenFor(result.token) };
+    return { user: auth.currentUser(result.user), csrfToken: csrfTokenFor(result.token) };
   };
 
   app.get('/api/v1/auth/me', { config: { access: 'public' } }, async (request) => {
     const current = request.auth;
     return {
       setupRequired: current ? false : auth.isSetupRequired(),
-      user: current ? toCurrentUser(current.user) : null,
+      user: current ? auth.currentUser(current.user) : null,
       csrfToken: current ? csrfTokenFor(current.token) : null,
       ...(current ? { dataId: dataId() } : {}),
     } satisfies MeResponse;
@@ -81,12 +88,24 @@ export function authRoutes(app: FastifyInstance, { auth, repos, dataId }: RouteD
   app.post('/api/v1/auth/login', { config: { access: 'public' } }, async (request, reply) => {
     const body = parse(loginRequestSchema, request.body);
     const result = await auth.login(body, requestMeta(request));
-    return signedIn(request, reply, result);
+    if ('ticket' in result) {
+      return { twoFactorRequired: true, ticket: result.ticket } satisfies LoginResponse;
+    }
+    return signedIn(request, reply, result) satisfies LoginResponse;
   });
 
   app.post(
+    '/api/v1/auth/login/two-factor',
+    { config: { access: 'public' } },
+    async (request, reply) => {
+      const body = parse(twoFactorLoginSchema, request.body);
+      return signedIn(request, reply, auth.loginWithCode(body, requestMeta(request)));
+    },
+  );
+
+  app.post(
     '/api/v1/auth/logout',
-    { config: { access: 'user', allowPendingPasswordChange: true } },
+    { config: { access: 'user', allowPendingPasswordChange: true, allowPendingTwoFactor: true } },
     async (request, reply) => {
       const current = authOf(request);
       repos.sessions.deleteForUser(current.user.id, current.session.id);
@@ -102,7 +121,7 @@ export function authRoutes(app: FastifyInstance, { auth, repos, dataId }: RouteD
 
   app.post(
     '/api/v1/auth/password',
-    { config: { access: 'user', allowPendingPasswordChange: true } },
+    { config: { access: 'user', allowPendingPasswordChange: true, allowPendingTwoFactor: true } },
     async (request, reply) => {
       const body = parse(changePasswordRequestSchema, request.body);
       const result = await auth.changePassword(authOf(request), body, requestMeta(request));
@@ -119,7 +138,7 @@ export function authRoutes(app: FastifyInstance, { auth, repos, dataId }: RouteD
       username: current.user.username,
       ip: request.ip,
     });
-    return toCurrentUser(user ?? current.user);
+    return auth.currentUser(user ?? current.user);
   });
 
   app.get('/api/v1/auth/sessions', { config: { access: 'user' } }, async (request) => {
@@ -150,6 +169,67 @@ export function authRoutes(app: FastifyInstance, { auth, repos, dataId }: RouteD
         meta: { sessionId: request.params.id },
       });
       if (request.params.id === current.session.id) app.sessionCookies.clear(reply);
+      return reply.code(204).send();
+    },
+  );
+
+  // Two-step verification (§11). Changes ask for the password again: a session left open on
+  // a shared computer must not be enough to lock the owner out.
+  const pendingTwoFactor = { access: 'user' as const, allowPendingTwoFactor: true };
+  const record = (
+    request: FastifyRequest,
+    event: 'two_factor_enabled' | 'two_factor_disabled' | 'recovery_codes_created',
+  ) => {
+    const { user } = authOf(request);
+    repos.audit.record(event, { userId: user.id, username: user.username, ip: request.ip });
+  };
+  const notOn = () => new ApiError(409, 'two_factor_off', 'Two-step verification is off.');
+
+  app.get('/api/v1/auth/two-factor', { config: pendingTwoFactor }, async (request) => {
+    return auth.twoFactor.status(authOf(request).user) satisfies TwoFactorStatus;
+  });
+
+  app.post('/api/v1/auth/two-factor/setup', { config: pendingTwoFactor }, async (request) => {
+    const { user } = authOf(request);
+    const body = parse(confirmPasswordSchema, request.body);
+    await auth.confirmPassword(user, body.password);
+    return auth.twoFactor.begin(user, 'Memora') satisfies TwoFactorSetup;
+  });
+
+  app.post('/api/v1/auth/two-factor/enable', { config: pendingTwoFactor }, async (request) => {
+    const current = authOf(request);
+    const body = parse(enableTwoFactorSchema, request.body);
+    const codes = auth.twoFactor.enable(current.user, body.code);
+    // Other devices signed in with the password alone: they sign in again, with a code.
+    repos.sessions.deleteAllForUser(current.user.id, current.session.id);
+    record(request, 'two_factor_enabled');
+    return { codes } satisfies RecoveryCodesResponse;
+  });
+
+  app.post(
+    '/api/v1/auth/two-factor/recovery-codes',
+    { config: { access: 'user' } },
+    async (request) => {
+      const { user } = authOf(request);
+      const body = parse(confirmPasswordSchema, request.body);
+      await auth.confirmPassword(user, body.password);
+      if (!user.totpEnabled) throw notOn();
+      const codes = auth.twoFactor.newRecoveryCodes(user.id);
+      record(request, 'recovery_codes_created');
+      return { codes } satisfies RecoveryCodesResponse;
+    },
+  );
+
+  app.post(
+    '/api/v1/auth/two-factor/disable',
+    { config: { access: 'user' } },
+    async (request, reply) => {
+      const { user } = authOf(request);
+      const body = parse(confirmPasswordSchema, request.body);
+      await auth.confirmPassword(user, body.password);
+      if (!user.totpEnabled) throw notOn();
+      auth.twoFactor.disable(user.id);
+      record(request, 'two_factor_disabled');
       return reply.code(204).send();
     },
   );

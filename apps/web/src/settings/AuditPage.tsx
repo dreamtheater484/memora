@@ -6,10 +6,16 @@ import {
   CircleCheck,
   DatabaseBackup,
   Download,
+  FileDown,
+  FileUp,
   KeyRound,
+  LifeBuoy,
   LogIn,
   LogOut,
+  Settings2,
   ShieldAlert,
+  ShieldCheck,
+  ShieldOff,
   Sparkles,
   Trash2,
   UserPen,
@@ -43,7 +49,9 @@ const EVENTS: Record<
         ? 'login failed: no such user'
         : e.meta.reason === 'disabled'
           ? 'login refused: account disabled'
-          : 'login failed: wrong password',
+          : e.meta.reason === 'wrong_code'
+            ? 'login failed: wrong code'
+            : 'login failed: wrong password',
   },
   logout: { icon: <LogOut />, text: () => 'logged out' },
   password_changed: { icon: <KeyRound />, text: () => 'changed their password' },
@@ -63,6 +71,33 @@ const EVENTS: Record<
     text: (e) =>
       `restored the backup ${typeof e.meta.backup === 'string' ? e.meta.backup : ''}`.trim(),
   },
+  backup_deleted: { icon: <Trash2 />, text: () => 'deleted a backup' },
+  two_factor_enabled: { icon: <ShieldCheck />, text: () => 'turned on two-step verification' },
+  two_factor_disabled: {
+    icon: <ShieldOff />,
+    alert: true,
+    text: () => 'turned off two-step verification',
+  },
+  two_factor_reset: {
+    icon: <ShieldOff />,
+    alert: true,
+    text: (e) => `turned off two-step verification for ${target(e)}`,
+  },
+  recovery_codes_created: { icon: <KeyRound />, text: () => 'made new recovery codes' },
+  recovery_code_used: {
+    icon: <LifeBuoy />,
+    alert: true,
+    text: () => 'logged in with a recovery code',
+  },
+  security_changed: {
+    icon: <Settings2 />,
+    text: (e) =>
+      e.meta.requireTwoFactor === true
+        ? 'required two-step verification for everyone'
+        : 'stopped requiring two-step verification',
+  },
+  export_created: { icon: <FileDown />, text: () => 'exported pages' },
+  import_completed: { icon: <FileUp />, text: () => 'imported pages' },
 };
 
 /** Security-relevant events (§9.1): logins, failed logins, and account changes. */
