@@ -106,6 +106,36 @@ function remarkWikiLinks() {
   };
 }
 
+/** A card's key, as `CARD_KEY` in @memora/shared (not imported: this runs in a worker). */
+const CARD_KEY = /\b([A-Z][A-Z0-9]{1,9})-([1-9]\d{0,8})\b/g;
+
+/** Card keys (`WEB-42`) become `card:` links; the preview shows those of known projects. */
+function remarkCardKeys() {
+  return (tree: MdastRoot) => {
+    visit(tree, 'text', (node: Text, index, parent) => {
+      if (!parent || index === undefined || parent.type === 'link') return;
+      if (!/[A-Z][A-Z0-9]{1,9}-[1-9]/.test(node.value)) return;
+      const parts: PhrasingContent[] = [];
+      let last = 0;
+      for (const match of node.value.matchAll(CARD_KEY)) {
+        if (match.index > last)
+          parts.push({ type: 'text', value: node.value.slice(last, match.index) });
+        parts.push({
+          type: 'link',
+          url: `card:${match[0]}`,
+          children: [{ type: 'text', value: match[0] }],
+          data: { hProperties: { className: ['card-link'] } },
+        });
+        last = match.index + match[0].length;
+      }
+      if (!parts.length) return;
+      if (last < node.value.length) parts.push({ type: 'text', value: node.value.slice(last) });
+      parent.children.splice(index, 1, ...parts);
+      return [SKIP, index + parts.length];
+    });
+  };
+}
+
 const LINED = new Set([
   'p',
   'h1',
@@ -172,11 +202,11 @@ export const sanitizeSchema = {
     code: withClasses('code', /^language-[\w+#.-]+$/, 'math-inline', 'math-display'),
     div: withClasses('div', 'markdown-alert', /^markdown-alert-[a-z]+$/),
     p: withClasses('p', 'markdown-alert-title'),
-    a: withClasses('a', 'wiki-link', 'data-footnote-backref'),
+    a: withClasses('a', 'wiki-link', 'card-link', 'data-footnote-backref'),
   },
   protocols: {
     ...defaultSchema.protocols,
-    href: [...(defaultSchema.protocols?.href ?? []), 'asset', 'wiki'],
+    href: [...(defaultSchema.protocols?.href ?? []), 'asset', 'wiki', 'card'],
     src: [...(defaultSchema.protocols?.src ?? []), 'asset'],
   },
 };
@@ -188,6 +218,7 @@ const processor = unified()
   .use(remarkMath)
   .use(remarkAlerts)
   .use(remarkWikiLinks)
+  .use(remarkCardKeys)
   // The sanitiser prefixes ids (`user-content-`), so footnotes aren't prefixed twice.
   .use(remarkRehype, { allowDangerousHtml: true, clobberPrefix: '' })
   .use(rehypeRaw)

@@ -1,5 +1,6 @@
-import type { UiState } from '@memora/shared';
+import type { Projects, UiState } from '@memora/shared';
 import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import {
   Clock,
   Columns2,
@@ -23,10 +24,10 @@ import {
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   CommandPalette,
-  EmptyState,
   Sheet,
   SheetContent,
   SplitPane,
+  toast,
   type PaletteItem,
 } from '../components/ui';
 import { cn } from '../lib/cn';
@@ -39,7 +40,9 @@ import { flushUiState, saveUiState, useUiState } from '../notes/queries';
 import { applyAccent, hueStyle } from '../theme/sections';
 import { useTheme } from '../theme/theme';
 import { useCommands, type Commands } from './commands';
-import { PROJECTS } from './demo';
+import { cardByKey } from '../kanban/api';
+import { OPEN_CARD_EVENT, useCardKeys } from '../kanban/keys';
+import { openBoards, useProjects } from '../kanban/projects';
 import { ShellDialogs } from './dialogs';
 import { useDropRules } from './dropRules';
 import { Inspector } from './Inspector';
@@ -58,24 +61,11 @@ const panel = 'glass min-h-0 overflow-hidden rounded-xl';
 // The recycle bin is opened now and then: loaded when it is.
 const TrashView = lazy(() => import('../history/TrashView'));
 const SearchView = lazy(() => import('../search/SearchView'));
-
-function BoardPlaceholder({ boardId }: { boardId: string | null }) {
-  const project = PROJECTS.find((p) => p.boards.some((b) => b.id === boardId));
-  const board = project?.boards.find((b) => b.id === boardId);
-  return (
-    <section aria-label="Board" className="flex h-full flex-col">
-      <EmptyState
-        icon={<SquareKanban />}
-        color={project?.color}
-        title={board?.name ?? 'Board'}
-        description="Kanban boards arrive in Phase 10: columns, swimlanes, cards linked to notes, and drag and drop where the whole highlighted column is the drop target."
-      />
-    </section>
-  );
-}
+const BoardView = lazy(() => import('../kanban/BoardView'));
 
 function BottomNav({ current }: { current: Current }) {
   const go = useGo();
+  const projects = useProjects();
   // Home opens the last section on larger screens; on a phone it is the notebook list.
   const inbox =
     !!current.section?.isInbox && (current.level === 'section' || current.level === 'page');
@@ -100,12 +90,30 @@ function BottomNav({ current }: { current: Current }) {
     >
       {item('Notes', <Notebook />, isNotesLevel(current.level) && !inbox, go.home)}
       {item('Search', <Search />, current.level === 'search', () => go.search())}
-      {item('Boards', <SquareKanban />, current.level === 'board', () =>
-        go.board(PROJECTS[0]!.boards[0]!.id),
-      )}
+      {item('Boards', <SquareKanban />, current.level === 'board', () => openBoards(projects, go))}
       {item('Inbox', <Inbox />, !!inbox, () => go.section(current.index.inbox.id))}
     </nav>
   );
+}
+
+/** Card keys in notes (§9.11): the keys known, and following one to its card. */
+function useCardKeyLinks(projects: Projects) {
+  const navigate = useNavigate();
+  useEffect(() => {
+    useCardKeys.setState({ keys: new Set(projects.projects.map((p) => p.key)) });
+  }, [projects]);
+  useEffect(() => {
+    const open = (event: Event) => {
+      const key = (event as CustomEvent<string>).detail;
+      cardByKey(key).then(
+        ({ id, boardId }) =>
+          void navigate({ to: '/b/$boardId', params: { boardId }, search: { card: id } }),
+        () => toast({ title: `There is no card ${key}`, tone: 'error' }),
+      );
+    };
+    window.addEventListener(OPEN_CARD_EVENT, open);
+    return () => window.removeEventListener(OPEN_CARD_EVENT, open);
+  }, [navigate]);
 }
 
 /** What is being dragged, next to the pointer. */
@@ -137,6 +145,7 @@ function usePaletteItems(current: Current, commands: Commands, query: string): P
   const { setTheme, glass, setGlass } = useTheme();
   const ultra = useMediaQuery('(min-width: 200rem)');
   const now = useNow();
+  const projects = useProjects();
   return useMemo(() => {
     const items: PaletteItem[] = [];
     const pathLabel = (sectionId: string) => {
@@ -183,8 +192,10 @@ function usePaletteItems(current: Current, commands: Commands, query: string): P
         onSelect: () => go.notebook(nb.id),
       });
     }
-    for (const p of PROJECTS) {
-      for (const b of p.boards) {
+    for (const p of projects.projects) {
+      if (p.archivedAt) continue;
+      for (const b of projects.boards) {
+        if (b.projectId !== p.id || b.archivedAt) continue;
         items.push({
           id: `board:${b.id}`,
           title: b.name,
@@ -195,6 +206,13 @@ function usePaletteItems(current: Current, commands: Commands, query: string): P
         });
       }
     }
+    items.push({
+      id: 'cmd:new-project',
+      title: 'New project',
+      group: 'Commands',
+      icon: <SquareKanban />,
+      onSelect: () => useShell.getState().openDialog({ kind: 'new-project' }),
+    });
     if (current.section) {
       items.push(
         {
@@ -381,6 +399,7 @@ function usePaletteItems(current: Current, commands: Commands, query: string): P
     setGlass,
     ultra,
     now,
+    projects,
   ]);
 }
 
@@ -407,9 +426,13 @@ export function AppShell() {
   useDropRules(commands);
 
   // The accent and the ambient glow follow the current section.
+  const projects = useProjects();
+  useCardKeyLinks(projects);
   const accent =
     level === 'board'
-      ? PROJECTS.find((p) => p.boards.some((b) => b.id === current.boardId))?.color
+      ? projects.projects.find(
+          (p) => p.id === projects.boards.find((b) => b.id === current.boardId)?.projectId,
+        )?.color
       : section?.color;
   useEffect(() => {
     if (accent) applyAccent(accent);
@@ -477,8 +500,13 @@ export function AppShell() {
     main = (
       <Suspense fallback={null}>{level === 'trash' ? <TrashView /> : <SearchView />}</Suspense>
     );
-  } else if (!notes) main = <BoardPlaceholder boardId={current.boardId} />;
-  else if (phone && !current.missing && level === 'home') main = <NotebookList />;
+  } else if (!notes) {
+    main = (
+      <Suspense fallback={null}>
+        {current.boardId && <BoardView key={current.boardId} boardId={current.boardId} />}
+      </Suspense>
+    );
+  } else if (phone && !current.missing && level === 'home') main = <NotebookList />;
   else if (phone && !current.missing && (level === 'notebook' || level === 'group')) {
     main = <ContainerList current={current} />;
   } else if (phone && !current.missing && level === 'section') main = <PageList />;

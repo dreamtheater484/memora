@@ -13,7 +13,23 @@ export type ShellDialog =
   | { kind: 'templates' }
   | { kind: 'insert-template'; onPick: (template: Template) => void }
   | { kind: 'export'; scope: ExportScope; id?: string }
-  | { kind: 'print'; scope: 'page' | 'section'; id: string };
+  | { kind: 'print'; scope: 'page' | 'section'; id: string }
+  // Kanban (§9.11)
+  | { kind: 'new-project' }
+  | { kind: 'project'; projectId: string }
+  | { kind: 'new-board'; projectId: string }
+  | { kind: 'delete-board'; boardId: string }
+  | { kind: 'delete-project'; projectId: string }
+  | { kind: 'move-card'; cardId: string; boardId: string }
+  | { kind: 'link-note'; cardId: string; boardId: string }
+  | { kind: 'add-to-board'; pageId: string }
+  | {
+      kind: 'kanban-name';
+      title: string;
+      label: string;
+      initial: string;
+      submit: (name: string) => Promise<unknown>;
+    };
 
 /** Where an item is renamed in place: its tab, its navigation row, or a phone list heading. */
 export type RenameWhere = 'tabs' | 'nav' | 'list';

@@ -26,6 +26,7 @@ import type { SqliteDatabase } from '../db/client';
 import { ApiError } from '../errors';
 import { indexPageLinks } from '../notes/links';
 import type { JobContext } from './jobs';
+import { boardFileSchema, importKanban, projectFileSchema, type ProjectFile } from './kanban';
 import { ZipLimitError, readZip, sha256, type ZipEntry, type ZipLimits } from './zip';
 
 /*
@@ -469,6 +470,8 @@ async function importArchive(
   const history = new Map<string, string>();
   const spill = new Spill(join(context.dir, 'pages'));
   const templates: z.infer<typeof templateFile>[] = [];
+  const projects: ProjectFile[] = [];
+  const boards: { path: string; file: string }[] = [];
   const paths = [...byPath.keys()];
   const total = paths.length;
   let read = 0;
@@ -505,6 +508,14 @@ async function importArchive(
     } else if (/^templates\/[^/]+\.json$/.test(path)) {
       const template = await readJson(byPath.get(path), templateFile, probe, verify);
       if (template) templates.push(template);
+    } else if (/^kanban\/projects\/[^/]+\.json$/.test(path)) {
+      const project = await readJson(byPath.get(path), projectFileSchema, probe, verify);
+      if (project) projects.push(project);
+    } else if (/^kanban\/boards\/[^/]+\.json$/.test(path)) {
+      // Boards can be large: they wait on disk like the pages.
+      const data = await byPath.get(path)!.read();
+      verify(path, data);
+      boards.push({ path, file: await spill.put(data) });
     } else if (path.endsWith('.html')) {
       // The readable copy of a rich page: its document is what is imported.
       const data = await byPath.get(path)!.read();
@@ -563,6 +574,7 @@ async function importArchive(
           })
       : [];
 
+  const kanban = { projects: 0, boards: 0, cards: 0 };
   context.progress(0.85, 'Adding the pages');
   const builder = new Builder(db, owner, deps.now());
   db.transaction(() => {
@@ -680,11 +692,36 @@ async function importArchive(
       );
       builder.report.templates += 1;
     }
+    if (projects.length) {
+      const counts = importKanban(
+        db,
+        owner,
+        projects,
+        function* () {
+          for (const board of boards) {
+            try {
+              const parsed = boardFileSchema.safeParse(JSON.parse(spill.read(board.file)));
+              if (parsed.success) yield parsed.data;
+              else skipped.push({ name: board.path, reason: 'It isn’t valid.' });
+            } catch {
+              skipped.push({ name: board.path, reason: 'It isn’t valid.' });
+            }
+          }
+        },
+        pageIds,
+        withFiles,
+        assetIds,
+        deps.now(),
+        (c) => COLOR_IDS.includes(c as never),
+      );
+      Object.assign(kanban, counts);
+    }
   })();
   return {
     ...builder.report,
     files: probe.files,
     skipped: [...skipped, ...builder.report.skipped],
+    ...(kanban.projects ? kanban : {}),
   };
 }
 

@@ -30,6 +30,17 @@ const InsertTemplateDialog = lazy(() =>
 const exportDialogs = () => import('../transfer/ExportDialog');
 const ExportDialog = lazy(() => exportDialogs().then((m) => ({ default: m.ExportDialog })));
 const PrintDialog = lazy(() => exportDialogs().then((m) => ({ default: m.PrintDialog })));
+const kanbanDialogs = () => import('../kanban/dialogs');
+const NewProjectDialog = lazy(() => kanbanDialogs().then((m) => ({ default: m.NewProjectDialog })));
+const ProjectDialog = lazy(() => kanbanDialogs().then((m) => ({ default: m.ProjectDialog })));
+const NewBoardDialog = lazy(() => kanbanDialogs().then((m) => ({ default: m.NewBoardDialog })));
+const DeleteDialog = lazy(() => kanbanDialogs().then((m) => ({ default: m.DeleteDialog })));
+const MoveCardDialog = lazy(() => kanbanDialogs().then((m) => ({ default: m.MoveCardDialog })));
+const AddToBoardDialog = lazy(() => kanbanDialogs().then((m) => ({ default: m.AddToBoardDialog })));
+const NameDialog = lazy(() => kanbanDialogs().then((m) => ({ default: m.NameDialog })));
+const LinkNoteDialog = lazy(() =>
+  import('../kanban/LinkNoteDialog').then((m) => ({ default: m.LinkNoteDialog })),
+);
 
 /** A group of radio buttons drawn as swatches or tiles. */
 function Choices<T extends string>({
@@ -431,6 +442,27 @@ export function ShellDialogs() {
         {dialog?.kind === 'insert-template' && <InsertTemplateDialog onPick={dialog.onPick} />}
         {dialog?.kind === 'export' && <ExportDialog scope={dialog.scope} id={dialog.id} />}
         {dialog?.kind === 'print' && <PrintDialog scope={dialog.scope} id={dialog.id} />}
+        {dialog?.kind === 'new-project' && <NewProjectDialog />}
+        {dialog?.kind === 'project' && <ProjectDialog projectId={dialog.projectId} />}
+        {dialog?.kind === 'new-board' && <NewBoardDialog projectId={dialog.projectId} />}
+        {dialog?.kind === 'delete-board' && <DeleteDialog kind="board" id={dialog.boardId} />}
+        {dialog?.kind === 'delete-project' && <DeleteDialog kind="project" id={dialog.projectId} />}
+        {dialog?.kind === 'move-card' && (
+          <MoveCardDialog cardId={dialog.cardId} boardId={dialog.boardId} />
+        )}
+        {dialog?.kind === 'link-note' && (
+          <LinkNoteDialog cardId={dialog.cardId} boardId={dialog.boardId} />
+        )}
+        {dialog?.kind === 'add-to-board' && <AddToBoardDialog pageId={dialog.pageId} />}
+        {dialog?.kind === 'kanban-name' && (
+          <NameDialog
+            key={dialog.title}
+            title={dialog.title}
+            label={dialog.label}
+            initial={dialog.initial}
+            submit={dialog.submit}
+          />
+        )}
       </Suspense>
     </Dialog>
   );

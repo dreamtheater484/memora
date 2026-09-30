@@ -24,6 +24,8 @@ export const searchQuerySchema = z.object({
   tagId: idSchema.optional(),
   type: z.enum(PAGE_TYPES).optional(),
   modified: z.enum(MODIFIED_WITHIN).optional(),
+  /** Kanban cards too (§9.11): `1`. */
+  cards: z.enum(['0', '1']).optional(),
   limit: z.coerce.number().int().min(1).max(MAX_SEARCH_RESULTS).default(50),
 });
 export type SearchQuery = z.input<typeof searchQuerySchema>;
@@ -40,10 +42,25 @@ export interface SearchHit {
   updatedAt: number;
 }
 
+/** A Kanban card that matches, with where it is. */
+export interface CardHit {
+  id: string;
+  key: string;
+  /** Marked like a page's. */
+  title: string;
+  snippet: string;
+  boardId: string;
+  boardName: string;
+  columnName: string;
+  completedAt: number | null;
+}
+
 export interface SearchResponse {
   hits: SearchHit[];
   /** How many pages match in all (at most 1000 are counted). */
   total: number;
+  /** Matching cards, when asked for (`cards=1`) and only words are searched for. */
+  cards?: CardHit[];
 }
 
 export interface ParsedSearch {

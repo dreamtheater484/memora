@@ -21,6 +21,7 @@ import { PageHoverCard } from './PageCard';
 import { highlight } from './highlight';
 import './markdown.css';
 import { createRenderer, type Renderer } from './renderer';
+import { openCardKey, useCardKeys } from '../kanban/keys';
 
 /*
  * The rendered page (§9.3): everything in the dialect, sanitised, with code highlighted by
@@ -308,6 +309,7 @@ function PreviewImage({ node: _node, src, alt, title, ...props }: WithNode<'img'
 
 function PreviewLink({ node: _node, href = '', children, className, ...props }: WithNode<'a'>) {
   const host = usePreviewHost();
+  const knownCards = useCardKeys((s) => s.keys);
   const fileHref = useFileSrc(href.startsWith(ASSET_SCHEME) ? href : undefined);
   if (href.startsWith('wiki:')) {
     const [title = '', heading] = href.slice('wiki:'.length).split('#');
@@ -339,6 +341,23 @@ function PreviewLink({ node: _node, href = '', children, className, ...props }: 
           {children}
         </a>
       </PageHoverCard>
+    );
+  }
+  if (href.startsWith('card:')) {
+    const key = href.slice('card:'.length);
+    if (!knownCards.has(key.slice(0, key.lastIndexOf('-')))) return <>{children}</>;
+    return (
+      <a
+        {...props}
+        href={`#${key}`}
+        className={className}
+        onClick={(e) => {
+          e.preventDefault();
+          openCardKey(key);
+        }}
+      >
+        {children}
+      </a>
     );
   }
   if (href.startsWith(ASSET_SCHEME)) {

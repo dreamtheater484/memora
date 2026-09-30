@@ -6,6 +6,7 @@ export * from './errors';
 export * from './health';
 export * from './history';
 export * from './ids';
+export * from './kanban';
 export * from './links';
 export * from './notes';
 export * from './rich';

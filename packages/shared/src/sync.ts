@@ -134,7 +134,11 @@ export type ServerEvent =
   | { type: 'page.updated'; page: PageMeta; revision: number; origin: string | null }
   | { type: 'presence'; devices: PresenceDevice[] }
   /** An import or export moved on (§9.10). */
-  | { type: 'job.updated'; job: Job };
+  | { type: 'job.updated'; job: Job }
+  /** Projects or boards were added, renamed, reordered, archived or deleted (§9.11). */
+  | { type: 'projects.changed'; origin: string | null }
+  /** Something on a board changed; `cardId` when it was one card. */
+  | { type: 'board.changed'; boardId: string; cardId?: string; origin: string | null };
 
 /** Most pages one browser reports as open. */
 export const MAX_PRESENCE_PAGES = 50;

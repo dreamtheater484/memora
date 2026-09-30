@@ -18,6 +18,8 @@ import { pageLinks, slashCommands } from './suggestions';
 import { Find } from './find';
 import { FileView, ImageView } from './views';
 import { WikiLinks } from './wikiLinks';
+import { CardKeys } from './cardKeys';
+import { knownCardKey, openCardKey } from '../kanban/keys';
 import '../markdown/markdown.css';
 import './rich.css';
 
@@ -112,6 +114,7 @@ function editorExtensions(bridge: Bridge, extra?: AnyExtension): AnyExtension[] 
     CodeHighlight,
     DragHandle,
     Find,
+    CardKeys.configure({ known: knownCardKey, open: openCardKey }),
     WikiLinks.configure({
       exists: (title) => {
         const wanted = title.trim().toLowerCase();

@@ -21,6 +21,7 @@ import { newWriteId, restore, settle, type Unstored } from './records';
 import { Sender, type SenderHost } from './sender';
 import { initialShared, useSync, type Shared } from './status';
 import { blobOf, openStore, type LocalStore } from './store';
+import { kanbanEvent } from '../kanban/api';
 import { jobUpdated } from '../transfer/jobs';
 
 /*
@@ -426,6 +427,10 @@ export class SyncEngine implements SenderHost, DocHost, LiveHost {
         break;
       case 'job.updated':
         jobUpdated(event.job);
+        break;
+      case 'projects.changed':
+      case 'board.changed':
+        kanbanEvent(this.queryClient, event);
         break;
     }
   }

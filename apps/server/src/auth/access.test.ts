@@ -27,6 +27,19 @@ interface World {
     tagId: string;
     templateId: string;
     jobId: string;
+    kanban: {
+      projectId: string;
+      boardId: string;
+      columnId: string;
+      laneId: string;
+      cardId: string;
+      labelId: string;
+      checklistId: string;
+      itemId: string;
+      commentId: string;
+    };
+    /** Alice's projects, board and card before Bob's attempts. */
+    kanbanState: unknown;
     bobSectionId: string;
     /** Alice's tree before Bob's attempts: it must stay exactly like this. */
     tree: unknown;
@@ -40,6 +53,27 @@ const probe =
     body: body?.(w.notes),
     async intact() {
       expect((await w.alice.get('/api/v1/tree')).json()).toEqual(w.notes.tree);
+    },
+  });
+
+/** Alice's projects, board and card as they are. */
+async function kanbanState(w: World) {
+  const k = w.notes.kanban;
+  return {
+    projects: (await w.alice.get('/api/v1/projects')).json(),
+    board: (await w.alice.get(`/api/v1/boards/${k.boardId}`)).json(),
+    card: (await w.alice.get(`/api/v1/cards/${k.cardId}`)).json(),
+  };
+}
+
+/** Bob aims at Alice's Kanban; her projects, board and card must be unchanged afterwards. */
+const kprobe =
+  (url: (k: World['notes']['kanban'], n: World['notes']) => string, body?: unknown) =>
+  (w: World) => ({
+    url: url(w.notes.kanban, w.notes),
+    body,
+    async intact() {
+      expect(await kanbanState(w)).toEqual(w.notes.kanbanState);
     },
   });
 
@@ -407,6 +441,163 @@ const RULES: Record<string, RouteRule> = {
     access: 'user',
     foreign: probe((n) => `/api/v1/jobs/${n.jobId}/download`),
   },
+  'GET /api/v1/projects': {
+    access: 'user',
+    async ownListOnly(w) {
+      const list = (await w.bob.get('/api/v1/projects')).json();
+      expect(list.projects).toEqual([]);
+      expect(list.boards).toEqual([]);
+    },
+  },
+  'POST /api/v1/projects': { access: 'user' },
+  'PATCH /api/v1/projects/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/projects/${k.projectId}`, { name: 'Mine now' }),
+  },
+  'DELETE /api/v1/projects/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/projects/${k.projectId}`),
+  },
+  'POST /api/v1/projects/:id/labels': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/projects/${k.projectId}/labels`, { name: 'x', color: 'blue' }),
+  },
+  'PATCH /api/v1/labels/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/labels/${k.labelId}`, { name: 'Mine now' }),
+  },
+  'DELETE /api/v1/labels/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/labels/${k.labelId}`),
+  },
+  'POST /api/v1/boards': {
+    access: 'user',
+    foreign: (w) =>
+      kprobe(() => '/api/v1/boards', { projectId: w.notes.kanban.projectId, name: 'x' })(w),
+  },
+  'GET /api/v1/boards/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/boards/${k.boardId}`),
+  },
+  'PATCH /api/v1/boards/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/boards/${k.boardId}`, { name: 'Mine now' }),
+  },
+  'DELETE /api/v1/boards/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/boards/${k.boardId}`),
+  },
+  'POST /api/v1/boards/:id/columns': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/boards/${k.boardId}/columns`, { name: 'x' }),
+  },
+  'PATCH /api/v1/columns/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/columns/${k.columnId}`, { name: 'Mine now' }),
+  },
+  'DELETE /api/v1/columns/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/columns/${k.columnId}`),
+  },
+  'POST /api/v1/boards/:id/lanes': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/boards/${k.boardId}/lanes`, { name: 'x' }),
+  },
+  'PATCH /api/v1/lanes/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/lanes/${k.laneId}`, { name: 'Mine now' }),
+  },
+  'DELETE /api/v1/lanes/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/lanes/${k.laneId}`),
+  },
+  'POST /api/v1/cards': {
+    access: 'user',
+    foreign: (w) =>
+      kprobe(() => '/api/v1/cards', { columnId: w.notes.kanban.columnId, title: 'x' })(w),
+  },
+  'GET /api/v1/cards/by-key/:key': {
+    access: 'user',
+    foreign: kprobe(() => '/api/v1/cards/by-key/SEC-1'),
+  },
+  'GET /api/v1/cards/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/cards/${k.cardId}`),
+  },
+  'PATCH /api/v1/cards/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/cards/${k.cardId}`, { title: 'Mine now' }),
+  },
+  'POST /api/v1/cards/:id/move': {
+    access: 'user',
+    foreign: (w) =>
+      kprobe((k) => `/api/v1/cards/${k.cardId}/move`, { columnId: w.notes.kanban.columnId })(w),
+  },
+  'POST /api/v1/cards/:id/duplicate': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/cards/${k.cardId}/duplicate`),
+  },
+  'DELETE /api/v1/cards/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/cards/${k.cardId}`),
+  },
+  'POST /api/v1/cards/:id/checklists': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/cards/${k.cardId}/checklists`, { title: 'x' }),
+  },
+  'PATCH /api/v1/checklists/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/checklists/${k.checklistId}`, { title: 'Mine now' }),
+  },
+  'DELETE /api/v1/checklists/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/checklists/${k.checklistId}`),
+  },
+  'POST /api/v1/checklists/:id/items': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/checklists/${k.checklistId}/items`, { text: 'x' }),
+  },
+  'PATCH /api/v1/checklist-items/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/checklist-items/${k.itemId}`, { done: true }),
+  },
+  'DELETE /api/v1/checklist-items/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/checklist-items/${k.itemId}`),
+  },
+  'POST /api/v1/cards/:id/comments': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/cards/${k.cardId}/comments`, { body: 'x' }),
+  },
+  'PATCH /api/v1/comments/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/comments/${k.commentId}`, { body: 'Mine now' }),
+  },
+  'DELETE /api/v1/comments/:id': {
+    access: 'user',
+    foreign: kprobe((k) => `/api/v1/comments/${k.commentId}`),
+  },
+  'PUT /api/v1/cards/:id/pages/:other': {
+    access: 'user',
+    foreign: kprobe((k, n) => `/api/v1/cards/${k.cardId}/pages/${n.pageId}`),
+  },
+  'DELETE /api/v1/cards/:id/pages/:other': {
+    access: 'user',
+    foreign: kprobe((k, n) => `/api/v1/cards/${k.cardId}/pages/${n.pageId}`),
+  },
+  'GET /api/v1/pages/:id/cards': {
+    access: 'user',
+    foreign: probe((n) => `/api/v1/pages/${n.pageId}/cards`),
+  },
+  'POST /api/v1/cards/:id/attachments': {
+    access: 'user',
+    foreign: (w) =>
+      kprobe((k) => `/api/v1/cards/${k.cardId}/attachments`, { assetId: w.notes.assetId })(w),
+  },
+  'DELETE /api/v1/cards/:id/attachments/:other': {
+    access: 'user',
+    foreign: kprobe((k, n) => `/api/v1/cards/${k.cardId}/attachments/${n.assetId}`),
+  },
   // Scoped by the session itself: events.test.ts checks a user only hears their own events.
   'GET /api/v1/events': { access: 'user' },
 };
@@ -446,6 +637,27 @@ beforeAll(async () => {
   await alice.put(`/api/v1/assets/${assetId}?name=note.txt`, Buffer.from('private'), {
     headers: { 'content-type': 'text/plain' },
   });
+  const made = (
+    await alice.post('/api/v1/projects', { name: 'Secret', key: 'SEC', color: 'blue' })
+  ).json();
+  const boardId = made.board.id;
+  const board = (await alice.get(`/api/v1/boards/${boardId}`)).json();
+  const columnId = board.columns[0].id;
+  const laneId = (await alice.post(`/api/v1/boards/${boardId}/lanes`, { name: 'Lane' })).json().id;
+  const labelId = (
+    await alice.post(`/api/v1/projects/${made.project.id}/labels`, { name: 'Hush', color: 'coral' })
+  ).json().id;
+  const cardId = (await alice.post('/api/v1/cards', { columnId, title: 'Plan' })).json().id;
+  await alice.patch(`/api/v1/cards/${cardId}`, { labelIds: [labelId] });
+  const withList = (
+    await alice.post(`/api/v1/cards/${cardId}/checklists`, { title: 'Steps' })
+  ).json();
+  const checklistId = withList.checklists[0].id;
+  const withItem = (
+    await alice.post(`/api/v1/checklists/${checklistId}/items`, { text: 'One' })
+  ).json();
+  const withComment = (await alice.post(`/api/v1/cards/${cardId}/comments`, { body: 'Hi' })).json();
+  await alice.put(`/api/v1/cards/${cardId}/pages/${page.pages[0].id}`);
   w = {
     t,
     alice,
@@ -461,10 +673,23 @@ beforeAll(async () => {
       tagId: tagged.tags[0].id,
       templateId: template.id,
       jobId: job.id,
+      kanban: {
+        projectId: made.project.id,
+        boardId,
+        columnId,
+        laneId,
+        cardId,
+        labelId,
+        checklistId,
+        itemId: withItem.checklists[0].items[0].id,
+        commentId: withComment.comments[0].id,
+      },
+      kanbanState: null,
       bobSectionId: (await bob.get('/api/v1/tree')).json().inboxId,
       tree: (await alice.get('/api/v1/tree')).json(),
     },
   };
+  w.notes.kanbanState = await kanbanState(w);
 });
 
 afterAll(async () => {

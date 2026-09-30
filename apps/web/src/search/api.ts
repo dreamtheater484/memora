@@ -24,6 +24,8 @@ export interface SearchParams {
   notebook?: string;
   type?: PageType;
   modified?: ModifiedWithin;
+  /** Leave Kanban cards out (`cards=0`); they are searched too by default. */
+  cards?: '0';
 }
 
 const text = (value: unknown) => (typeof value === 'string' && value ? value : undefined);
@@ -40,6 +42,7 @@ export function validateSearchParams(search: Record<string, unknown>): SearchPar
     modified: MODIFIED_WITHIN.includes(modified as ModifiedWithin)
       ? (modified as ModifiedWithin)
       : undefined,
+    cards: search.cards === '0' || search.cards === 0 ? '0' : undefined,
   };
 }
 

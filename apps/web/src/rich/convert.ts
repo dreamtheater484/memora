@@ -35,6 +35,11 @@ const element = (
 function adapt(tree: Root) {
   visit(tree, 'element', (node: Element, index, parent) => {
     if (!parent || index === undefined) return;
+    // Card keys are plain text in rich pages (they are linked as they are shown).
+    if (node.tagName === 'a' && hasClass(node, 'card-link')) {
+      parent.children.splice(index, 1, ...node.children);
+      return [SKIP, index];
+    }
     // Alerts become callouts, without their generated title.
     if (node.tagName === 'div' && hasClass(node, 'markdown-alert')) {
       const kind = /markdown-alert-(\w+)/.exec(

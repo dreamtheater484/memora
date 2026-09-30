@@ -60,6 +60,10 @@ export interface ImportReport {
   skipped: { name: string; reason: string }[];
   /** The first page imported, to open. */
   firstPageId: string | null;
+  /** Kanban (archives of everything). */
+  projects?: number;
+  boards?: number;
+  cards?: number;
 }
 
 export interface ExportReport {
@@ -129,6 +133,9 @@ export interface ArchiveManifest {
     assets: number;
     templates: number;
     versions: number;
+    projects?: number;
+    boards?: number;
+    cards?: number;
   };
   /** SHA-256 of every other file in the archive, by path. */
   sha256: Record<string, string>;

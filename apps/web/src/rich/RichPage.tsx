@@ -50,6 +50,8 @@ import { summaryOf } from '../notes/summary';
 import { FindBar } from './FindBar';
 import { LinkPreview } from './LinkPreview';
 import { wikiLinksKey } from './wikiLinks';
+import { cardKeysKey } from './cardKeys';
+import { useCardKeys } from '../kanban/keys';
 import { useGo } from '../shell/location';
 import type { PageDoc } from '../sync/doc';
 import { currentSync } from '../sync/engine';
@@ -179,12 +181,14 @@ export default memo(function RichPage({ page, doc, compact, autoFocus }: RichPag
     [findPage, index],
   );
 
-  // Links to pages that are gone (or came) show as such once the pages change.
+  // Links to pages that are gone (or came) show as such once the pages change, and card
+  // keys once the projects are known.
+  const cardKeys = useCardKeys((s) => s.keys);
   useEffect(() => {
     if (editor && !editor.isDestroyed) {
-      editor.view.dispatch(editor.state.tr.setMeta(wikiLinksKey, true));
+      editor.view.dispatch(editor.state.tr.setMeta(wikiLinksKey, true).setMeta(cardKeysKey, true));
     }
-  }, [editor, index]);
+  }, [editor, index, cardKeys]);
 
   // Outline and word count, once typing pauses.
   const [version, setVersion] = useState(0);

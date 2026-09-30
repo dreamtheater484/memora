@@ -112,7 +112,18 @@ const notebookRoute = createRoute({ getParentRoute: parent, path: '/n/$notebookI
 const groupRoute = createRoute({ getParentRoute: parent, path: '/g/$groupId' });
 const sectionRoute = createRoute({ getParentRoute: parent, path: '/s/$sectionId' });
 const pageRoute = createRoute({ getParentRoute: parent, path: '/p/$pageId' });
-const boardRoute = createRoute({ getParentRoute: parent, path: '/b/$boardId' });
+const boardRoute = createRoute({
+  getParentRoute: parent,
+  path: '/b/$boardId',
+  // The open card, what to focus in it, and a note open beside the board.
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { card?: string; focus?: string; beside?: string } => ({
+    ...(typeof search.card === 'string' ? { card: search.card } : {}),
+    ...(typeof search.focus === 'string' ? { focus: search.focus } : {}),
+    ...(typeof search.beside === 'string' ? { beside: search.beside } : {}),
+  }),
+});
 const trashRoute = createRoute({ getParentRoute: parent, path: '/trash' });
 const searchRoute = createRoute({
   getParentRoute: parent,

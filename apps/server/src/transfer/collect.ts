@@ -234,8 +234,10 @@ export function assetsOf(
   db: SqliteDatabase,
   owner: string,
   pageIds: readonly string[],
+  /** Files used elsewhere (by cards). */
+  more: readonly string[] = [],
 ): AssetInfo[] {
-  const ids = new Set<string>();
+  const ids = new Set<string>(more.map((id) => id.toLowerCase()));
   for (const id of pageIds) {
     const content = contentOf(db, id);
     if (content.includes('asset:')) for (const asset of assetIdsIn(content)) ids.add(asset);

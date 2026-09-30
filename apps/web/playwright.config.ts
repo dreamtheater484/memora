@@ -34,7 +34,7 @@ export default defineConfig({
     serviceWorkers: 'block',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: ['perf.spec.ts'] },
     // Not losing a keystroke (§13.1) and pasting screenshots (§9.5) are proven in every
     // engine; the rest runs in Chromium.
     {
@@ -46,6 +46,13 @@ export default defineConfig({
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
       testMatch: ['resilience.spec.ts', 'paste.spec.ts'],
+    },
+    // Speed is measured alone, after everything else, so no other test takes its CPU.
+    {
+      name: 'perf',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: ['perf.spec.ts'],
+      dependencies: ['chromium', 'firefox', 'webkit'],
     },
   ],
   webServer: {
