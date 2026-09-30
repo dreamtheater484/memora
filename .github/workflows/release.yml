@@ -287,10 +287,13 @@ jobs:
           ls -la release
       - name: Test the app
         env:
-          MEMORA_SHOT: test-results/window.png
+          # Outside test-results, which each Playwright run empties.
+          MEMORA_SHOT: screenshots/packaged.png
         run: |
           if [ "$RUNNER_OS" = Linux ]; then xvfb-run -a pnpm test; else pnpm test; fi
       - name: Install it, as people will, and test that
+        env:
+          MEMORA_SHOT: screenshots/installed.png
         run: |
           case "$RUNNER_OS" in
             Windows)
@@ -320,12 +323,14 @@ jobs:
           else
             MEMORA_APP="$app" pnpm test
           fi
-      - name: A screenshot of the app on ${{ matrix.name }}
+      - name: Screenshots of the app on ${{ matrix.name }}, and the logs of a failed test
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: desktop-screenshot-${{ runner.os }}-${{ runner.arch }}
-          path: apps/desktop/test-results
+          path: |
+            apps/desktop/screenshots
+            apps/desktop/test-results
           retention-days: 14
       - name: The Microsoft Store package, to upload in Partner Center (docs/SIGNING.md)
         if: runner.os == 'Windows' && vars.MEMORA_STORE_IDENTITY != ''

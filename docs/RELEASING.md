@@ -39,7 +39,7 @@ Memora follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`.
    - tags the images: `x.y.z`, `x.y` and `latest`, or only its own tag for a pre-release;
    - creates the GitHub release with the changelog's notes, the installers and the update files (`latest*.yml`) the desktop app checks.
 
-   Each desktop job also keeps a screenshot of the app it tested, as an artifact of the run: a way to see the Mac app without a Mac. With the Microsoft Store's values set, the Windows job keeps a Store package too, for uploading in Partner Center.
+   Each desktop job also keeps screenshots of the app it tested, as built and as installed, in the run's `desktop-screenshot-…` artifacts: a way to see the Mac app without a Mac. With the Microsoft Store's values set, the Windows job keeps a Store package too, for uploading in Partner Center.
 
 7. Check the release page (the installers are there), open the [download page](https://dreamtheater484.github.io/memora/), and pull the new image once:
 
