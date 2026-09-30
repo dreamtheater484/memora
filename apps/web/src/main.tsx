@@ -7,6 +7,7 @@ import { UIProvider } from './components/ui';
 import { ApiRequestError, setCsrfSource, setSessionEvents } from './lib/api';
 import { createAppRouter } from './router';
 import { currentSync, startSync } from './sync/engine';
+import { watchInstall } from './lib/install';
 import { registerServiceWorker } from './sync/worker';
 import './styles/index.css';
 import { applyAccent } from './theme/sections';
@@ -52,6 +53,7 @@ setSessionEvents({
 // After starting offline, the first change fetches the session's CSRF token.
 setCsrfSource(() => (currentSync() ? refreshSession(queryClient) : Promise.resolve()));
 registerServiceWorker();
+watchInstall();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Missing #root element');

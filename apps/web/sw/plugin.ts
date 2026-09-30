@@ -20,6 +20,15 @@ const source = fileURLToPath(new URL('./sw.js', import.meta.url));
 const OPTIONAL =
   /node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?(?:mermaid|@mermaid-js|cytoscape[^/]*|katex|shiki|@shikijs|@codemirror\/(?:lang-[^/]+|legacy-modes))\/|src\/markdown\/(?:pipeline|math|mermaid)\.ts$|src\/rich\/convert\.ts$/;
 
+/** Files from public/ the installed app needs without a connection. */
+const PUBLIC = [
+  '/offline.html',
+  '/manifest.webmanifest',
+  '/favicon.svg',
+  '/icon-192.png',
+  '/apple-touch-icon.png',
+];
+
 const precachedAsset = (file: string) =>
   /\.(css|js)$/.test(file) || (/\.woff2$/.test(file) && /latin(?!-ext)/.test(file));
 
@@ -55,7 +64,7 @@ export function serviceWorker(): Plugin {
         )
         .map(([file]) => file)
         .sort();
-      const urls = ['/', ...files.map((f) => `/${f}`)];
+      const urls = ['/', ...PUBLIC, ...files.map((f) => `/${f}`)];
       const version = createHash('sha256').update(urls.join('\n')).digest('hex').slice(0, 12);
       const code = readFileSync(source, 'utf8').replace(
         'self.__MEMORA_PRECACHE__',

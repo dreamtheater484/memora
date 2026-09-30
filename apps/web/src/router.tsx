@@ -163,6 +163,12 @@ const dataRoute = createRoute({
   component: lazyRouteComponent(() => import('./settings/DataPage'), 'DataPage'),
 });
 
+const deviceRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: 'device',
+  component: lazyRouteComponent(() => import('./settings/DevicePage'), 'DevicePage'),
+});
+
 const adminRoute = createRoute({
   getParentRoute: () => settingsRoute,
   id: 'admin',
@@ -212,6 +218,7 @@ const routeTree = rootRoute.addChildren([
       accountRoute,
       editingRoute,
       dataRoute,
+      deviceRoute,
       adminRoute.addChildren([usersRoute, auditRoute, backupsRoute]),
     ]),
   ]),

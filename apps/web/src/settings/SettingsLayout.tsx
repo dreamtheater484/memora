@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ArrowUpDown,
   DatabaseBackup,
+  MonitorSmartphone,
   PenLine,
   ScrollText,
   UserRound,
@@ -17,6 +18,7 @@ interface NavItem {
     | '/settings/account'
     | '/settings/editing'
     | '/settings/data'
+    | '/settings/device'
     | '/settings/users'
     | '/settings/audit'
     | '/settings/backups';
@@ -29,6 +31,7 @@ const NAV: NavItem[] = [
   { to: '/settings/account', label: 'Account', icon: <UserRound /> },
   { to: '/settings/editing', label: 'Editing', icon: <PenLine /> },
   { to: '/settings/data', label: 'Import & export', icon: <ArrowUpDown /> },
+  { to: '/settings/device', label: 'This device', icon: <MonitorSmartphone /> },
   { to: '/settings/users', label: 'Users', icon: <Users />, admin: true },
   { to: '/settings/audit', label: 'Audit log', icon: <ScrollText />, admin: true },
   { to: '/settings/backups', label: 'Backups', icon: <DatabaseBackup />, admin: true },
