@@ -1,6 +1,7 @@
 import {
   BrowserWindow,
   clipboard,
+  dialog,
   Menu,
   nativeTheme,
   screen,
@@ -58,6 +59,19 @@ export function createWindow(server: () => RunningServer): BrowserWindow {
   window.once('ready-to-show', () => window.show());
   window.on('close', () => {
     saveSettings({ bounds: { ...window.getNormalBounds(), maximized: window.isMaximized() } });
+  });
+  // Closing right after typing: the web app asks to stay while that change is on its way, as a
+  // browser tab would. A browser shows the question itself; here the app does.
+  window.webContents.on('will-prevent-unload', (event) => {
+    const choice = dialog.showMessageBoxSync(window, {
+      type: 'question',
+      message: 'Close Memora?',
+      detail: 'Your last change is still being saved.',
+      buttons: ['Wait', 'Close anyway'],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    if (choice === 1) event.preventDefault();
   });
   void window.loadURL(server().signInUrl());
   return window;

@@ -147,9 +147,14 @@ export async function startServer(onExit: (code: number) => void): Promise<Runni
       if (exited) return;
       stopping = true;
       child.postMessage('shutdown');
-      const timeout = new Promise<void>((resolve) => setTimeout(resolve, 10_000));
-      await Promise.race([exit, timeout]);
-      if (!exited) child.kill();
+      const timeout = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+      await Promise.race([exit, timeout(10_000)]);
+      if (exited) return;
+      // It didn't stop in time. On Windows kill() ends it; elsewhere it sends SIGTERM, which a
+      // server already stopping doesn't act on again, so it gets SIGKILL.
+      if (process.platform === 'win32' || !child.pid) child.kill();
+      else process.kill(child.pid, 'SIGKILL');
+      await Promise.race([exit, timeout(5_000)]);
     },
   };
 }

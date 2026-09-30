@@ -48,6 +48,7 @@ function run(): void {
       void window?.loadURL(current().signInUrl());
       return;
     }
+    console.error(`Memora stopped unexpectedly (exit code ${code})`);
     const { response } = await dialog.showMessageBox({
       type: 'error',
       message: 'Memora stopped unexpectedly',
@@ -97,6 +98,7 @@ function run(): void {
     try {
       await start();
     } catch (error) {
+      console.error('Memora could not start:', error);
       dialog.showErrorBox(
         'Memora could not start',
         `${(error as Error).message}\n\nWhat happened is in the log, in ${logDir()}.`,
@@ -116,8 +118,14 @@ function run(): void {
 
   app.on('before-quit', (event) => {
     if (quitting || !server) return;
-    // Memora first closes its database cleanly; then the app quits for real.
     event.preventDefault();
+    if (window) {
+      // The window closes first: the web app sends its last change and closes its connection
+      // (or asks to wait for that change). Its closing brings Memora back here.
+      window.close();
+      return;
+    }
+    // Then Memora closes its database cleanly, and the app quits for real.
     quitting = true;
     void server.stop().finally(() => app.quit());
   });
