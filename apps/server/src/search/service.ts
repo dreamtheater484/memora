@@ -3,6 +3,7 @@ import {
   parseSearch,
   snippetOf,
   tagKey,
+  type CardHit,
   type ModifiedWithin,
   type PageType,
   type SearchHit,
@@ -144,7 +145,33 @@ export class SearchService {
         .all({ ...params, limit: query.limit }) as Row[];
       total = this.count(from, params);
     }
-    return { hits: rows.map(toHit), total };
+    const cards =
+      query.cards === '1' && positive.length
+        ? this.cards(owner, params.match as string, query)
+        : undefined;
+    return { hits: rows.map(toHit), total, ...(cards ? { cards } : {}) };
+  }
+
+  /** Cards whose title or description match; page-only filters leave none. */
+  private cards(
+    owner: string,
+    match: string,
+    query: z.output<typeof searchQuerySchema>,
+  ): CardHit[] {
+    if (query.sectionId || query.notebookId || query.tagId || query.type) return [];
+    const since = query.modified ? this.now() - SPAN[query.modified] : 0;
+    return this.db
+      .prepare(
+        `SELECT c.id, p.key || '-' || c.number AS key, highlight(fts_cards, 0, char(1), char(2)) AS title,
+           coalesce(snippet(fts_cards, 1, char(1), char(2), '…', 16), '') AS snippet, c.board_id AS boardId,
+           b.name AS boardName, col.name AS columnName, c.completed_at AS completedAt
+         FROM fts_cards JOIN card_search s ON s.docid = fts_cards.rowid JOIN cards c ON c.id = s.card_id
+         JOIN boards b ON b.id = c.board_id JOIN projects p ON p.id = b.project_id
+         JOIN board_columns col ON col.id = c.column_id
+         WHERE fts_cards MATCH @match AND c.owner_id = @owner AND c.archived_at IS NULL AND c.updated_at >= @since
+         ORDER BY bm25(fts_cards, 10.0, 1.0), c.updated_at DESC LIMIT 20`,
+      )
+      .all({ match, owner, since }) as CardHit[];
   }
 
   private count(from: string, params: Record<string, unknown>): number {

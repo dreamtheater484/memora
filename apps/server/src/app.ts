@@ -27,7 +27,9 @@ import { eventRoutes } from './routes/events';
 import { notesRoutes } from './routes/notes';
 import { searchRoutes } from './routes/search';
 import { SearchService } from './search/service';
+import { kanbanRoutes } from './routes/kanban';
 import { transferRoutes } from './routes/transfer';
+import { KanbanService } from './kanban/service';
 import { JobService } from './transfer/jobs';
 
 export interface AppOptions {
@@ -117,6 +119,7 @@ export async function buildApp({
     },
     now,
   );
+  const kanban = new KanbanService(db, now);
   const jobs = new JobService(join(config.dataDir, 'tmp', 'jobs'), events, now, (error, job) =>
     app.log.warn({ err: error, job: job.id, kind: job.kind }, 'job failed'),
   );
@@ -187,6 +190,7 @@ export async function buildApp({
   backupRoutes(app, deps);
   await assetRoutes(app, deps);
   await transferRoutes(app, { ...deps, jobs, version });
+  kanbanRoutes(app, { ...deps, kanban });
   eventRoutes(app, deps);
 
   const hasWebApp = existsSync(join(config.webDir, 'index.html'));

@@ -3,8 +3,9 @@ import type { SqliteDatabase } from '../db/client';
 
 /*
  * Removing files no page uses any more (§9.7): after the recycle bin is purged, and once a
- * day. A file is in use while any page (in the recycle bin too) or any kept version refers to
- * it as `asset:<id>`, in Markdown or in a rich page's document alike. New files are left
+ * day. A file is in use while any page (in the recycle bin too), any kept version, or any
+ * card's description or comment refers to it as `asset:<id>`, in Markdown or in a rich page's
+ * document alike, or while it is attached to a card. New files are left
  * alone for a day: a page pasted into offline sends its files before its text.
  */
 
@@ -28,6 +29,8 @@ export function cleanUnusedAssets(
     for (const sql of [
       'SELECT content FROM pages WHERE owner_id = ?',
       'SELECT content FROM page_versions WHERE owner_id = ?',
+      'SELECT description AS content FROM cards WHERE owner_id = ?',
+      'SELECT body AS content FROM card_comments WHERE owner_id = ?',
     ]) {
       for (const row of db.prepare(sql).iterate(owner) as Iterable<{ content: string }>) {
         if (row.content.includes('asset:')) for (const id of assetIdsIn(row.content)) used.add(id);
@@ -35,7 +38,10 @@ export function cleanUnusedAssets(
     }
     const candidates = (
       db
-        .prepare('SELECT id FROM assets WHERE owner_id = ? AND created_at < ?')
+        .prepare(
+          `SELECT id FROM assets WHERE owner_id = ? AND created_at < ?
+           AND NOT EXISTS (SELECT 1 FROM card_attachments ca WHERE ca.asset_id = assets.id)`,
+        )
         .all(owner, now - ASSET_GRACE_MS) as { id: string }[]
     )
       .map((r) => r.id)

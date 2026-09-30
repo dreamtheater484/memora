@@ -363,6 +363,259 @@ export const pageSearch = sqliteTable('page_search', {
   pageId: text('page_id').notNull().unique(),
 });
 
+/*
+ * Kanban (§7.4, §9.11). Projects hold boards, boards hold columns and swimlanes, columns hold
+ * cards. Everything carries its owner, like the notes. Deleting is for good (archiving is the
+ * soft way), so the rows cascade from their parents.
+ */
+
+const stamps = () => ({
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export const projects = sqliteTable(
+  'projects',
+  {
+    id: text('id').primaryKey(),
+    ownerId: ownerId(),
+    name: text('name').notNull(),
+    /** Card keys start with it (`WEB-42`); unique per user. */
+    key: text('key').notNull(),
+    color: text('color').notNull(),
+    icon: text('icon').notNull(),
+    sortKey: text('sort_key').notNull(),
+    archivedAt: integer('archived_at'),
+    nextCardNumber: integer('next_card_number').notNull().default(1),
+    ...stamps(),
+  },
+  (t) => [uniqueIndex('projects_owner_id_key_idx').on(t.ownerId, t.key)],
+);
+
+export const boards = sqliteTable(
+  'boards',
+  {
+    id: text('id').primaryKey(),
+    ownerId: ownerId(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    sortKey: text('sort_key').notNull(),
+    settingsJson: text('settings_json').notNull().default('{}'),
+    archivedAt: integer('archived_at'),
+    ...stamps(),
+  },
+  (t) => [index('boards_project_id_idx').on(t.projectId)],
+);
+
+export const boardColumns = sqliteTable(
+  'board_columns',
+  {
+    id: text('id').primaryKey(),
+    ownerId: ownerId(),
+    boardId: text('board_id')
+      .notNull()
+      .references(() => boards.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    color: text('color'),
+    wipLimit: integer('wip_limit'),
+    wipStrict: integer('wip_strict', { mode: 'boolean' }).notNull().default(false),
+    isDone: integer('is_done', { mode: 'boolean' }).notNull().default(false),
+    collapsed: integer('collapsed', { mode: 'boolean' }).notNull().default(false),
+    sort: text('sort').notNull().default('manual'),
+    sortKey: text('sort_key').notNull(),
+    archivedAt: integer('archived_at'),
+    ...stamps(),
+  },
+  (t) => [index('board_columns_board_id_idx').on(t.boardId)],
+);
+
+export const swimlanes = sqliteTable(
+  'swimlanes',
+  {
+    id: text('id').primaryKey(),
+    ownerId: ownerId(),
+    boardId: text('board_id')
+      .notNull()
+      .references(() => boards.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    color: text('color'),
+    collapsed: integer('collapsed', { mode: 'boolean' }).notNull().default(false),
+    sortKey: text('sort_key').notNull(),
+    ...stamps(),
+  },
+  (t) => [index('swimlanes_board_id_idx').on(t.boardId)],
+);
+
+export const cards = sqliteTable(
+  'cards',
+  {
+    id: text('id').primaryKey(),
+    ownerId: ownerId(),
+    boardId: text('board_id')
+      .notNull()
+      .references(() => boards.id, { onDelete: 'cascade' }),
+    columnId: text('column_id')
+      .notNull()
+      .references(() => boardColumns.id, { onDelete: 'cascade' }),
+    swimlaneId: text('swimlane_id').references(() => swimlanes.id, { onDelete: 'set null' }),
+    number: integer('number').notNull(),
+    title: text('title').notNull(),
+    /** Markdown, like a page's. */
+    description: text('description').notNull().default(''),
+    priority: text('priority').notNull().default('none'),
+    startDate: text('start_date'),
+    dueDate: text('due_date'),
+    coverColor: text('cover_color'),
+    /** Reserved for sharing (§17). */
+    assigneeId: text('assignee_id'),
+    sortKey: text('sort_key').notNull(),
+    completedAt: integer('completed_at'),
+    archivedAt: integer('archived_at'),
+    ...stamps(),
+  },
+  (t) => [
+    index('cards_board_id_idx').on(t.boardId),
+    index('cards_column_id_idx').on(t.columnId),
+    index('cards_owner_id_idx').on(t.ownerId),
+  ],
+);
+
+export const labels = sqliteTable(
+  'labels',
+  {
+    id: text('id').primaryKey(),
+    ownerId: ownerId(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    color: text('color').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('labels_project_id_idx').on(t.projectId)],
+);
+
+export const cardLabels = sqliteTable(
+  'card_labels',
+  {
+    cardId: text('card_id')
+      .notNull()
+      .references(() => cards.id, { onDelete: 'cascade' }),
+    labelId: text('label_id')
+      .notNull()
+      .references(() => labels.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.cardId, t.labelId] }),
+    index('card_labels_label_id_idx').on(t.labelId),
+  ],
+);
+
+export const checklists = sqliteTable(
+  'checklists',
+  {
+    id: text('id').primaryKey(),
+    ownerId: ownerId(),
+    cardId: text('card_id')
+      .notNull()
+      .references(() => cards.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    sortKey: text('sort_key').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('checklists_card_id_idx').on(t.cardId)],
+);
+
+export const checklistItems = sqliteTable(
+  'checklist_items',
+  {
+    id: text('id').primaryKey(),
+    ownerId: ownerId(),
+    checklistId: text('checklist_id')
+      .notNull()
+      .references(() => checklists.id, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    done: integer('done', { mode: 'boolean' }).notNull().default(false),
+    sortKey: text('sort_key').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('checklist_items_checklist_id_idx').on(t.checklistId)],
+);
+
+export const cardComments = sqliteTable(
+  'card_comments',
+  {
+    id: text('id').primaryKey(),
+    ownerId: ownerId(),
+    cardId: text('card_id')
+      .notNull()
+      .references(() => cards.id, { onDelete: 'cascade' }),
+    userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+    body: text('body').notNull(),
+    createdAt: integer('created_at').notNull(),
+    editedAt: integer('edited_at'),
+  },
+  (t) => [index('card_comments_card_id_idx').on(t.cardId)],
+);
+
+/** Notes linked to cards (§9.11): many to many. */
+export const cardPages = sqliteTable(
+  'card_pages',
+  {
+    cardId: text('card_id')
+      .notNull()
+      .references(() => cards.id, { onDelete: 'cascade' }),
+    pageId: text('page_id')
+      .notNull()
+      .references(() => pages.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.cardId, t.pageId] }),
+    index('card_pages_page_id_idx').on(t.pageId),
+  ],
+);
+
+export const cardAttachments = sqliteTable(
+  'card_attachments',
+  {
+    cardId: text('card_id')
+      .notNull()
+      .references(() => cards.id, { onDelete: 'cascade' }),
+    assetId: text('asset_id')
+      .notNull()
+      .references(() => assets.id, { onDelete: 'cascade' }),
+    sortKey: text('sort_key').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.cardId, t.assetId] })],
+);
+
+export const cardActivity = sqliteTable(
+  'card_activity',
+  {
+    id: text('id').primaryKey(),
+    ownerId: ownerId(),
+    cardId: text('card_id')
+      .notNull()
+      .references(() => cards.id, { onDelete: 'cascade' }),
+    userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+    type: text('type').notNull(),
+    payloadJson: text('payload_json').notNull().default('{}'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('card_activity_card_id_idx').on(t.cardId)],
+);
+
+/** The search index's row for each card, like `page_search` (`fts_cards`, made in the migration). */
+export const cardSearch = sqliteTable('card_search', {
+  docid: integer('docid').primaryKey({ autoIncrement: true }),
+  cardId: text('card_id').notNull().unique(),
+});
+
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type NotebookRow = typeof notebooks.$inferSelect;
