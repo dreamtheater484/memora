@@ -32,6 +32,15 @@ export function toggleFavorite(queryClient: QueryClient, ui: UiState, place: Pla
   return on;
 }
 
+/** Shows a page at the full width of its pane, or back at a readable width (§9.12). */
+export function toggleFullWidth(queryClient: QueryClient, ui: UiState, pageId: string): boolean {
+  const list = ui.fullWidth ?? [];
+  const on = !list.includes(pageId);
+  const fullWidth = on ? [...list, pageId].slice(-1000) : list.filter((id) => id !== pageId);
+  saveUiState(queryClient, { fullWidth }, 0);
+  return on;
+}
+
 /** Remembers that something was opened, newest first. */
 export function rememberOpened(queryClient: QueryClient, ui: UiState, place: Place): void {
   const list = ui.recent ?? [];
