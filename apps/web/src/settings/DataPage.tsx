@@ -8,6 +8,8 @@ import { useNotes } from '../notes/queries';
 import { ARCHIVE_FILES, IMPORT_ACCEPT, PAGE_FILES, importPageFiles } from '../transfer/importFiles';
 import { startImport } from '../transfer/jobs';
 import { SettingsSection } from './SettingsLayout';
+import { HelpLink } from '../components/HelpLink';
+import { HELP } from '../lib/help';
 
 /* Import and export (§9.10, §9.16): everything out, and files in. */
 
@@ -76,7 +78,13 @@ export function DataPage() {
     <>
       <SettingsSection
         title="Export"
-        description="Download everything as a Memora archive, to keep or to move to another Memora, or as Markdown for other apps. Notebooks, sections and pages have their own “Export…” in their menus."
+        description={
+          <>
+            Download everything as a Memora archive, to keep or to move to another Memora, or as
+            Markdown for other apps. Notebooks, sections and pages have their own “Export…” in their
+            menus. <HelpLink href={HELP.importExport}>Import and export in the guide</HelpLink>
+          </>
+        }
         actions={
           <Button onClick={() => setExporting(true)}>
             <Share2 aria-hidden />

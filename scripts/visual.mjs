@@ -6,6 +6,9 @@
 //   node scripts/visual.mjs --update-snapshots   accept new or changed screenshots
 //   node scripts/visual.mjs -g "gallery"         any other Playwright arguments
 //
+// VISUAL_DOCKER_ARGS adds arguments for `docker run` (the documentation's screenshots use it
+// to join the network of the Memora they photograph: scripts/demo/screenshots.mjs).
+//
 // Needs Docker on a Linux host (or WSL). The repository is mounted at the same
 // path inside the container, so node_modules installed on the host work as is.
 import { spawnSync } from 'node:child_process';
@@ -44,6 +47,7 @@ const args = [
   `${root}:${root}`,
   '-w',
   web,
+  ...(process.env.VISUAL_DOCKER_ARGS ?? '').split(' ').filter(Boolean),
   image,
   'sh',
   '-c',

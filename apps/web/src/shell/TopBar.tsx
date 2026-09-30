@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import {
   ArrowLeft,
   ArrowRight,
+  BookOpen,
   ChevronRight,
   FilePlus,
   Keyboard,
@@ -34,6 +35,7 @@ import {
   MenuTrigger,
 } from '../components/ui';
 import { hueStyle } from '../theme/sections';
+import { HELP, openHelp } from '../lib/help';
 import { useTheme, type ThemeMode } from '../theme/theme';
 import { useCommands } from './commands';
 import { useProjects } from '../kanban/projects';
@@ -217,6 +219,9 @@ function AccountMenu() {
           onSelect={() => useShell.getState().openDialog({ kind: 'shortcuts' })}
         >
           Keyboard shortcuts
+        </MenuItem>
+        <MenuItem icon={<BookOpen />} onSelect={() => openHelp(HELP.guide)}>
+          User guide
         </MenuItem>
         <MenuSeparator />
         <MenuItem icon={<LogOut />} onSelect={() => logout.mutate()}>

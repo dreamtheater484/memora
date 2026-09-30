@@ -2,6 +2,7 @@ import type { Projects, UiState } from '@memora/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
+  BookOpen,
   Clock,
   Columns2,
   FileClock,
@@ -26,6 +27,7 @@ import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 're
 import { CommandPalette, Sheet, SheetContent, toast, type PaletteItem } from '../components/ui';
 import { cn } from '../lib/cn';
 import { useDnd } from '../lib/dnd';
+import { HELP, openHelp } from '../lib/help';
 import { formatRelative } from '../lib/time';
 import { DESKTOP_QUERY, useMediaQuery } from '../lib/useMediaQuery';
 import { useNow } from '../lib/useNow';
@@ -310,6 +312,14 @@ function usePaletteItems(current: Current, commands: Commands, query: string): P
         icon: <Keyboard />,
         hint: '?',
         onSelect: commands.showShortcuts,
+      },
+      {
+        id: 'cmd:guide',
+        title: 'Open the user guide',
+        group: 'Commands',
+        icon: <BookOpen />,
+        keywords: 'help manual documentation',
+        onSelect: () => openHelp(HELP.guide),
       },
       {
         id: 'cmd:light',

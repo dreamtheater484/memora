@@ -5,6 +5,8 @@ import { formatBytes } from '../lib/bytes';
 import { install, useInstall } from '../lib/install';
 import { useKeepAll } from '../sync/keepAll';
 import { SettingsSection } from './SettingsLayout';
+import { HelpLink } from '../components/HelpLink';
+import { HELP } from '../lib/help';
 
 /*
  * This device (Phase 11): what is kept here for working without a connection, and installing
@@ -63,7 +65,12 @@ export function DevicePage() {
       </SettingsSection>
       <SettingsSection
         title="App"
-        description="Installed, Memora opens in its own window and from the home screen or dock, like other apps."
+        description={
+          <>
+            Installed, Memora opens in its own window and from the home screen or dock, like other
+            apps. <HelpLink href={HELP.offline}>Offline use and installing the app</HelpLink>
+          </>
+        }
       >
         {installed ? (
           <p className="flex items-center gap-2 text-sm [&_svg]:size-4 [&_svg]:text-fg-3">

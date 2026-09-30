@@ -127,6 +127,7 @@ These are parked and listed in §17. The data model is designed so they can be a
 | D45 | Accessibility audit (Phase 11)          | Automated: axe on every screen in both themes, a keyboard walkthrough that checks every Tab stop is visible and named and that Tab leaves every region, reduced motion honoured. Found and fixed: **Tab in the page list indented pages**, so the keyboard could never leave the list; indenting is now Alt+Shift+→/← (Tab moves on, as everywhere). A skip link leads past the bars to the content.                                                                                                                                                                                          | A trap for keyboard users is a WCAG failure (2.1.2) and worse than a less familiar shortcut; outliners use Alt+Shift+arrows for the same thing.                                                                                                                                                             |
 | D46 | Installed app (Phase 11)                | A manifest with icons and iOS splash screens (drawn from the logo by a script); an offline page for when not even the app is stored; **a new version is offered with "Reload"** (the waiting service worker is told to take over), still never forced. "Keep every page on this device" is a setting of the device: pages are fetched in the background, one tab at a time, and kept instead of the 100 most recent.                                                                                                                                                                          | Updating stays the user's choice, so nothing reloads under someone's typing, but it no longer needs every tab closed. What fits on a device is the device's business, not the account's.                                                                                                                    |
 | D47 | Two-step verification (Phase 12)        | **TOTP written on `node:crypto`**, with recovery codes and an administrator's "required"; secrets sealed with an **instance key file** (`data/secret.key`), not in the database or its backups. **Database encryption at rest parked** (ADR 0005).                                                                                                                                                                                                                                                                                                                                            | No dependency to trust for a security feature. A copy of the database or a backup doesn't give the second step away; a lost key still leaves recovery codes. An encrypted volume protects the rest, without running every install on a forked storage driver.                                               |
+| D48 | The first release (Phase 13)            | **0.9.0, a public beta**, not 1.0. The release is a tag: the workflow checks it against the packages, the changelog and CI, and publishes images, SBOMs and notes. Guides are linked from the app at the running version.                                                                                                                                                                                                                                                                                                                                                                     | Everything planned for 1.0 is in, but it hasn't met real use yet, and the Synology and Windows install tests are still to be done by hand. 1.0 is a promise of stability that should follow time in use.                                                                                                    |
 
 ---
 
@@ -1147,7 +1148,7 @@ Long lists (pages, search results, cards) render only what is visible on screen.
 | **M2 · Rich & safe**         | 6–7    | write Word-like notes with pasted images, and rely on history, the recycle bin and backups |
 | **M3 · Findable & portable** | 8–9    | search everything, link pages, and import/export in every format                           |
 | **M4 · Boards**              | 10     | run projects on Kanban boards linked to your notes                                         |
-| **M5 · v1.0**                | 11–13  | use the wide-screen workspace, 2FA and the finished setup guide                            |
+| **M5 · v0.9 (beta)**         | 11–13  | use the wide-screen workspace, 2FA and the finished setup guide                            |
 
 ---
 
@@ -1373,17 +1374,21 @@ Long lists (pages, search results, cards) render only what is visible on screen.
 
 **Acceptance:** the checklist is complete; 2FA works with common authenticator apps; the encryption-at-rest decision is recorded as an ADR.
 
-### Phase 13 — Release 1.0 · M
+### Phase 13 — Release 0.9, a public beta · M
 
-- [ ] Release workflow: semantic-version tags → multi-arch GHCR images, SBOM, changelog, GitHub release
-- [ ] Final **SETUP.md** (§16), **UPGRADE.md**, **BACKUP_RESTORE.md**, troubleshooting, **USER_GUIDE.md**, in-app help links
-- [ ] Clean-install test **following the guide word for word** on Synology, Ubuntu 26.04 (Docker Engine) and Windows 11 (Docker Desktop)
-- [ ] Final privacy audit: gitleaks over the full history, forbidden patterns, a check of image layers
-- [ ] Demo dataset for the documentation screenshots
+_Released as **0.9.0** rather than 1.0 (D48): everything planned for 1.0 is in, and 1.0 follows after time in real use._
 
-**Acceptance:** someone who has never seen Memora can install it on a Synology NAS using only `SETUP.md`.
+- [x] Release workflow: semantic-version tags → multi-arch GHCR images, SBOM, changelog, GitHub release. _`.github/workflows/release.yml`: a `v*` tag is checked against the packages, `CHANGELOG.md` and CI on `main`, then each architecture is built natively, smoke-tested, privacy-checked and listed (SPDX, syft), tagged `x.y.z`, `x.y` and `latest`, and released with the changelog's notes. Pull requests that change releases run all of it but the publishing. [RELEASING.md](RELEASING.md)._
+- [x] Final **SETUP.md** (§16), **UPGRADE.md**, **BACKUP_RESTORE.md**, troubleshooting, **USER_GUIDE.md**, in-app help links. _Also TROUBLESHOOTING.md and CHANGELOG.md. The app links to the guides of its own version (the account menu, the palette, the shortcuts sheet, Settings' footer with the version, and the Settings sections); a test checks every link's file and heading exist. Going back to an older version was tried both ways UPGRADE.md describes._
+- [x] Clean-install test following the guide word for word on **Ubuntu 26.04** (Docker Engine). _The quick start's `docker run` line with the 0.9.0 image, under another name and port beside a running Memora: the setup code in `docker logs`, the first account, a quick note saved to the server, and the version and help links in Settings. The Compose path wasn't run: the test machine has no Compose plugin._
+- [ ] The same on **Synology DSM 7.2** and **Windows 11** (Docker Desktop): by hand, on those machines.
+- [ ] Screen-reader spot check with NVDA and VoiceOver (from Phase 11): by hand.
+- [x] Final privacy audit: gitleaks over the full history, forbidden patterns, a check of image layers. _`scripts/check-image.mjs`: the history, labels and Memora's own files for build-machine paths (in CI), and every file for the longer personal strings (locally and before each release)._
+- [x] Demo dataset for the documentation screenshots. _`scripts/demo`: `seed.mjs` fills any Memora through its API (also to try Memora), and `screenshots.mjs` photographs a throwaway one into `docs/images`._
 
-**→ Milestone M5 · v1.0.**
+**Acceptance:** someone who has never seen Memora can install it on a Synology NAS using only `SETUP.md`. _To be confirmed on the NAS._
+
+**→ Milestone M5 · v0.9.0, a public beta (D48). 1.0 follows after real use.**
 
 ---
 

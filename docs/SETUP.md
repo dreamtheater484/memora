@@ -1,6 +1,6 @@
 # Installing Memora
 
-> **Draft (Phase 6).** Memora has accounts, notebook organisation, safe saving (also offline), a full Markdown editor with a live preview, and a rich text editor like a word processor's. The guide grows with each phase and is finished in Phase 13.
+This guide installs Memora with Docker: on a Synology NAS, on Linux, or on Windows. Using Memora is in the [user guide](USER_GUIDE.md); updating it is in [UPGRADE.md](UPGRADE.md).
 
 ## What you need
 
@@ -36,12 +36,18 @@
 Or with plain `docker run` (one line):
 
 ```bash
-docker run -d --name memora --restart unless-stopped -p 3000:3000 -e PUID=1000 -e PGID=1000 -v ./data:/data ghcr.io/dreamtheater484/memora:edge
+docker run -d --name memora --restart unless-stopped -p 3000:3000 -e PUID=1000 -e PGID=1000 -v ./data:/data ghcr.io/dreamtheater484/memora:latest
 ```
 
 ### Images
 
-The `:edge` image is built from the `main` branch after every change that passes CI, for amd64 and arm64. Versioned images (`:1`, `:latest`) arrive with the first release.
+The images are built for amd64 and arm64 and published at `ghcr.io/dreamtheater484/memora`:
+
+- `:latest`, the newest release (what the example uses);
+- `:0.9`, the fixes to 0.9 only, or `:0.9.0`, exactly that version;
+- `:edge`, every change on the `main` branch, for testing.
+
+[UPGRADE.md](UPGRADE.md#which-image-to-follow) says more about choosing one.
 
 To build the image yourself instead, from a checkout of the repository:
 
@@ -201,6 +207,53 @@ sudo docker login ghcr.io -u <your-github-user>
 
 Paste a **fine-grained or classic token with only `read:packages`** as the password. The token stays on the NAS, never in the repository.
 
+## Ubuntu 26.04 (Docker Engine)
+
+1. Install Docker and Compose from Ubuntu's packages, and let your user run Docker (log out and back in afterwards):
+
+   ```bash
+   sudo apt install docker.io docker-compose-v2
+   ```
+
+   ```bash
+   sudo usermod -aG docker "$USER"
+   ```
+
+2. Make a folder for Memora and download the example compose file into it:
+
+   ```bash
+   mkdir -p ~/memora && cd ~/memora && curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/dreamtheater484/memora/main/docker/docker-compose.example.yml
+   ```
+
+3. In `docker-compose.yml`, set `PUID` and `PGID` to the numbers `id -u` and `id -g` print, and `TZ` to your time zone.
+4. Start it, and read the setup code:
+
+   ```bash
+   docker compose up -d && docker logs memora
+   ```
+
+5. Open `http://localhost:3000` and create your administrator account.
+
+## Windows 11 (Docker Desktop)
+
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) with the WSL 2 back end (its default), and start it.
+2. Create a folder, for example `C:\memora`, and save [`docker-compose.example.yml`](../docker/docker-compose.example.yml) in it as `docker-compose.yml`. In PowerShell:
+
+   ```powershell
+   mkdir C:\memora; cd C:\memora; Invoke-WebRequest https://raw.githubusercontent.com/dreamtheater484/memora/main/docker/docker-compose.example.yml -OutFile docker-compose.yml
+   ```
+
+3. Set `TZ` in the file. Leave `PUID` and `PGID` at `1000`: Docker Desktop takes care of the file permissions.
+4. Start it, and read the setup code:
+
+   ```powershell
+   docker compose up -d; docker logs memora
+   ```
+
+5. Open `http://localhost:3000` and create your administrator account.
+
+Memora then runs whenever Docker Desktop does. To reach it from your phone or another computer, allow Docker Desktop through the Windows firewall when it asks, and set up [HTTPS](#https) for offline use on those devices.
+
 ## HTTPS
 
 Browsers only allow offline mode, secure cookies and clipboard images over **HTTPS** (or at `localhost`), even on your own network. Over plain HTTP Memora still works, but logs a warning and uses a weaker cookie.
@@ -286,6 +339,10 @@ Point a (sub)domain at your home address (Synology DDNS works), get a Let's Encr
 
 Install Tailscale on the NAS and your devices, turn on **HTTPS certificates** in the Tailscale admin console, and use `tailscale serve` to publish `http://localhost:3000` at your NAS's Tailscale name. Set `MEMORA_BASE_URL` to that `https://` address.
 
+## Installing the app
+
+Once Memora is served over HTTPS, it installs on phones and computers like an app, with its own window and icon, and works offline. The [user guide](USER_GUIDE.md#offline-and-the-app) shows how, for each browser.
+
 ## First deployment checklist
 
 For the first time on the NAS:
@@ -304,25 +361,15 @@ For the first time on the NAS:
 docker compose pull && docker compose up -d
 ```
 
-On Synology: **Container Manager → Image** marks the memora image when a newer one is published; choose **Update**, which downloads it and recreates the container. (Labels can differ a little between DSM versions.)
-
-Memora updates the database automatically on start, and takes a backup first. A database created by a newer Memora version is never opened by an older one.
+Memora backs up the database before it changes it. [UPGRADE.md](UPGRADE.md) covers the image tags, Synology, and going back to an earlier version.
 
 ## Troubleshooting
 
-| Symptom                                                                                                  | Fix                                                                                                                                                                                                                                             |
-| -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Container exits with _"is not writable by user …"_                                                       | Give the `PUID`/`PGID` user read/write access to the data folder, or change `PUID`/`PGID`                                                                                                                                                       |
-| Container exits with _"refusing to run as root"_                                                         | Set `PUID` to a regular user's id (not `0`)                                                                                                                                                                                                     |
-| Container exits with _"newer version of Memora"_                                                         | You started an older image on a newer database. Use the newer image, or restore a backup.                                                                                                                                                       |
-| Lost the setup code                                                                                      | Check the log again, or restart the container to print a new one                                                                                                                                                                                |
-| Forgot a password                                                                                        | An administrator resets it in **Settings → Users**. For the last administrator: `memora-admin reset-password <username>`                                                                                                                        |
-| Lost the phone with the authenticator app                                                                | Log in with a recovery code, then set up the app again in **Settings → Account**. Without recovery codes: an administrator turns two-step verification off in **Settings → Users**, or `memora-admin reset-2fa <username>`                      |
-| Container exits with _"is not a Memora secret key"_                                                      | `secret.key` was damaged. Put back your copy, or remove the file: a new key is made, and two-step verification has to be set up again (recovery codes still work)                                                                               |
-| _"Too many attempts"_                                                                                    | Wait the time shown. Repeated failures double the wait, up to 15 minutes                                                                                                                                                                        |
-| _"Requests from other sites are not allowed"_                                                            | `MEMORA_BASE_URL` doesn't match the address in the browser. Set it to exactly that address, including `https://` and the port                                                                                                                   |
-| Log warns about _"signing in over plain HTTP"_                                                           | You're using plain HTTP. Set up HTTPS and `MEMORA_BASE_URL`                                                                                                                                                                                     |
-| `denied` when pulling the image                                                                          | The image is private: see [Images from your own fork](#images-from-your-own-fork)                                                                                                                                                               |
-| Changes from other devices take up to 30 s to appear, and the status says the live connection is blocked | The reverse proxy doesn't pass WebSockets. On Synology, add the **WebSocket** custom header to the rule ([HTTPS](#a-vpn-plus-a-local-certificate), step 3). Other proxies must pass the `Upgrade` and `Connection` headers for `/api/v1/events` |
-| The badge stays on _"Saved on this device"_                                                              | The browser can't reach Memora. Your changes are safe in the browser and are sent as soon as it can; check that the container runs                                                                                                              |
-| Check the logs                                                                                           | `docker logs memora`, or Container Manager → Container → memora → Log                                                                                                                                                                           |
+The most common problems:
+
+- **The container stops at start:** `docker logs memora` says why, usually that the data folder isn't writable by `PUID`/`PGID` ([above](#choosing-puid-and-pgid)).
+- **Changes from other devices take 30 seconds:** the reverse proxy doesn't pass WebSockets; add the **WebSocket** custom header to the rule ([HTTPS](#a-vpn-plus-a-local-certificate), step 3).
+- **Offline mode or installing the app doesn't work:** that needs [HTTPS](#https).
+- **A forgotten password or a lost phone:** [`memora-admin`](#locked-out-memora-admin).
+
+Everything else is in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

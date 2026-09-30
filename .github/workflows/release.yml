@@ -1,0 +1,241 @@
+name: Release
+
+# A version tag (`v0.9.0`) publishes that version (plan §13.3, docs/RELEASING.md):
+# - images on GHCR for amd64 and arm64, tagged `0.9.0`, `0.9` and `latest` (a pre-release such
+#   as `1.0.0-rc.1` gets its own tag only);
+# - a software bill of materials (SPDX) for each architecture;
+# - a GitHub release with the notes from CHANGELOG.md.
+# Pull requests that change how releases are made run all of it except publishing.
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - CHANGELOG.md
+      - docker/**
+      - scripts/check-image.mjs
+      - scripts/release-notes.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PUBLISH: ${{ github.event_name == 'push' }}
+  SYFT_IMAGE: anchore/syft:v1.52.0
+
+jobs:
+  prepare:
+    name: Check the version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tags: ${{ steps.version.outputs.tags }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Version, image tags and release notes
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(node -p "require('./package.json').version")"
+          fi
+          # Fails unless every package.json says this version and CHANGELOG.md has its section.
+          node scripts/release-notes.mjs "$version" --check > notes.md
+          read -r tags prerelease < <(node --input-type=module -e "
+            import { imageTags, isPrerelease } from './scripts/release-notes.mjs';
+            console.log(imageTags('$version').join(','), isPrerelease('$version'));
+          ")
+          {
+            echo "version=$version"
+            echo "tags=$tags"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing $version as :${tags//,/, :}"
+      - name: The tagged commit is on main and passed CI there
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main ||
+            { echo "::error::$GITHUB_REF_NAME is not on main"; exit 1; }
+          conclusion="$(gh run list --workflow CI --branch main --commit "$GITHUB_SHA" --event push \
+            --json conclusion,status --jq '[.[] | select(.status == "completed")][0].conclusion')"
+          [ "$conclusion" = success ] ||
+            { echo "::error::CI on main has not passed for $GITHUB_SHA (${conclusion:-no run})"; exit 1; }
+      - name: Release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAGS: ${{ steps.version.outputs.tags }}
+        run: |
+          IFS=, read -ra tags <<< "$TAGS"
+          images="Images for amd64 and arm64: \`ghcr.io/${GITHUB_REPOSITORY,,}:$VERSION\`"
+          if [ "${#tags[@]}" -gt 1 ]; then
+            images+=" (also"
+            for tag in "${tags[@]:1}"; do images+=" \`:$tag\`"; done
+            images+=")"
+          fi
+          docs="https://github.com/$GITHUB_REPOSITORY/blob/v$VERSION/docs"
+          {
+            echo "$images."
+            echo
+            echo "New here? Read [SETUP.md]($docs/SETUP.md). Updating? Read [UPGRADE.md]($docs/UPGRADE.md)."
+            echo
+            cat notes.md
+          } > release-notes.md
+          cat release-notes.md
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: release-notes.md
+          retention-days: 7
+
+  build:
+    name: Build (${{ matrix.arch }})
+    needs: prepare
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        if: env.PUBLISH == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ steps.image.outputs.name }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Without publishing, the image goes to the runner's Docker for the checks below.
+          outputs: ${{ env.PUBLISH == 'true' && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', steps.image.outputs.name) || 'type=docker,name=memora:release-check' }}
+          cache-from: type=gha,scope=release-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.arch }}
+      - name: The image to check
+        id: ref
+        run: |
+          if [ "$PUBLISH" = true ]; then
+            ref="${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}"
+            docker pull "$ref"
+          else
+            ref=memora:release-check
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      - name: Smoke test
+        run: ./docker/smoke-test.sh "${{ steps.ref.outputs.ref }}"
+      - name: Image privacy check
+        run: node scripts/check-image.mjs "${{ steps.ref.outputs.ref }}"
+      - name: Software bill of materials
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$SYFT_IMAGE" \
+            "docker:${{ steps.ref.outputs.ref }}" -o spdx-json --quiet \
+            > "memora-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.spdx.json"
+          node -e "const s = require('./memora-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.spdx.json'); console.log(s.packages.length + ' packages listed')"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sbom-${{ matrix.arch }}
+          path: memora-*.spdx.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Export digest
+        if: env.PUBLISH == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "$RUNNER_TEMP/digests/${digest#sha256:}"
+      - uses: actions/upload-artifact@v7
+        if: env.PUBLISH == 'true'
+        with:
+          name: digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish ${{ needs.prepare.outputs.version }}
+    if: github.event_name == 'push'
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digest-*
+          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          path: release
+          pattern: '{sbom-*,release-notes}'
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tag the multi-arch image
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          name="ghcr.io/${GITHUB_REPOSITORY,,}"
+          IFS=, read -ra tags <<< "${{ needs.prepare.outputs.tags }}"
+          args=()
+          for tag in "${tags[@]}"; do args+=(-t "$name:$tag"); done
+          refs=()
+          for digest in *; do refs+=("$name@sha256:$digest"); done
+          docker buildx imagetools create "${args[@]}" "${refs[@]}"
+          docker buildx imagetools inspect "$name:${{ needs.prepare.outputs.version }}"
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=()
+          [ "${{ needs.prepare.outputs.prerelease }}" = true ] && flags+=(--prerelease) || flags+=(--latest)
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "Memora ${{ needs.prepare.outputs.version }}" \
+            --notes-file release/release-notes.md "${flags[@]}" release/*.spdx.json

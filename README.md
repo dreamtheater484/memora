@@ -2,32 +2,41 @@
 
 A self-hosted notebook that runs in your browser. It combines OneNote-style organisation (notebooks, section tabs, page lists) with first-class Markdown, a Word-like rich editor and built-in Kanban boards. It is designed to look great on a phone, a laptop and an ultra-wide monitor.
 
-> **Status: Phase 12, security hardening.** Accounts, notebook organisation and a save engine that keeps every keystroke (offline too) are in place, with an `:edge` image on GHCR. Markdown pages have a Notepad++-style source view beside a live preview; rich text pages work like a word processor, with clean pasting from Word, Google Docs and the web. Every page has a version history, deleted items go to a recycle bin, and backups run on a schedule, optionally encrypted. Full-text search, tags, links between pages with backlinks, favourites and templates help find things again. Pages, sections and notebooks export to Markdown, Word, HTML, PDF or a documented `.memora` archive, and Memora imports archives, Markdown folders, Word, HTML and text files. Kanban projects hold boards with columns, swimlanes, WIP limits and cards that drag with the mouse, a finger or the keyboard; any note links to any card, and card keys like `WEB-42` in a note link to their card. On wide and ultra-wide monitors, panes with tabs sit beside the main one (pages, boards, search, backlinks, history), with named layouts; text keeps a readable width. Memora installs as an app, updates when you choose, and can keep every page on a device for offline use. Two-step verification with an authenticator app can be turned on per person or required for everyone, and a strict Content Security Policy guards every page. See the [implementation plan](docs/IMPLEMENTATION_PLAN.md) for the roadmap.
+> **Version 0.9: a public beta.** Everything planned for 1.0 is in and tested; 1.0 follows after time in real use. What's in it: [CHANGELOG.md](CHANGELOG.md).
 
-## Planned highlights
+![Memora: a Markdown page beside its live preview, with notebooks, section tabs and the page list](docs/images/notes.png)
 
-- **Organisation like OneNote, done better:** notebooks → section groups → coloured section tabs → pages and subpages.
-- **Markdown notes:**
-  - Notepad++-style highlighted source with a live preview side by side.
-  - Tables that realign as you type.
-  - Easy formatting through the toolbar, shortcuts and slash commands.
-- **Rich notes:** a Word-like editor. Paste screenshots and images straight in, and export to Word or PDF.
-- **Kanban:** projects with multiple boards and the full standard feature set. Link any note to any card.
-- **Never lose a keystroke:**
-  - Autosave with offline support and an always-accurate save indicator.
-  - Version history with diffs, a recycle bin, and scheduled, optionally encrypted backups with one-click restore.
-- **Open formats:** import and export single notes or whole notebooks as Markdown, Word, PDF, HTML or a documented `.memora` archive.
-- **Self-hosted:** one Docker container with one SQLite file. Runs on a NAS (Synology included) or any Docker host.
+## What it does
+
+- **Organisation like OneNote, done better:** notebooks → section groups → coloured section tabs → pages and subpages, with drag and drop, an Inbox for quick notes, and a shortcut for everything.
+- **Markdown notes:** a Notepad++-style source beside a live preview, tables that line up as you type, maths, diagrams and highlighted code.
+- **Rich notes:** a Word-like editor with tables, callouts and images. Paste screenshots straight in, and clean pastes from Word, Google Docs and the web.
+- **Never lose a keystroke:** autosave that works offline, an honest save indicator, merged edits from two devices, version history, a recycle bin, and scheduled backups (optionally encrypted).
+- **Find it again:** full-text search, tags, links between pages with backlinks, favourites and templates.
+- **Kanban:** projects with boards, swimlanes, WIP limits and cards that drag with a mouse, a finger or the keyboard. Any note links to any card.
+- **Every screen:** panes with tabs on wide and ultra-wide monitors, a phone layout, and an installable app.
+- **Open formats:** Markdown, Word, HTML, PDF, and a documented `.memora` archive, in and out.
+- **Yours:** one small Docker container with one SQLite file, on a Synology NAS or any Docker host. No telemetry, nothing loaded from other sites, two-step verification, and a [security review](docs/SECURITY_REVIEW.md).
+
+| Kanban boards                                                    | Dark theme                                                 | Phones                                             |
+| ---------------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------- |
+| ![A Kanban board with priority swimlanes](docs/images/board.png) | ![The board in the dark theme](docs/images/board-dark.png) | ![A recipe page on a phone](docs/images/phone.png) |
 
 ## Quick start
 
 ### Run with Docker
 
 ```bash
-docker run -d --name memora -p 3000:3000 -e PUID=1000 -e PGID=1000 -v ./data:/data ghcr.io/dreamtheater484/memora:edge
+docker run -d --name memora --restart unless-stopped -p 3000:3000 -e PUID=1000 -e PGID=1000 -v ./data:/data ghcr.io/dreamtheater484/memora:latest
 ```
 
-Then open `http://localhost:3000`. `:edge` is built from the main branch; version tags come with the first release. See [docs/SETUP.md](docs/SETUP.md) for the full guide (Docker Compose, Synology, HTTPS).
+Then run `docker logs memora` for the setup code, and open `http://localhost:3000`. [docs/SETUP.md](docs/SETUP.md) is the full guide: Docker Compose, Synology, Linux, Windows, and HTTPS.
+
+To try it with sample notes and a board, fill a new Memora with the demo dataset. With the setup code from its log, this creates the account `demo` and prints its password:
+
+```bash
+node scripts/demo/seed.mjs --url http://localhost:3000 --setup-code <setup-code>
+```
 
 To build the image yourself instead:
 
@@ -58,12 +67,15 @@ The web app runs at `http://localhost:5173` and the API at `http://localhost:300
 ## Documentation
 
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md): scope, decisions, architecture, roadmap
+- [User guide](docs/USER_GUIDE.md): using Memora
 - [Setup guide](docs/SETUP.md): installing Memora with Docker
+- [Updating](docs/UPGRADE.md) and [troubleshooting](docs/TROUBLESHOOTING.md)
 - [Backups and restoring](docs/BACKUP_RESTORE.md): the schedule, encryption, Hyper Backup, restoring
 - [Architecture](docs/ARCHITECTURE.md): how the code is organised
 - [Contributing](CONTRIBUTING.md): development workflow and privacy rules
 - [Security policy](docs/SECURITY.md) and [security review](docs/SECURITY_REVIEW.md): threat model, OWASP ASVS Level 1
 - [Architecture decision records](docs/adr/)
+- [Changelog](CHANGELOG.md) and [making a release](docs/RELEASING.md)
 
 ## License
 
