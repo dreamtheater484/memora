@@ -251,18 +251,22 @@ jobs:
           sudo apt-get install -y --no-install-recommends xvfb libgtk-3-0t64 libnss3 libgbm1 libasound2t64
       - name: Build the installers
         env:
-          # Signing, once its secrets are set (docs/SIGNING.md). Without them: unsigned.
-          CSC_LINK: ${{ runner.os == 'macOS' && secrets.MAC_CERTIFICATE || '' }}
-          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.MAC_CERTIFICATE_PASSWORD || '' }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          WIN_CSC_LINK: ${{ secrets.WIN_CERTIFICATE }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PASSWORD }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          MEMORA_AZURE_ENDPOINT: ${{ vars.MEMORA_AZURE_ENDPOINT }}
+          # Signing, once its secrets are set (docs/SIGNING.md), and only for a release: a pull
+          # request's run never sees them. Without them, Windows is unsigned and macOS is signed
+          # ad hoc, which electron-builder would skip for a pull request unless told otherwise:
+          # the dry run then checks the same kind of app a release makes.
+          CSC_FOR_PULL_REQUEST: 'true'
+          CSC_LINK: ${{ runner.os == 'macOS' && github.event_name == 'push' && secrets.MAC_CERTIFICATE || '' }}
+          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && github.event_name == 'push' && secrets.MAC_CERTIFICATE_PASSWORD || '' }}
+          APPLE_ID: ${{ github.event_name == 'push' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ github.event_name == 'push' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ github.event_name == 'push' && secrets.APPLE_TEAM_ID || '' }}
+          WIN_CSC_LINK: ${{ github.event_name == 'push' && secrets.WIN_CERTIFICATE || '' }}
+          WIN_CSC_KEY_PASSWORD: ${{ github.event_name == 'push' && secrets.WIN_CERTIFICATE_PASSWORD || '' }}
+          AZURE_TENANT_ID: ${{ github.event_name == 'push' && secrets.AZURE_TENANT_ID || '' }}
+          AZURE_CLIENT_ID: ${{ github.event_name == 'push' && secrets.AZURE_CLIENT_ID || '' }}
+          AZURE_CLIENT_SECRET: ${{ github.event_name == 'push' && secrets.AZURE_CLIENT_SECRET || '' }}
+          MEMORA_AZURE_ENDPOINT: ${{ github.event_name == 'push' && vars.MEMORA_AZURE_ENDPOINT || '' }}
           MEMORA_AZURE_ACCOUNT: ${{ vars.MEMORA_AZURE_ACCOUNT }}
           MEMORA_AZURE_PROFILE: ${{ vars.MEMORA_AZURE_PROFILE }}
           MEMORA_AZURE_PUBLISHER: ${{ vars.MEMORA_AZURE_PUBLISHER }}

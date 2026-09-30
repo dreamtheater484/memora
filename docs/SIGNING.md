@@ -2,7 +2,7 @@
 
 For maintainers. Windows and macOS trust apps that are **signed**: a certificate says who made the app, and that nobody changed it since. Unsigned, the app works the same, but the first start needs an extra step ([DESKTOP.md](DESKTOP.md#installing)), and on macOS the app can't update itself.
 
-Everything for signing is ready in the release workflow: it signs as soon as the secrets below are set in GitHub (**Settings → Secrets and variables → Actions**). Nothing else changes. Getting the certificates needs your identity, and on macOS a paid membership, so that part is yours.
+Everything for signing is ready in the release workflow: it signs as soon as the secrets below are set in GitHub (**Settings → Secrets and variables → Actions**). Nothing else changes. Only a release (a version tag) uses them: a pull request's dry run never sees them, and builds the Mac app signed ad hoc, as an unsigned release is. Getting the certificates needs your identity, and on macOS a paid membership, so that part is yours.
 
 | System  | What it takes                                                                                                                                                                | Cost       |
 | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
