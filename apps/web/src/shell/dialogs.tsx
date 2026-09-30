@@ -1,6 +1,8 @@
 import { COLOR_IDS, NOTEBOOK_ICONS, type ColorId, type NotebookIcon } from '@memora/shared';
 import { lazy, Suspense, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { HelpLink } from '../components/HelpLink';
 import { Button, Dialog, DialogContent, Field, Input, Kbd, toast } from '../components/ui';
+import { HELP } from '../lib/help';
 import { checkGroupMove } from '../notes/model';
 import { useNotes, useNotesActions } from '../notes/queries';
 import { hueStyle, sectionColor } from '../theme/sections';
@@ -417,6 +419,10 @@ function ShortcutsDialog() {
           <div className="divide-y divide-line">{EDITOR_KEYS.map((k) => row(k.keys, k.label))}</div>
         </section>
       </div>
+      <p className="mt-4 text-sm text-fg-2">
+        The editors’ own keys and more tips are in the{' '}
+        <HelpLink href={HELP.shortcuts}>user guide</HelpLink>.
+      </p>
     </DialogContent>
   );
 }

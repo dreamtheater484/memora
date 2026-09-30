@@ -11,7 +11,9 @@ import {
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCurrentUser } from '../auth/queries';
+import { HelpLink } from '../components/HelpLink';
 import { cn } from '../lib/cn';
+import { APP_VERSION, HELP } from '../lib/help';
 
 interface NavItem {
   to:
@@ -81,6 +83,12 @@ export function SettingsLayout() {
             <Outlet />
           </main>
         </div>
+        <footer className="flex flex-wrap justify-center gap-x-3 gap-y-1 pb-2 text-xs text-fg-3">
+          <span>Memora {APP_VERSION}</span>
+          <HelpLink href={HELP.guide}>User guide</HelpLink>
+          <HelpLink href={HELP.troubleshooting}>Troubleshooting</HelpLink>
+          <HelpLink href={HELP.changes}>What’s new</HelpLink>
+        </footer>
       </div>
     </div>
   );

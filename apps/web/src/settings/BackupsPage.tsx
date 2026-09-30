@@ -28,6 +28,8 @@ import { api, errorMessage } from '../lib/api';
 import { formatBytes } from '../lib/bytes';
 import { formatDateTime, formatRelative } from '../lib/time';
 import { SettingsSection } from './SettingsLayout';
+import { HelpLink } from '../components/HelpLink';
+import { HELP } from '../lib/help';
 
 /*
  * Backups (§9.14), for administrators: when they are made and how many are kept, making one
@@ -232,7 +234,13 @@ export function BackupsPage() {
     <>
       <SettingsSection
         title="Backups"
-        description="Memora backs up its database into its backup folder. Copy that folder somewhere else as well, with Hyper Backup for example."
+        description={
+          <>
+            Memora backs up its database into its backup folder. Copy that folder somewhere else as
+            well, with Hyper Backup for example.{' '}
+            <HelpLink href={HELP.backups}>Backups and restoring</HelpLink>
+          </>
+        }
         actions={
           <Button variant="primary" onClick={() => create.mutate()} disabled={create.isPending}>
             <DatabaseBackup /> {create.isPending ? 'Backing up…' : 'Back up now'}

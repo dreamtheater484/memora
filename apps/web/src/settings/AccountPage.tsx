@@ -41,6 +41,8 @@ import { ApiRequestError, errorMessage } from '../lib/api';
 import { formatDateTime, formatRelative } from '../lib/time';
 import { SettingsSection } from './SettingsLayout';
 import { NewPasswordHint } from '../auth/NewPasswordHint';
+import { HelpLink } from '../components/HelpLink';
+import { HELP } from '../lib/help';
 
 export function AccountPage() {
   return (
@@ -196,7 +198,12 @@ function TwoFactorSection() {
   return (
     <SettingsSection
       title="Two-step verification"
-      description="Logging in also asks for a code from an app on your phone, so your password alone isn’t enough."
+      description={
+        <>
+          Logging in also asks for a code from an app on your phone, so your password alone isn’t
+          enough. <HelpLink href={HELP.twoFactor}>How it works</HelpLink>
+        </>
+      }
     >
       {status.isPending ? (
         <Skeleton className="h-12" />
