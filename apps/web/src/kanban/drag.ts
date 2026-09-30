@@ -95,32 +95,53 @@ function begin(event: ReactPointerEvent, source: HTMLElement, make: () => Sessio
       }, LONG_PRESS_MS)
     : undefined;
 
+  // Once a frame: every read first (where things are), then every write (the copy's place,
+  // scrolling, the target), so the browser lays the page out once per frame.
+  let seen: { x: number; y: number } | null = null;
   const scroll = () => {
     frame = requestAnimationFrame(scroll);
     if (!session) return;
     const board = session.board;
     const r = board.getBoundingClientRect();
-    if (last.x < r.left + EDGE) board.scrollLeft -= Math.ceil((r.left + EDGE - last.x) / 3);
-    else if (last.x > r.right - EDGE) board.scrollLeft += Math.ceil((last.x - r.right + EDGE) / 3);
-    if (last.y < r.top + EDGE) board.scrollTop -= Math.ceil((r.top + EDGE - last.y) / 3);
-    else if (last.y > r.bottom - EDGE) board.scrollTop += Math.ceil((last.y - r.bottom + EDGE) / 3);
-    // A column scrolls near its own top and bottom.
-    const cell = document
-      .elementFromPoint(last.x, last.y)
-      ?.closest<HTMLElement>('[data-kb-scroll]');
+    const scrollX =
+      last.x < r.left + EDGE
+        ? -Math.ceil((r.left + EDGE - last.x) / 3)
+        : last.x > r.right - EDGE
+          ? Math.ceil((last.x - r.right + EDGE) / 3)
+          : 0;
+    const scrollY =
+      last.y < r.top + EDGE
+        ? -Math.ceil((r.top + EDGE - last.y) / 3)
+        : last.y > r.bottom - EDGE
+          ? Math.ceil((last.y - r.bottom + EDGE) / 3)
+          : 0;
+    // A column scrolls near its own top and bottom: the one the card would land in.
+    const target = useBoardDrag.getState().target;
+    const cell = target
+      ? board.querySelector<HTMLElement>(
+          `[data-kb-cell="${target.lane}|${target.columnId}"][data-kb-scroll]`,
+        )
+      : null;
+    let scrollCell = 0;
     if (cell && cell.scrollHeight > cell.clientHeight) {
       const c = cell.getBoundingClientRect();
-      if (last.y < c.top + EDGE) cell.scrollTop -= Math.ceil((c.top + EDGE - last.y) / 3);
-      else if (last.y > c.bottom - EDGE)
-        cell.scrollTop += Math.ceil((last.y - c.bottom + EDGE) / 3);
+      if (last.y < c.top + EDGE) scrollCell = -Math.ceil((c.top + EDGE - last.y) / 3);
+      else if (last.y > c.bottom - EDGE) scrollCell = Math.ceil((last.y - c.bottom + EDGE) / 3);
     }
-    session.targetAt(last.x, last.y);
+    const moved = !seen || seen.x !== last.x || seen.y !== last.y;
+    // Reads the cards' places, then sets the target.
+    if (moved || scrollX || scrollY || scrollCell) session.targetAt(last.x, last.y);
+    if (moved && ghost) {
+      ghost.style.transform = `translate(${last.x - offset.x}px, ${last.y - offset.y}px) rotate(1.5deg)`;
+    }
+    if (scrollX) board.scrollLeft += scrollX;
+    if (scrollY) board.scrollTop += scrollY;
+    if (scrollCell) cell!.scrollTop += scrollCell;
+    seen = last;
   };
 
   const move = (x: number, y: number) => {
     last = { x, y };
-    if (ghost)
-      ghost.style.transform = `translate(${x - offset.x}px, ${y - offset.y}px) rotate(1.5deg)`;
   };
 
   const onMove = (e: PointerEvent) => {
@@ -148,7 +169,10 @@ function begin(event: ReactPointerEvent, source: HTMLElement, make: () => Sessio
         pointerEvents: 'none',
         opacity: '0.95',
         boxShadow: '0 12px 28px rgb(0 0 0 / 0.22)',
+        // Its own layer: moving it doesn't repaint the board.
+        willChange: 'transform',
       });
+      ghost.style.transform = `translate(${e.clientX - offset.x}px, ${e.clientY - offset.y}px) rotate(1.5deg)`;
       document.body.append(ghost);
       document.documentElement.dataset.dragging = session.kind;
       useBoardDrag.setState({ kind: session.kind, id: session.id, height: rect.height });
@@ -176,6 +200,9 @@ function begin(event: ReactPointerEvent, source: HTMLElement, make: () => Sessio
     if (armed) e.preventDefault();
   };
 
+  // A long press is a drag here, not the browser's menu.
+  const onContextMenu = (e: Event) => e.preventDefault();
+
   // The click that ends a drag must not open the card.
   const onClick = (e: MouseEvent) => {
     e.stopPropagation();
@@ -190,6 +217,7 @@ function begin(event: ReactPointerEvent, source: HTMLElement, make: () => Sessio
     window.removeEventListener('pointercancel', cancel);
     window.removeEventListener('keydown', onKey, true);
     window.removeEventListener('touchmove', onTouchMove);
+    window.removeEventListener('contextmenu', onContextMenu, true);
     ghost?.remove();
     if (session) {
       window.addEventListener('click', onClick, { capture: true, once: true });
@@ -209,17 +237,18 @@ function begin(event: ReactPointerEvent, source: HTMLElement, make: () => Sessio
   window.addEventListener('pointercancel', cancel);
   window.addEventListener('keydown', onKey, true);
   window.addEventListener('touchmove', onTouchMove, { passive: false });
+  if (touch) window.addEventListener('contextmenu', onContextMenu, true);
 }
 
 const boardOf = (el: HTMLElement) => el.closest<HTMLElement>('[data-kb-board]');
 
-/** Starts dragging a card; `onDrop` gets where it was released. */
+/** Starts dragging a card (`source`, the card's element); `onDrop` gets where it was released. */
 export function startCardDrag(
-  event: ReactPointerEvent<HTMLElement>,
+  event: ReactPointerEvent,
+  source: HTMLElement,
   cardId: string,
   onDrop: (target: CardTarget) => void,
 ): void {
-  const source = event.currentTarget;
   begin(event, source, () => {
     const board = boardOf(source);
     if (!board) return null;

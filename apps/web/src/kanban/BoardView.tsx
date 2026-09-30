@@ -50,6 +50,7 @@ import {
   useState,
   type KeyboardEvent,
   type ReactNode,
+  type SyntheticEvent,
 } from 'react';
 import {
   Button,
@@ -94,6 +95,7 @@ import {
   deleteCard,
   deleteColumn,
   deleteLane,
+  moveBack,
   moveCard,
   projectsQuery,
   updateBoard,
@@ -642,9 +644,11 @@ function BoardGrid({
   const move = async (card: Card, target: MoveTarget) => {
     const to = board.columns.find((c) => c.id === target.columnId);
     const from = board.columns.find((c) => c.id === card.columnId);
+    // Undo knows the move at once, so Ctrl+Z right away takes back this one.
+    const entry = { card, back: moveBack(queryClient, card, target) };
+    undo.current = [...undo.current.slice(-19), entry];
     try {
-      const back = await moveCard(queryClient, card, target);
-      undo.current = [...undo.current.slice(-19), { card, back }];
+      await moveCard(queryClient, card, target);
       if (to && from && to.id !== from.id) {
         const count =
           board.cards.filter((c) => c.columnId === to.id && !c.archivedAt && c.id !== card.id)
@@ -658,6 +662,7 @@ function BoardGrid({
       }
     } catch {
       // Put back by `moveCard`, with a message.
+      undo.current = undo.current.filter((e) => e !== entry);
     }
   };
 
@@ -700,8 +705,10 @@ function BoardGrid({
       pendingFocus.current = null;
       return;
     }
+    // Only when the focus was lost with the card's old place: never away from where it went.
+    const lost = !document.activeElement || document.activeElement === document.body;
     const el = ref.current?.querySelector<HTMLElement>(`[data-kb-card="${pending.id}"]`);
-    if (el && document.activeElement !== el) el.focus();
+    if (el && lost) el.focus();
   });
   const focusCard = (id: string) => {
     setFocused(id);
@@ -931,6 +938,7 @@ function ColumnHead({ column, index }: { column: Column; index: number }) {
       <div
         data-kb-column={column.id}
         data-kb-column-head={column.id}
+        data-kb-target={highlighted ? '' : undefined}
         style={{ gridColumn: index + 1, gridRow: lanesOn ? '1' : '1 / span 2' }}
         className={cn(
           'hue flex flex-col items-center gap-2 rounded-t-xl bg-hover py-2',
@@ -964,6 +972,7 @@ function ColumnHead({ column, index }: { column: Column; index: number }) {
     <div
       data-kb-column={column.id}
       data-kb-column-head={column.id}
+      data-kb-target={highlighted ? '' : undefined}
       style={{ gridColumn: index + 1, gridRow: 1, ...(column.color ? hueStyle(column.color) : {}) }}
       className={cn(
         'hue relative flex snap-start items-center gap-1.5 rounded-t-xl bg-hover/70 py-1.5 pr-1 pl-3',
@@ -1330,25 +1339,31 @@ const Cell = memo(function Cell({
   const height = useBoardDrag((s) => s.height);
   const dragged = useBoardDrag((s) => (s.kind === 'card' ? s.id : null));
   const highlighted = useBoardDrag((s) => s.kind === 'card' && s.target?.columnId === column.id);
-  const visible = dragged ? cards.filter((c) => c.id !== dragged) : cards;
   const firstFocusable = focused ?? board.cards.find((c) => !c.archivedAt)?.id;
-  const items: ReactNode[] = visible.map((card) => (
-    <li key={card.id}>
+  // The dragged card stays in the page, hidden: a finger's touch events go to the element it
+  // pressed, and stop if that element leaves the page.
+  const items: ReactNode[] = cards.map((card) => (
+    <li key={card.id} hidden={card.id === dragged}>
       <CardFace
         card={card}
-        cardKey={keyOf(board.project, card)}
+        cardKey={card.number ? keyOf(board.project, card) : `${board.project.key}-…`}
         labels={labels}
         now={now}
         tabIndex={card.id === firstFocusable ? 0 : -1}
-        onFocus={() => setFocused(card.id)}
-        onClick={() => open(card.id)}
-        onPointerDown={(e) => startCardDrag(e, card.id, (target) => drop(card, target))}
       />
     </li>
   ));
+  // One set of handlers for the cell's cards, so a card re-renders only when it changes.
+  const cardAt = (e: SyntheticEvent) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-kb-card]');
+    const card = el && cards.find((c) => c.id === el.dataset.kbCard);
+    return card && el ? { card, el } : null;
+  };
   if (placeholder >= 0) {
+    // Before the card at that place among the others, or last.
+    const next = cards.filter((c) => c.id !== dragged)[placeholder];
     items.splice(
-      placeholder,
+      next ? cards.indexOf(next) : cards.length,
       0,
       <li
         key="placeholder"
@@ -1378,6 +1393,18 @@ const Cell = memo(function Cell({
       <ul
         aria-label={`${column.name}${lane.name ? `, ${lane.name}` : ''}`}
         className="flex flex-col gap-2"
+        onFocus={(e) => {
+          const at = cardAt(e);
+          if (at) setFocused(at.card.id);
+        }}
+        onClick={(e) => {
+          const at = cardAt(e);
+          if (at) open(at.card.id);
+        }}
+        onPointerDown={(e) => {
+          const at = cardAt(e);
+          if (at) startCardDrag(e, at.el, at.card.id, (target) => drop(at.card, target));
+        }}
       >
         {items}
       </ul>

@@ -351,14 +351,10 @@ export interface MoveTarget extends MoveCardRequest {
   patch?: UpdateCardRequest;
 }
 
-/** Moves a card on its board (or away from it), answering how to move it back. */
-export async function moveCard(
-  queryClient: QueryClient,
-  card: Card,
-  target: MoveTarget,
-): Promise<MoveTarget> {
+/** How to move a card back from a move to `target`, as the board has it now. */
+export function moveBack(queryClient: QueryClient, card: Card, target: MoveTarget): MoveTarget {
   const board = queryClient.getQueryData<BoardData>(boardKey(card.boardId));
-  const back: MoveTarget = {
+  return {
     columnId: card.columnId,
     swimlaneId: card.swimlaneId,
     beforeId: board ? nextCard(board, card) : null,
@@ -371,7 +367,16 @@ export async function moveCard(
         }
       : {}),
   };
-  await optimistic(
+}
+
+/** Moves a card on its board (or away from it), answering how to move it back. */
+export async function moveCard(
+  queryClient: QueryClient,
+  card: Card,
+  target: MoveTarget,
+): Promise<MoveTarget> {
+  const back = moveBack(queryClient, card, target);
+  const moved = await optimistic(
     queryClient,
     card.boardId,
     (data) => {
@@ -402,6 +407,10 @@ export async function moveCard(
     },
   );
   void queryClient.invalidateQueries({ queryKey: cardKey(card.id) });
+  // To another board: that board's copy here is out of date (the server tells only the others).
+  if (moved.boardId !== card.boardId) {
+    void queryClient.invalidateQueries({ queryKey: ['kanban', 'board', moved.boardId] });
+  }
   return back;
 }
 
