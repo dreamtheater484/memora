@@ -64,7 +64,8 @@ export function packageDirOf(file) {
     const manifest = path.join(dir, 'package.json');
     if (existsSync(manifest)) {
       const pkg = JSON.parse(readFileSync(manifest, 'utf8'));
-      if (pkg.name && pkg.version) return dir;
+      // In the platform's own form (the search above works with forward slashes).
+      if (pkg.name && pkg.version) return path.normalize(dir);
     }
     const up = path.posix.dirname(dir);
     if (up === dir) break;
