@@ -30,6 +30,8 @@ assets/<sha256>.<ext>                                                     # the 
 assets/index.json
 tags.json
 templates/<template-id>.json                                              # "everything" only
+kanban/projects/<project-id>.json                                         # "everything" only
+kanban/boards/<board-id>.json                                             # "everything" only
 ```
 
 Paths use `/`, and ids are UUIDs (version 7). Folders exist only through the files in them.
@@ -52,7 +54,10 @@ Written last, so it can list every other file.
     "pages": 37,
     "assets": 5,
     "templates": 0,
-    "versions": 120
+    "versions": 120,
+    "projects": 0,
+    "boards": 0,
+    "cards": 0
   },
   "sha256": {
     "notebooks/0190c0de-…/notebook.json": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
@@ -113,6 +118,27 @@ On import each file gets a new id, and the pages' `asset:` references are change
 **`tags.json`**: the tags the exported pages use, with their colours: `[{ "name": "Urgent", "color": "coral" }]` (`color` may be null). Tags are matched by name, whatever the case: an imported tag that exists already is reused.
 
 **`templates/<id>.json`**: page templates (only in an export of everything): `id`, `name`, `type`, `content` (like a page's), `createdAt`, `updatedAt`.
+
+## Kanban
+
+An export of everything also holds the user's Kanban projects and boards. (`projects`, `boards` and `cards` in the manifest's counts appear only then.)
+
+**`kanban/projects/<id>.json`**: `id`, `name`, `key` (2 to 10 capital letters or digits, starting with a letter: the start of every card's key, like `WEB-42`), `color`, `icon`, `sortKey`, `archivedAt` (null unless archived), `nextCardNumber`, `createdAt`, `updatedAt`, and `labels`: `[{ "id", "name", "color" }]`. Labels belong to the project, and its boards share them.
+
+**`kanban/boards/<id>.json`**: a board with everything on it:
+
+- `id`, `projectId`, `name`, `description`, `sortKey`, `archivedAt`, `createdAt`, `updatedAt`, and `settings`: `{ "lanes": "none" | "custom" | "priority" | "label" }`.
+- `columns`: `id`, `name`, `color` (or null), `wipLimit` (or null), `wipStrict`, `isDone`, `collapsed`, `sort` (`manual`, `due`, `priority` or `created`), `sortKey`, `archivedAt`.
+- `swimlanes`: the board's own lanes: `id`, `name`, `color`, `collapsed`, `sortKey`.
+- `cards`: `id`, `columnId`, `swimlaneId` (or null), `number`, `title`, `description` (Markdown; files as `asset:<asset-id>`), `priority` (`none`, `low`, `medium`, `high` or `urgent`), `startDate` and `dueDate` (`YYYY-MM-DD`, or null), `coverColor`, `sortKey`, `completedAt`, `archivedAt`, `createdAt`, `updatedAt`, and what the card holds:
+  - `labelIds`: the project's labels on it;
+  - `checklists`: `[{ "title", "sortKey", "items": [{ "text", "done", "sortKey" }] }]`;
+  - `comments`: `[{ "author", "body", "createdAt", "editedAt" }]` (`author` is a display name, for information);
+  - `pageIds`: the linked notes (pages in the same archive);
+  - `attachments`: the ids of its files, in `assets/index.json` like the pages' files;
+  - `activity`: `[{ "type", "payload", "createdAt" }]`, the card's history.
+
+A card's place in its column comes from its `sortKey`, whatever its lane. On import, everything gets new ids; linked notes and files follow their pages and files, and links to pages that aren't in the archive are dropped. A project whose key the importing user already has gets a free one (`WEB2`, `WEB3`, …); card numbers stay as they were. Comments become the importing user's.
 
 ## History
 
