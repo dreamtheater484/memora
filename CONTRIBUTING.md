@@ -139,9 +139,18 @@ docs/             Plan, setup guide, architecture, decision records
 - Replace the value with a **placeholder**: `<nas-ip>`, `<your-user>`, `notes.example.com`, `/volume1/docker/memora`.
 - If a line genuinely needs a generic match (for example documentation that explains a pattern), add `privacy-check: allow` to that line. This never bypasses your personal block list.
 - Run the checks yourself at any time with `pnpm check:privacy`.
-- For build output or image contents, which contain third-party code, use `node scripts/check-forbidden.mjs --personal-only <files>`.
+- For build output, which contains third-party code, use `node scripts/check-forbidden.mjs --personal-only <files>`.
+- For a Docker image, use `node scripts/check-image.mjs <image>`. It checks the image's build history, labels and Memora's own files for build-machine paths, and every file for your longer personal strings. CI runs it too, without your list.
 
 Never skip hooks with `--no-verify`. CI runs the same checks and will reject the change anyway.
+
+## Screenshots for the documentation
+
+The pictures in `docs/images` come from a real Memora filled with the demo dataset (`scripts/demo/content.mjs`). To take them again after the interface changed:
+
+```bash
+docker build -f docker/Dockerfile -t memora:local . && node scripts/demo/screenshots.mjs memora:local
+```
 
 ## Coding guidelines
 

@@ -4,7 +4,7 @@
 
 services:
   memora:
-    image: ghcr.io/dreamtheater484/memora:edge
+    image: ghcr.io/dreamtheater484/memora:latest # or :0.9 for fixes only, :edge for every change (docs/UPGRADE.md)
     # To build from a checkout of the repository instead (keep this file in its docker/ folder):
     # build:
     #   context: ..
