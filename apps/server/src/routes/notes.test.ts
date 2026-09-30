@@ -516,4 +516,43 @@ describe('settings', () => {
     );
     expect((await refused('PATCH', '/api/v1/settings', {})).code).toBe('invalid_request');
   });
+
+  it('keep workspace layouts, full-width pages and the line length (§9.12)', async () => {
+    const page = uuidv7();
+    const layout = {
+      name: 'Planning',
+      panes: [
+        {
+          tabs: [
+            { kind: 'board', target: uuidv7() },
+            { kind: 'backlinks', target: null },
+          ],
+          active: 1,
+        },
+      ],
+      sizes: [60, 40],
+    };
+    const res = await ok<{ ui: unknown; editor: unknown }>('PATCH', '/api/v1/settings', {
+      ui: { layouts: [layout], fullWidth: [page] },
+      editor: { lineLength: 90 },
+    });
+    expect(res.ui).toEqual({ layouts: [layout], fullWidth: [page] });
+    expect(res.editor).toEqual({ lineLength: 90 });
+    const bad = [
+      { ui: { layouts: [{ ...layout, name: '' }] } },
+      {
+        ui: {
+          layouts: [{ ...layout, panes: [{ tabs: [{ kind: 'video', target: null }], active: 0 }] }],
+        },
+      },
+      { ui: { layouts: [{ ...layout, panes: Array(4).fill(layout.panes[0]) }] } },
+      { ui: { fullWidth: ['not-an-id'] } },
+      { editor: { lineLength: 400 } },
+    ];
+    for (const body of bad) {
+      expect((await refused('PATCH', '/api/v1/settings', body)).code, JSON.stringify(body)).toBe(
+        'invalid_request',
+      );
+    }
+  });
 });
