@@ -235,6 +235,17 @@ export class BackupService {
     return drop;
   }
 
+  /**
+   * The desktop app is usually closed at the scheduled time (03:00): when the newest backup
+   * is more than a day old, it takes the scheduled one it missed. Answers the backup, if any.
+   */
+  async catchUp(): Promise<BackupInfo | null> {
+    if (!this.config.backupSchedule) return null;
+    const newest = Math.max(0, ...(await this.list()).map((backup) => backup.createdAt));
+    if (this.now() - newest < DAY) return null;
+    return this.create('scheduled');
+  }
+
   // Scheduling
 
   start(): void {

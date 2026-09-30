@@ -160,6 +160,11 @@ export interface MeResponse {
    * browser kept of the data before is then out of date (§9.14).
    */
   dataId?: string;
+  /**
+   * Memora runs in the desktop app (Phase 14): one person, no passwords. The app hides what
+   * belongs to a server: logging out, passwords, two-step verification, users and devices.
+   */
+  desktop?: boolean;
 }
 
 /** Returned by setup, login and password changes (which rotate the session). */

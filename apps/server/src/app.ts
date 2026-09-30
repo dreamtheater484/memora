@@ -177,6 +177,19 @@ export async function buildApp({
     return reply.code(500).send(new ApiError(500, 'internal', 'Something went wrong.').toBody());
   });
 
+  if (config.desktop) {
+    // The desktop app listens on this computer only. A web page elsewhere could still point a
+    // name of its own at 127.0.0.1 ("DNS rebinding"): only this address is answered.
+    const hosts = new Set([`127.0.0.1:${config.port}`, `localhost:${config.port}`]);
+    app.addHook('onRequest', async (request, reply) => {
+      if (!hosts.has(request.headers.host ?? '')) {
+        return reply
+          .code(421)
+          .send(new ApiError(421, 'forbidden', 'Memora answers on this computer only.').toBody());
+      }
+    });
+  }
+
   registerAuth(app, auth, config, now);
 
   // Security headers on every answer (§11). Routes that set a stricter policy keep theirs.
@@ -282,15 +295,22 @@ export async function buildApp({
       app.log.warn({ err: error }, 'maintenance failed');
     }
   };
+  // The desktop app catches up on the backup it missed while it was closed, a minute in.
+  let catchUp: NodeJS.Timeout | undefined;
   app.addHook('onReady', async () => {
     await jobs.prepare();
     runMaintenance();
     maintenance = setInterval(runMaintenance, MAINTENANCE_INTERVAL_MS);
     maintenance.unref();
     backups.start();
+    if (config.desktop) {
+      catchUp = setTimeout(() => void backups.catchUp().catch(() => undefined), 60_000);
+      catchUp.unref();
+    }
   });
   app.addHook('onClose', async () => {
     clearInterval(maintenance);
+    clearTimeout(catchUp);
     backups.stop();
   });
 

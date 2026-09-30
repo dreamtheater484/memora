@@ -52,13 +52,21 @@ export interface RouteDeps {
   now: () => number;
 }
 
+/** Passwords and first-run setup don't exist in the desktop app. */
+const notInDesktop = () =>
+  new ApiError(404, 'not_found', 'The Memora app signs you in by itself: there are no passwords.');
+
 /** Routes with `access: 'user'` or `'admin'` only run with a session (checked in the hook). */
 export function authOf(request: FastifyRequest): AuthContext {
   if (!request.auth) throw new Error('route needs access: user or admin');
   return request.auth;
 }
 
-export function authRoutes(app: FastifyInstance, { auth, repos, dataId }: RouteDeps): void {
+/** A path in this app to go to after signing in: never another site (`//host`, `/\\host`). */
+const localPath = (value: unknown) =>
+  typeof value === 'string' && /^\/(?![/\\])/.test(value) ? value : '/';
+
+export function authRoutes(app: FastifyInstance, { auth, repos, dataId, config }: RouteDeps): void {
   const signedIn = (
     request: FastifyRequest,
     reply: FastifyReply,
@@ -75,10 +83,26 @@ export function authRoutes(app: FastifyInstance, { auth, repos, dataId }: RouteD
       user: current ? auth.currentUser(current.user) : null,
       csrfToken: current ? csrfTokenFor(current.token) : null,
       ...(current ? { dataId: dataId() } : {}),
+      ...(config.desktop ? { desktop: true } : {}),
     } satisfies MeResponse;
   });
 
+  if (config.desktop) {
+    // The desktop app's window opens this with the secret it started Memora with, and lands
+    // in the app signed in (Phase 14). There are no passwords to log in with.
+    app.get<{ Querystring: { token?: string; next?: string } }>(
+      '/api/v1/auth/desktop',
+      { config: { access: 'public' } },
+      async (request, reply) => {
+        const result = auth.desktopSession(request.query.token ?? '', requestMeta(request));
+        app.sessionCookies.set(request, reply, result);
+        return reply.redirect(localPath(request.query.next), 303);
+      },
+    );
+  }
+
   app.post('/api/v1/auth/setup', { config: { access: 'public' } }, async (request, reply) => {
+    if (config.desktop) throw notInDesktop();
     const body = parse(setupRequestSchema, request.body);
     const result = await auth.setup(body, requestMeta(request));
     request.log.info({ userId: result.user.id }, 'first admin account created');
@@ -86,6 +110,7 @@ export function authRoutes(app: FastifyInstance, { auth, repos, dataId }: RouteD
   });
 
   app.post('/api/v1/auth/login', { config: { access: 'public' } }, async (request, reply) => {
+    if (config.desktop) throw notInDesktop();
     const body = parse(loginRequestSchema, request.body);
     const result = await auth.login(body, requestMeta(request));
     if ('ticket' in result) {

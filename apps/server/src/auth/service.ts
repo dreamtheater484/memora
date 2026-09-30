@@ -105,7 +105,36 @@ export class AuthService {
   }
 
   isSetupRequired(): boolean {
-    return this.repos.users.count() === 0;
+    return this.config.desktop === null && this.repos.users.count() === 0;
+  }
+
+  /**
+   * The desktop app's owner (Phase 14): made on the first start, as an admin without a
+   * password (the stored value can't match any password; the window signs in with the
+   * launch secret instead).
+   */
+  ensureDesktopOwner(): UserRow {
+    const existing = this.repos.users.firstActiveAdmin();
+    if (existing) return existing;
+    const name = this.config.desktop?.name ?? 'Me';
+    const user = this.repos.users.create({
+      username: 'me',
+      displayName: name,
+      passwordHash: '!desktop',
+      role: 'admin',
+      mustChangePassword: false,
+    });
+    this.repos.audit.record('setup_completed', { userId: user.id, username: user.username });
+    return user;
+  }
+
+  /** Signs the desktop app's window in, when it presents the secret it started Memora with. */
+  desktopSession(token: string, meta: RequestMeta): NewSessionResult {
+    const expected = this.config.desktop?.token;
+    if (!expected || !safeEqual(token, expected)) {
+      throw new ApiError(403, 'forbidden', 'This link only works in the Memora app.');
+    }
+    return this.createSession(this.ensureDesktopOwner(), true, meta);
   }
 
   /** Returns the setup code to print when the instance has no users yet, else null. */

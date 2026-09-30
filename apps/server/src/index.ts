@@ -10,6 +10,14 @@ import { runMigrations } from './db/migrate';
 import { migrationsDir } from './paths';
 import { APP_VERSION } from './version';
 
+/** Electron gives its utility processes a port to talk to the app (apps/desktop). */
+type DesktopProcess = NodeJS.Process & {
+  parentPort?: {
+    on(event: 'message', listener: (event: { data: unknown }) => void): void;
+    postMessage(message: unknown): void;
+  };
+};
+
 /** Exit code asking to be started again (after a restore): Docker's restart policy does. */
 const RESTART_EXIT_CODE = 75;
 
@@ -63,6 +71,7 @@ async function main(): Promise<void> {
       );
     }
     ensureInstanceMeta(db, APP_VERSION);
+    if (config.desktop) app.authService.ensureDesktopOwner();
     const indexed = indexAllLinksOnce(db);
     if (indexed > 0) app.log.info({ pages: indexed }, 'links between pages indexed');
   } catch (error) {
@@ -84,9 +93,16 @@ async function main(): Promise<void> {
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
   requestRestart = () => void shutdown('restart');
+  // In the desktop app, Memora runs as Electron's utility process: the app asks it to stop
+  // (Windows has no SIGTERM), and is told when it is ready.
+  const parent = (process as DesktopProcess).parentPort;
+  parent?.on('message', (event) => {
+    if (event.data === 'shutdown') void shutdown('SIGTERM');
+  });
 
   await app.listen({ host: config.host, port: config.port });
   app.log.info({ version: APP_VERSION, dataDir: config.dataDir }, 'Memora is running');
+  parent?.postMessage({ type: 'ready', port: config.port });
 
   const setupCode = app.authService.startSetupIfNeeded();
   if (setupCode) {
