@@ -11,7 +11,7 @@ import {
   type Priority,
 } from '@memora/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useSearch } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import {
   Archive,
   ArchiveRestore,
@@ -75,14 +75,16 @@ const heading =
 export default function CardPanel({
   cardId,
   board,
+  focus,
   onClose,
 }: {
   cardId: string;
   board: BoardData;
+  /** What to focus first: `title`, `labels` or `due`. */
+  focus?: string;
   onClose: () => void;
 }) {
   const { data: detail, error } = useQuery(cardQuery(cardId));
-  const search = useSearch({ strict: false }) as { focus?: string };
   const ref = useRef<HTMLDivElement>(null);
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -126,13 +128,8 @@ export default function CardPanel({
       onKeyDown={onKeyDown}
       className="flex min-h-0 flex-1 flex-col overflow-y-auto outline-none"
     >
-      <Header
-        detail={detail}
-        board={board}
-        onClose={onClose}
-        focusTitle={search.focus === 'title'}
-      />
-      <Properties detail={detail} board={board} focus={search.focus} />
+      <Header detail={detail} board={board} onClose={onClose} focusTitle={focus === 'title'} />
+      <Properties detail={detail} board={board} focus={focus} />
       <Description detail={detail} />
       <Checklists detail={detail} />
       <LinkedNotes detail={detail} boardId={board.board.id} />

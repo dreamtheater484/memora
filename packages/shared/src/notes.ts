@@ -313,6 +313,47 @@ export const MAX_FAVORITES = 200;
 const place = z.object({ type: z.enum(PLACE_TYPES), id: idSchema });
 export type Place = z.infer<typeof place>;
 
+/*
+ * The workspace on wide screens (§9.12): panes beside the main one, each with tabs. A layout
+ * is saved per device class on the device; named layouts follow the user.
+ */
+
+/** What a pane's tab shows. */
+export const PANE_KINDS = ['page', 'board', 'search', 'backlinks', 'history'] as const;
+export type PaneKind = (typeof PANE_KINDS)[number];
+/** Panes beside the main one, at most. */
+export const MAX_PANES = 3;
+/** Tabs in one pane, at most. */
+export const MAX_TABS = 12;
+/** Named layouts a user may keep. */
+export const MAX_LAYOUTS = 20;
+
+export const paneTabSchema = z.object({
+  kind: z.enum(PANE_KINDS),
+  /** A page or board id, a search; for backlinks and history, null follows the main pane. */
+  target: z.string().max(200).nullable(),
+});
+export type PaneTabSpec = z.infer<typeof paneTabSchema>;
+
+export const workspaceLayoutSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  panes: z
+    .array(
+      z.object({
+        tabs: z.array(paneTabSchema).max(MAX_TABS),
+        active: z
+          .number()
+          .int()
+          .min(0)
+          .max(MAX_TABS - 1),
+      }),
+    )
+    .max(MAX_PANES),
+  /** Shares of the width, the main pane first. */
+  sizes: z.array(z.number().positive().max(100)).max(MAX_PANES + 1),
+});
+export type WorkspaceLayout = z.infer<typeof workspaceLayoutSchema>;
+
 export const uiStateSchema = z
   .object({
     lastSectionId: idSchema.nullable(),
@@ -329,6 +370,10 @@ export const uiStateSchema = z
     sectionTemplates: z
       .record(idSchema, z.string().max(64).nullable())
       .refine((v) => Object.keys(v).length <= 1000),
+    /** Pages shown at the full width of their pane instead of a readable width (§9.12). */
+    fullWidth: z.array(idSchema).max(1000),
+    /** Named workspace layouts ("Writing", "Planning"). */
+    layouts: z.array(workspaceLayoutSchema).max(MAX_LAYOUTS),
   })
   .partial();
 export type UiState = z.infer<typeof uiStateSchema>;
@@ -362,6 +407,8 @@ export const editorSettingsSchema = z
     downscaleImages: z.boolean(),
     /** The longest side, in pixels, of a downscaled image. */
     maxImageEdge: z.number().int().min(640).max(8192),
+    /** Text stops at this many characters a line, unless a page is full width (§9.12). */
+    lineLength: z.number().int().min(60).max(120),
   })
   .partial();
 export type EditorSettings = z.infer<typeof editorSettingsSchema>;
@@ -380,6 +427,7 @@ export const DEFAULT_EDITOR_SETTINGS: Required<EditorSettings> = {
   pageView: 'off',
   downscaleImages: false,
   maxImageEdge: 2560,
+  lineLength: 80,
 };
 
 export interface Settings {

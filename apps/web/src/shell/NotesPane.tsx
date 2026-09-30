@@ -1,12 +1,10 @@
 import type { PageMeta } from '@memora/shared';
 import {
-  ArrowLeftRight,
   Copy,
   Ellipsis,
   FileClock,
   FilePlus,
   FileQuestion,
-  FileText,
   FolderInput,
   LayoutTemplate,
   Link2,
@@ -19,7 +17,6 @@ import {
   SquareKanban,
   Star,
   Trash2,
-  X,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
@@ -29,6 +26,7 @@ import {
   EmptyState,
   IconButton,
   Menu,
+  MenuCheckboxItem,
   MenuContent,
   MenuItem,
   MenuSeparator,
@@ -38,11 +36,10 @@ import {
 import { cn } from '../lib/cn';
 import { useFocusOnMount } from '../lib/useFocusOnMount';
 import { formatDateTime, formatRelative } from '../lib/time';
-import { isFavorite, toggleFavorite } from '../notes/places';
+import { isFavorite, toggleFavorite, toggleFullWidth } from '../notes/places';
 import { useNotesActions, useUiState } from '../notes/queries';
 import type { PageDoc } from '../sync/doc';
 import { usePageDoc } from '../sync/hooks';
-import { hueStyle } from '../theme/sections';
 import { useCommands } from './commands';
 import { ConvertDialog } from './ConvertDialog';
 import { useCurrent, useGo } from './location';
@@ -143,6 +140,12 @@ function PageHead({ page, doc }: { page: PageMeta; doc: PageDoc | null }) {
               <MenuItem icon={<Link2 />} onSelect={copyLink}>
                 Copy link
               </MenuItem>
+              <MenuCheckboxItem
+                checked={!!ui.fullWidth?.includes(page.id)}
+                onCheckedChange={() => toggleFullWidth(queryClient, ui, page.id)}
+              >
+                Full width
+              </MenuCheckboxItem>
               <MenuSeparator />
               <MenuItem
                 icon={<FolderInput />}
@@ -296,65 +299,6 @@ export function NotesPane() {
           />
         )}
       </div>
-    </section>
-  );
-}
-
-/** Second editor pane (ultra-wide): another page open beside the main one. */
-export function SecondPane() {
-  const { index } = useCurrent();
-  const { secondPageId, setSecondPane } = useShell();
-  const go = useGo();
-  const page = secondPageId ? index.page.get(secondPageId) : undefined;
-  const section = page ? index.section.get(page.sectionId) : undefined;
-  const doc = usePageDoc(page?.id ?? null);
-  return (
-    <section aria-label="Second pane" className="flex h-full min-h-0 flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line pr-2.5 pl-4 text-sm whitespace-nowrap text-fg-2">
-        {page && section ? (
-          <>
-            <span className="hue flex items-center gap-2" style={hueStyle(section.color)}>
-              <span aria-hidden className="size-2 rounded-full bg-sec" />
-              {section.name}
-            </span>
-            <span aria-hidden>›</span>
-            <b className="truncate font-semibold text-fg">{page.title || 'Untitled page'}</b>
-          </>
-        ) : (
-          <b className="font-semibold text-fg">Second pane</b>
-        )}
-        <span className="flex-1" />
-        {page && <PageSaveIndicator page={page} doc={doc} compact />}
-        {page && (
-          <IconButton
-            label="Open in the main pane"
-            icon={<ArrowLeftRight />}
-            onClick={() => go.page(page.id)}
-          />
-        )}
-        <IconButton label="Close pane" icon={<X />} onClick={() => setSecondPane(false, null)} />
-      </div>
-      {page ? (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="shrink-0 px-5 pt-5 pb-2">
-            <h2 className="font-display text-[1.75rem] leading-tight font-semibold tracking-tight">
-              {page.title || 'Untitled page'}
-            </h2>
-            <p className="text-sm text-fg-3">
-              {section?.name} · edited {formatRelative(page.updatedAt)}
-            </p>
-          </div>
-          <div className="min-h-0 flex-1">
-            <PageBody key={page.id} page={page} doc={doc} compact />
-          </div>
-        </div>
-      ) : (
-        <EmptyState
-          icon={<FileText />}
-          title="Nothing open here"
-          description="Right-click a page in the page list and choose “Open in the second pane” to read it beside the main one."
-        />
-      )}
     </section>
   );
 }

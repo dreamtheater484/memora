@@ -4,6 +4,7 @@
   "private": true,
   "description": "Code shared by the Memora server and web app: schemas, types and pure helpers.",
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": "./src/index.ts"
   },

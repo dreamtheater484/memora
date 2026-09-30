@@ -24,7 +24,8 @@ export type ShortcutId =
   | 'shortcuts'
   | 'search'
   | 'back'
-  | 'forward';
+  | 'forward'
+  | 'split-pane';
 
 /**
  * Where a shortcut works: anywhere (even while typing), anywhere but in a text field, or only
@@ -62,6 +63,14 @@ export const SHORTCUTS: readonly Shortcut[] = [
       !e.altKey &&
       !e.shiftKey &&
       (letter(e, 'K') || (letter(e, 'P') && inEditor(e.target))),
+  },
+  {
+    id: 'split-pane',
+    keys: 'Mod \\',
+    label: 'Open the page in a new pane (wide screens)',
+    group: 'General',
+    scope: 'global',
+    match: (e) => mod(e) && !e.altKey && !e.shiftKey && e.code === 'Backslash',
   },
   {
     id: 'search',
@@ -144,20 +153,21 @@ export const SHORTCUTS: readonly Shortcut[] = [
     match: (e) => e.key === 'Delete' && plain(e) && !e.shiftKey,
   },
   {
+    // Not Tab: in the page list that kept the keyboard from ever leaving it (Phase 11 audit).
     id: 'indent',
-    keys: 'Tab',
+    keys: 'Alt Shift ArrowRight',
     label: 'Make a subpage (indent)',
     group: 'Pages',
     scope: 'page-list',
-    match: (e) => e.key === 'Tab' && plain(e) && !e.shiftKey,
+    match: (e) => e.altKey && e.shiftKey && !mod(e) && e.key === 'ArrowRight',
   },
   {
     id: 'outdent',
-    keys: 'Shift Tab',
+    keys: 'Alt Shift ArrowLeft',
     label: 'Move out a level (outdent)',
     group: 'Pages',
     scope: 'page-list',
-    match: (e) => e.key === 'Tab' && plain(e) && e.shiftKey,
+    match: (e) => e.altKey && e.shiftKey && !mod(e) && e.key === 'ArrowLeft',
   },
   {
     id: 'move-up',

@@ -44,6 +44,13 @@ const PAGE_VIEWS: { value: PageView; label: string }[] = [
   { value: 'letter', label: 'Letter page' },
 ];
 
+const LINE_LENGTHS = [
+  { value: '70', label: 'Narrow (70 characters)' },
+  { value: '80', label: 'Medium (80 characters)' },
+  { value: '90', label: 'Wide (90 characters)' },
+  { value: '100', label: 'Widest (100 characters)' },
+];
+
 const VIEW_MODES: { value: ViewMode; label: string }[] = [
   { value: 'source', label: 'Source' },
   { value: 'split', label: 'Split' },
@@ -127,6 +134,23 @@ export function EditingPage() {
               value={String(settings.tabSize)}
               onValueChange={(value) => save({ tabSize: Number(value) })}
               options={[2, 4, 8].map((n) => ({ value: String(n), label: `${n} spaces` }))}
+            />
+          )}
+        />
+      </SettingsSection>
+      <SettingsSection
+        title="Line length"
+        description="Text stops at a readable width, so lines don't run across a wide screen. A page can be shown at full width from its menu."
+      >
+        <Row
+          label="Longest line"
+          control={(id) => (
+            <Select
+              id={id}
+              aria-label="Longest line"
+              value={String(settings.lineLength)}
+              onValueChange={(value) => save({ lineLength: Number(value) })}
+              options={LINE_LENGTHS}
             />
           )}
         />

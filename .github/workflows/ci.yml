@@ -52,6 +52,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - name: Initial JavaScript within budget (§14)
+        run: node scripts/bundle-size.mjs
 
   e2e:
     name: Visual & accessibility (Playwright)

@@ -34,7 +34,6 @@ import {
 } from '../components/ui';
 import { cn } from '../lib/cn';
 import { dropSpot, startDrag } from '../lib/dnd';
-import { useMediaQuery } from '../lib/useMediaQuery';
 import { useNow } from '../lib/useNow';
 import { formatDateTime, formatRelative } from '../lib/time';
 import { indentPlace, outdentPlace, type PageRow } from '../notes/model';
@@ -47,6 +46,8 @@ import { DropIndicator, InlineRename } from './parts';
 import { shortcutKeys } from './shortcuts';
 import { useShell } from './store';
 import { useFileDrop } from '../transfer/drop';
+import { openInPane } from '../workspace/actions';
+import { useDeviceClass } from '../workspace/store';
 
 interface PageNode extends TreeNode {
   page: PageMeta;
@@ -118,7 +119,7 @@ function PageMenu({ pageId }: { pageId: string }) {
   const { index } = useCurrent();
   const commands = useCommands();
   const go = useGo();
-  const ultra = useMediaQuery('(min-width: 200rem)');
+  const cls = useDeviceClass();
   const selection = useShell((s) => s.selection);
   const page = index.page.get(pageId);
   if (!page) return null;
@@ -138,12 +139,12 @@ function PageMenu({ pageId }: { pageId: string }) {
           >
             New subpage
           </ContextMenuItem>
-          {ultra && (
+          {cls && (
             <ContextMenuItem
               icon={<PanelRight />}
-              onSelect={() => useShell.getState().setSecondPane(true, pageId)}
+              onSelect={() => openInPane(cls, { kind: 'page', target: pageId })}
             >
-              Open in the second pane
+              Open in a pane
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />
@@ -163,7 +164,7 @@ function PageMenu({ pageId }: { pageId: string }) {
       )}
       <ContextMenuItem
         icon={<IndentIncrease />}
-        shortcut="Tab"
+        shortcut={shortcutKeys('indent')}
         disabled={!indentPlace(index, ids[0]!)}
         onSelect={() => commands.movePagesTo(ids, indentPlace(index, ids[0]!)!)}
       >
@@ -171,7 +172,7 @@ function PageMenu({ pageId }: { pageId: string }) {
       </ContextMenuItem>
       <ContextMenuItem
         icon={<IndentDecrease />}
-        shortcut="Shift Tab"
+        shortcut={shortcutKeys('outdent')}
         disabled={!outdentPlace(index, ids[0]!)}
         onSelect={() => commands.movePagesTo(ids, outdentPlace(index, ids[0]!)!)}
       >

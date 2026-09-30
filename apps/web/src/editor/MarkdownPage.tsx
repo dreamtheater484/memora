@@ -260,6 +260,8 @@ export default memo(function MarkdownPage({ page, doc, compact, autoFocus }: Mar
               // Contained: layout work in one column never spreads to the other, which on a
               // long page would make every scroll in the editor re-lay out the whole preview.
               'min-h-0 min-w-0 flex-1 pt-3 [contain:strict] [&_.cm-scroller]:px-(--page-pad)',
+              // A readable width, centred (§9.12).
+              '[&_.cm-content]:mx-auto [&_.cm-content]:max-w-(--measure)',
               mode === 'split' && 'border-r border-line',
             )}
           >
@@ -284,7 +286,7 @@ export default memo(function MarkdownPage({ page, doc, compact, autoFocus }: Mar
               <Preview
                 text={text}
                 onToggleTask={toggle}
-                className={cn(mode === 'preview' && 'max-w-[47.5rem]', compact && 'text-sm')}
+                className={cn('mx-auto max-w-(--measure)', compact && 'text-sm')}
               />
             </PreviewHostContext.Provider>
           </div>

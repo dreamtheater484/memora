@@ -63,6 +63,14 @@ const TREE_WRITE_MS = 1_000;
 const UNSTORED_PREFIX = 'memora.unstored.';
 /** The service worker's cache of files in pages (sw.js). */
 const FILES_CACHE = 'memora-files';
+/** The "keep every page" setting of this device (sync/keepAll.ts). */
+const keepAllOn = () => {
+  try {
+    return localStorage.getItem('memora.offline.keepAll') === '1';
+  } catch {
+    return false;
+  }
+};
 
 export interface EngineOptions {
   /** The server ended the session. */
@@ -206,7 +214,8 @@ export class SyncEngine implements SenderHost, DocHost, LiveHost {
     this.post({ t: 'hello' });
     this.live = new Live(this);
     this.live.start();
-    void this.store.trim(CACHED_PAGES).catch(() => undefined);
+    // "Keep every page on this device" keeps them all; otherwise the ones opened lately.
+    if (!keepAllOn()) void this.store.trim(CACHED_PAGES).catch(() => undefined);
     void this.sender.kick();
     this.sweepTimer = setInterval(() => void this.sender.kick(), SWEEP_MS);
   }

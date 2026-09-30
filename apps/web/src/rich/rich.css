@@ -9,7 +9,10 @@
 
 /* The page: fitting the pane, or a sheet of A4 or Letter paper. */
 .rich-sheet {
-  max-width: 47.5rem;
+  /* A readable width, centred (§9.12); the padding comes on top. */
+  box-sizing: content-box;
+  max-width: var(--measure, 80ch);
+  margin-inline: auto;
   padding: 1rem var(--page-pad) 30vh;
 }
 [data-page-view='a4'] [data-rich-scroll],

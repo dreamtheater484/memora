@@ -2,7 +2,8 @@
  * Memora's service worker (§9.6, D26): keeps the app itself on the device, so it opens
  * without a connection. Notes never pass through here: the app keeps those in IndexedDB.
  *
- * - Pages (navigations): network first, the kept app after 3 s or when offline.
+ * - Pages (navigations): network first, the kept app after 3 s or when offline (or an
+ *   offline page, when not even the app is kept).
  * - Built files (/assets/…, content-hashed): from the cache, fetched once otherwise.
  * - Images and files in pages (/api/v1/assets/…): kept once loaded, since an id always
  *   names the same bytes; the app empties this cache when the user signs out.
@@ -19,8 +20,14 @@ const NETWORK_TIMEOUT_MS = 3000;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE.urls)));
-  // No skipWaiting: open tabs keep the version they started with (and its lazy files) until
-  // they close, and the next start uses the new one.
+  // No skipWaiting here: open tabs keep the version they started with (and its lazy files)
+  // until they close, and the next start uses the new one, unless someone chooses to update
+  // now (below).
+});
+
+// "Reload to update" in the app: this version takes over at once.
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -65,7 +72,8 @@ async function navigate(request) {
     }
     return response;
   } catch {
-    return (await cache.match(SHELL)) ?? Response.error();
+    // The kept app, or a page saying the server can't be reached.
+    return (await cache.match(SHELL)) ?? (await cache.match('/offline.html')) ?? Response.error();
   }
 }
 

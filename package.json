@@ -23,6 +23,7 @@
     "test:visual": "node scripts/visual.mjs",
     "test:visual:update": "node scripts/visual.mjs --update-snapshots",
     "check:privacy": "node scripts/check-forbidden.mjs && node scripts/check-git-identity.mjs",
+    "check:bundle": "node scripts/bundle-size.mjs",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm check:privacy",
     "db:generate": "pnpm --filter @memora/server db:generate",
     "docker:build": "docker build -f docker/Dockerfile -t memora:local .",
