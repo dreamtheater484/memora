@@ -26,6 +26,7 @@ import { useCurrent, useGo } from './location';
 import { DropIndicator, InlineRename } from './parts';
 import { SectionMenuItems } from './Sidebar';
 import { useShell } from './store';
+import { useFileDrop } from '../transfer/drop';
 
 const tabClass = (selected: boolean) =>
   cn(
@@ -232,6 +233,12 @@ export function SectionBar({ panelId }: { panelId: string }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [overflowing, setOverflowing] = useState(false);
   const [menuTarget, setMenuTarget] = useState<string | null>(null);
+  const drop = useFileDrop(
+    (e) =>
+      (e.target as HTMLElement).closest<HTMLElement>('[data-tab-kind="section"]')?.dataset.tabId ??
+      null,
+    (id) => go.page(id),
+  );
 
   const sections: Section[] = notebook
     ? index.sectionsIn(notebook.id, null)
@@ -297,6 +304,7 @@ export function SectionBar({ panelId }: { panelId: string }) {
               aria-label="Sections"
               aria-orientation="horizontal"
               className="flex items-center gap-1"
+              {...drop.handlers}
             >
               {sections.map((s, i) => {
                 const selected = s.id === value;
@@ -347,7 +355,7 @@ export function SectionBar({ panelId }: { panelId: string }) {
                       startDrag(e, () => ({ kind: 'section', ids: [s.id], label: s.name }))
                     }
                     style={hueStyle(s.color)}
-                    className={tabClass(selected)}
+                    className={cn(tabClass(selected), drop.target === s.id && 'ring-2 ring-sec')}
                   >
                     {s.isInbox ? <Inbox className="size-3.5 shrink-0" /> : <Dot />}
                     {s.name}

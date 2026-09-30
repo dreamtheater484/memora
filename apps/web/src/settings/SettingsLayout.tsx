@@ -1,5 +1,13 @@
 import { Link, Outlet } from '@tanstack/react-router';
-import { ArrowLeft, DatabaseBackup, PenLine, ScrollText, UserRound, Users } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowUpDown,
+  DatabaseBackup,
+  PenLine,
+  ScrollText,
+  UserRound,
+  Users,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCurrentUser } from '../auth/queries';
 import { cn } from '../lib/cn';
@@ -8,6 +16,7 @@ interface NavItem {
   to:
     | '/settings/account'
     | '/settings/editing'
+    | '/settings/data'
     | '/settings/users'
     | '/settings/audit'
     | '/settings/backups';
@@ -19,6 +28,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/settings/account', label: 'Account', icon: <UserRound /> },
   { to: '/settings/editing', label: 'Editing', icon: <PenLine /> },
+  { to: '/settings/data', label: 'Import & export', icon: <ArrowUpDown /> },
   { to: '/settings/users', label: 'Users', icon: <Users />, admin: true },
   { to: '/settings/audit', label: 'Audit log', icon: <ScrollText />, admin: true },
   { to: '/settings/backups', label: 'Backups', icon: <DatabaseBackup />, admin: true },

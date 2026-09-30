@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
@@ -20,6 +21,19 @@ function withoutDocument(): Plugin {
   };
 }
 
+/**
+ * Paged.js's polyfill (the print preview loads it into its frame) isn't in the package's
+ * exports, so it gets a name of its own.
+ */
+export const pagedPolyfill = [
+  {
+    find: /^pagedjs-polyfill(?=\?|$)/,
+    replacement: fileURLToPath(
+      new URL('./node_modules/pagedjs/dist/paged.polyfill.min.js', import.meta.url),
+    ),
+  },
+];
+
 // `--mode gallery` also builds the component gallery (gallery.html) into its own
 // folder, for the visual tests. The production build only contains index.html;
 // in development the gallery is always served at /gallery.html.
@@ -27,6 +41,7 @@ export default defineConfig(({ mode }) => {
   const gallery = mode === 'gallery';
   return {
     plugins: [withoutDocument(), react(), tailwindcss(), serviceWorker()],
+    resolve: { alias: pagedPolyfill },
     worker: { plugins: () => [withoutDocument()] },
     server: {
       port: 5173,

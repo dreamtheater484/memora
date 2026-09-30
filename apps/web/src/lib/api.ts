@@ -70,6 +70,8 @@ type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 interface Options {
   /** Let the request finish even if the tab closes (only for small bodies). */
   keepalive?: boolean;
+  /** The answer is a file (a PDF, say), not JSON. */
+  blob?: boolean;
 }
 
 export async function api<T>(
@@ -92,6 +94,26 @@ export async function api<T>(
 /** Sends a file as it is (`PUT /assets/:id`), answering what the server made of it. */
 export function uploadFile<T>(path: string, file: Blob): Promise<T> {
   return send<T>('PUT', path, { 'Content-Type': file.type || 'application/octet-stream' }, file);
+}
+
+/** Sends a file to be processed (`POST /imports`), with any headers it needs. */
+export function postFile<T>(
+  path: string,
+  file: Blob,
+  headers: Record<string, string> = {},
+): Promise<T> {
+  return send<T>('POST', path, { 'Content-Type': 'application/octet-stream', ...headers }, file);
+}
+
+/** A request whose answer is a file. */
+export function apiBlob(method: Method, path: string, body?: unknown): Promise<Blob> {
+  return send<Blob>(
+    method,
+    path,
+    body === undefined ? {} : { 'Content-Type': 'application/json' },
+    body === undefined ? undefined : JSON.stringify(body),
+    { blob: true },
+  );
 }
 
 async function send<T>(
@@ -121,6 +143,7 @@ async function send<T>(
   }
 
   if (response.status === 204) return undefined as T;
+  if (options.blob && response.ok) return (await response.blob()) as T;
   const data: unknown = await response.json().catch(() => null);
   if (response.ok) return data as T;
 
