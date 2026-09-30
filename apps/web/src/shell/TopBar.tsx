@@ -18,7 +18,7 @@ import {
   Users,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useCurrentUser, useLogout } from '../auth/queries';
+import { useCurrentUser, useDesktop, useLogout } from '../auth/queries';
 import {
   Avatar,
   IconButton,
@@ -188,6 +188,7 @@ function AppearanceMenu() {
 
 function AccountMenu() {
   const user = useCurrentUser();
+  const desktop = useDesktop();
   const navigate = useNavigate();
   const logout = useLogout();
   return (
@@ -208,7 +209,7 @@ function AccountMenu() {
         <MenuItem icon={<Settings />} onSelect={() => void navigate({ to: '/settings/account' })}>
           Account settings
         </MenuItem>
-        {user.role === 'admin' && (
+        {user.role === 'admin' && !desktop && (
           <MenuItem icon={<Users />} onSelect={() => void navigate({ to: '/settings/users' })}>
             Users
           </MenuItem>
@@ -223,10 +224,14 @@ function AccountMenu() {
         <MenuItem icon={<BookOpen />} onSelect={() => openHelp(HELP.guide)}>
           User guide
         </MenuItem>
-        <MenuSeparator />
-        <MenuItem icon={<LogOut />} onSelect={() => logout.mutate()}>
-          Log out
-        </MenuItem>
+        {!desktop && (
+          <>
+            <MenuSeparator />
+            <MenuItem icon={<LogOut />} onSelect={() => logout.mutate()}>
+              Log out
+            </MenuItem>
+          </>
+        )}
       </MenuContent>
     </Menu>
   );
