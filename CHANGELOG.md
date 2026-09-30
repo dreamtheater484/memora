@@ -4,6 +4,18 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-09-30
+
+### Fixed
+
+- **The desktop app's icon on Ubuntu:** the launcher and the dock showed a gear instead of Memora's icon. The icon now comes in every size Ubuntu looks for, and the running window is matched to it. On Windows the icon fills its square like other apps' do; on macOS it keeps Apple's margin.
+- **A section's default template** couldn't be chosen with the mouse: the choice was in a submenu that closed before the click. It's now a small dialog, **Default template…**, in the **▾** menu beside **+ Page** and in a section's right-click menu.
+
+### Changed
+
+- **Templates are easier to find:** an empty section offers **From a template** beside **New page**, and says which template its new pages start from. A section's right-click menu has **New page from a template…**. The Templates dialog lists where to find each of these.
+- The download page no longer says the app updates itself everywhere: it tells you when there's a new version, and installs it itself on Windows.
+
 ## [0.9.3] - 2026-09-30
 
 ### Added
@@ -117,7 +129,8 @@ The first release: a public beta. Everything planned for 1.0 is in; what's left 
 - Setup guides for Synology, Linux and Windows, with three ways to get HTTPS.
 - `memora-admin` inside the container for lost passwords, lost phones, backups and restores.
 
-[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.9.4...HEAD
+[0.9.4]: https://github.com/dreamtheater484/memora/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/dreamtheater484/memora/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/dreamtheater484/memora/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/dreamtheater484/memora/compare/v0.9.0...v0.9.1
