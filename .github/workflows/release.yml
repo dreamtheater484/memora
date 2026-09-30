@@ -275,6 +275,12 @@ jobs:
           MEMORA_STORE_PUBLISHER: ${{ vars.MEMORA_STORE_PUBLISHER }}
           MEMORA_STORE_PUBLISHER_NAME: ${{ vars.MEMORA_STORE_PUBLISHER_NAME }}
         run: |
+          # electron-builder takes a variable that is set but empty as a certificate's path:
+          # the ones without a value are removed.
+          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID \
+            WIN_CSC_LINK WIN_CSC_KEY_PASSWORD AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET; do
+            [ -n "${!name}" ] || unset "$name"
+          done
           pnpm build
           pnpm resources
           pnpm app ${{ matrix.target }}
