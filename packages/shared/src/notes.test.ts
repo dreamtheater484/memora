@@ -116,6 +116,23 @@ describe('markdownToText', () => {
     );
   });
 
+  it('drops the kind of an alert, keeping its text', () => {
+    expect(
+      snippetOf(markdownToText('# Plan\n\n> [!WARNING]\n> Mind the gap.\n\n[!NOTE] stays in text')),
+    ).toBe('Plan Mind the gap. [!NOTE] stays in text');
+  });
+
+  it('keeps the words of a table, not its pipes and alignment row', () => {
+    const table = [
+      '| Goal | Measure |',
+      '| ---- | :-----: |',
+      '| Relaunch | Live \\| online |',
+    ].join('\n');
+    expect(snippetOf(markdownToText(`Goals\n\n${table}\n\nDone.`))).toBe(
+      'Goals Goal Measure Relaunch Live | online Done.',
+    );
+  });
+
   it('keeps the words and drops the marks', () => {
     const md = [
       '# Weekly review',

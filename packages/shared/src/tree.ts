@@ -104,25 +104,37 @@ export function isWithin<T>(
 export function markdownToText(markdown: string): string {
   // Escaped characters (`\#`, `\*`) are just characters: set aside, so no rule below sees them.
   const escaped: string[] = [];
-  return markdown
-    .replace(
-      /\\([\\`*_{}[\]()#+\-.!|~$<>])/g,
-      (_, c: string) => `\uE000${escaped.push(c) - 1}\uE001`,
-    )
-    .replace(/^\s*(```|~~~).*$/gm, '')
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (_, target: string, label?: string) =>
-      (label ?? target).trim(),
-    )
-    .replace(/^\s{0,3}(?:>\s?)+/gm, '')
-    .replace(/^\s*(?:#{1,6}\s+|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)/gm, '')
-    .replace(/^\s*(?:[-*_]\s*){3,}$/gm, '')
-    .replace(/(\*\*|__|~~|==)(.+?)\1/g, '$2')
-    .replace(/(^|[^\w*])[*_]([^*_\n]+)[*_](?=[^\w*]|$)/gm, '$1$2')
-    .replace(/`+([^`]*)`+/g, '$1')
-    .replace(/<[^>]*>/g, '')
-    .replace(/\uE000(\d+)\uE001/g, (_, i: string) => escaped[Number(i)] ?? '');
+  return (
+    markdown
+      .replace(
+        /\\([\\`*_{}[\]()#+\-.!|~$<>])/g,
+        (_, c: string) => `\uE000${escaped.push(c) - 1}\uE001`,
+      )
+      .replace(/^\s*(```|~~~).*$/gm, '')
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (_, target: string, label?: string) =>
+        (label ?? target).trim(),
+      )
+      .replace(/^\s{0,3}(?:>\s?)+/gm, '')
+      // An alert's kind (`> [!NOTE]`) is a marker, not words of the page.
+      .replace(/^\s*\[!(?:note|tip|important|warning|caution)\][ \t]*$/gim, '')
+      // Tables: the cells' words, without the pipes and the alignment row.
+      .replace(/^[ \t]*\|?(?:[ \t]*:?-{3,}:?[ \t]*\|)+(?:[ \t]*:?-{3,}:?[ \t]*)?$/gm, '')
+      .replace(/^[ \t]*\|(.*)\|[ \t]*$/gm, (_, cells: string) =>
+        cells
+          .split('|')
+          .map((cell) => cell.trim())
+          .join(' '),
+      )
+      .replace(/^\s*(?:#{1,6}\s+|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)/gm, '')
+      .replace(/^\s*(?:[-*_]\s*){3,}$/gm, '')
+      .replace(/(\*\*|__|~~|==)(.+?)\1/g, '$2')
+      .replace(/(^|[^\w*])[*_]([^*_\n]+)[*_](?=[^\w*]|$)/gm, '$1$2')
+      .replace(/`+([^`]*)`+/g, '$1')
+      .replace(/<[^>]*>/g, '')
+      .replace(/\uE000(\d+)\uE001/g, (_, i: string) => escaped[Number(i)] ?? '')
+  );
 }
 
 /** The start of a page's text, on one line, for the page list. */
