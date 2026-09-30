@@ -20,6 +20,8 @@ const PACKAGES = [
   'packages/shared/package.json',
 ];
 
+const REPO = process.env.GITHUB_REPOSITORY || 'dreamtheater484/memora';
+
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
 
 /** `v1.2.3` or `1.2.3` → `1.2.3`; throws on anything else. */
@@ -37,6 +39,17 @@ export function imageTags(version) {
   return isPrerelease(version) ? [version] : [version, `${major}.${minor}`, 'latest'];
 }
 
+/**
+ * Relative links (into the repository, as CHANGELOG.md has them) made absolute at the
+ * release's tag: on a release page they would lead nowhere.
+ */
+export function absoluteLinks(markdown, version, repo = REPO) {
+  return markdown.replace(
+    /\]\((?![a-z][a-z0-9+.-]*:|#|\/)([^)\s]+)\)/gi,
+    (_, target) => `](https://github.com/${repo}/blob/v${version}/${target.replace(/^\.\//, '')})`,
+  );
+}
+
 /** The body of `## [version] - date`, up to the next `## ` heading or the link list. */
 export function notesFor(changelog, version) {
   const lines = changelog.split(/\r?\n/);
@@ -51,7 +64,7 @@ export function notesFor(changelog, version) {
   const end = rest.findIndex((l) => l.startsWith('## ') || /^\[[^\]]+\]: /.test(l));
   const body = (end < 0 ? rest : rest.slice(0, end)).join('\n').trim();
   if (!body) throw new Error(`CHANGELOG.md: the ${version} section is empty`);
-  return `${body}\n`;
+  return `${absoluteLinks(body, version)}\n`;
 }
 
 /** Package files whose version isn't `version`. */
