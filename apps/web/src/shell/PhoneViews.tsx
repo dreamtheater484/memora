@@ -7,13 +7,13 @@ import { useNotesActions } from '../notes/queries';
 import { hueStyle } from '../theme/sections';
 import { useCommands } from './commands';
 import { useCurrent, useGo, type Current } from './location';
-import { InlineRename, NotebookTile } from './parts';
+import { InlineRename, MoreButton, NotebookTile } from './parts';
 import { NavMenu, type MenuTarget } from './Sidebar';
 import { useShell } from './store';
 
 /*
  * Phone drill-down (§9.12): notebooks → sections → pages → page, one level per screen, each
- * with its own URL so the back button works. Long-press an item for its menu.
+ * with its own URL so the back button works. Long-press an item, or tap its "…", for its menu.
  */
 
 function Item({
@@ -32,20 +32,19 @@ function Item({
   target?: MenuTarget;
 }) {
   return (
-    <li>
+    <li data-nav-kind={target?.kind} data-nav-id={target?.id} className="flex items-center">
       <button
         type="button"
         onClick={onClick}
-        data-nav-kind={target?.kind}
-        data-nav-id={target?.id}
         style={color ? hueStyle(color) : undefined}
-        className="hue flex min-h-12 w-full items-center gap-3 rounded-md px-3 text-left text-md hover:bg-hover active:bg-active"
+        className="hue flex min-h-12 min-w-0 flex-1 items-center gap-3 rounded-md px-3 text-left text-md hover:bg-hover active:bg-active"
       >
         {icon}
         <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
         {meta && <span className="shrink-0 text-xs text-fg-3 tabular-nums">{meta}</span>}
         <ChevronRight aria-hidden className="size-4 shrink-0 text-fg-3" />
       </button>
+      {target && <MoreButton label={`Actions for ${label}`} size="md" className="text-fg-3" />}
     </li>
   );
 }

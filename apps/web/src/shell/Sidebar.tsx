@@ -48,7 +48,7 @@ import { BoardsNav } from '../kanban/BoardsNav';
 import { openBoards, useProjects } from '../kanban/projects';
 import { useCommands } from './commands';
 import { isNotesLevel, useCurrent, useGo } from './location';
-import { DropIndicator, InlineRename, NotebookTile } from './parts';
+import { DropIndicator, InlineRename, MoreButton, NotebookTile } from './parts';
 import { FavoritePlaces, RecentPlaces } from './Places';
 import { shortcutKeys } from './shortcuts';
 import { useShell, type RenameWhere } from './store';
@@ -62,13 +62,20 @@ interface NavNode extends TreeNode {
   children?: NavNode[];
 }
 
+/** What each kind of row is called in its "…" button's name. */
+const MENU_NOUN: Partial<Record<NavKind, string>> = {
+  notebook: 'notebook',
+  group: 'section group',
+  section: 'section',
+};
+
 const DROP_KIND: Partial<Record<NavKind, string>> = {
   notebook: 'nb',
   group: 'grp',
   section: 'sec',
 };
 
-/** Notebooks with their sections, then their section groups (as OneNote orders them). */
+/** Notebooks with their sections, then their section groups. */
 function notebookNodes(index: NotesIndex): NavNode[] {
   const level = (notebookId: string, groupId: string | null, color: ColorId): NavNode[] => [
     ...index
@@ -125,6 +132,13 @@ function NavRow({ node }: { node: NavNode }) {
         />
       ) : (
         <span className="truncate">{node.label}</span>
+      )}
+      {MENU_NOUN[node.kind] && !renaming && (
+        <MoreButton
+          inRow
+          label={`Actions for ${MENU_NOUN[node.kind]} ${node.label}`}
+          className="-mr-1 ml-auto opacity-0 group-hover/nav:opacity-100 pointer-coarse:opacity-100"
+        />
       )}
       {dropKind && <DropIndicator kind={dropKind} id={node.id} />}
     </span>
@@ -523,6 +537,7 @@ export function Sidebar() {
                   renderRow={(node) => <NavRow node={node} />}
                   rowProps={(node) =>
                     ({
+                      className: 'group/nav',
                       'data-nav-kind': node.kind,
                       'data-nav-id': node.id,
                       ...(DROP_KIND[node.kind] ? dropSpot(DROP_KIND[node.kind]!, node.id) : {}),

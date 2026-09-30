@@ -109,6 +109,22 @@ test.describe('behaviour', () => {
     await expect(pageList(page).getByRole('treeitem', { name: /^Pricing/ })).toBeVisible();
   });
 
+  test('a notebook’s … button opens its menu, which deletes it to the recycle bin', async ({
+    page,
+  }) => {
+    const api = new FakeApi();
+    await openShell(page, 'light', api);
+    const nav = page.getByRole('navigation', { name: 'Navigation' });
+    const work = nav.getByRole('treeitem', { name: 'Work', exact: true });
+    await work.getByText('Work', { exact: true }).first().hover();
+    // Hidden from assistive technology (the row's menu key opens the same menu), so by label.
+    await page.locator('button[aria-label="Actions for notebook Work"]').click();
+    await page.getByRole('menuitem', { name: 'Delete notebook' }).click();
+    await expect(page.getByText(/^Moved .*Work.* to the recycle bin$/)).toBeVisible();
+    await expect(work).toHaveCount(0);
+    expect(api.requests.some((r) => r.method === 'DELETE' && r.path.endsWith('/work'))).toBe(true);
+  });
+
   test('pages move to another section from the Move dialog', async ({ page }) => {
     const api = new FakeApi();
     await openShell(page, 'light', api);
@@ -255,6 +271,12 @@ test.describe('phone', () => {
     await page.getByRole('button', { name: 'Back' }).click();
     await expect(page).toHaveURL(/\/n\/work$/);
     await expect(page.getByRole('button', { name: /^Admin/ })).toBeVisible();
+  });
+
+  test('a notebook’s … opens its menu', async ({ page }) => {
+    await openShell(page, 'light');
+    await page.getByRole('button', { name: 'Actions for Work' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Delete notebook' })).toBeVisible();
   });
 
   test('the Inbox is one tap away', async ({ page }) => {
