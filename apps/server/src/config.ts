@@ -36,6 +36,8 @@ const envSchema = z.object({
     )
     .default('7,4,12'),
   MEMORA_BACKUP_PASSWORD_FILE: z.string().optional(),
+  MEMORA_MAX_IMPORT_MB: z.coerce.number().int().min(1).max(16384).default(1024),
+  MEMORA_GOTENBERG_URL: z.url({ protocol: /^https?$/ }).optional(),
 });
 
 export interface Config {
@@ -71,6 +73,10 @@ export interface Config {
   backupKeep: { daily: number; weekly: number; monthly: number };
   /** A file (a Docker secret) with the password that encrypts backups; none: not encrypted. */
   backupPasswordFile: string | undefined;
+  /** Largest file that can be imported (a `.memora` archive or a zip), in bytes. */
+  maxImportBytes: number;
+  /** A Gotenberg service that makes PDFs (§9.10); none: the browser prints them. */
+  gotenbergUrl: string | undefined;
 }
 
 export class ConfigError extends Error {
@@ -128,6 +134,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     backupSchedule,
     backupKeep: { daily, weekly, monthly },
     backupPasswordFile: e.MEMORA_BACKUP_PASSWORD_FILE,
+    maxImportBytes: e.MEMORA_MAX_IMPORT_MB * 1024 * 1024,
+    gotenbergUrl: e.MEMORA_GOTENBERG_URL?.replace(/\/+$/, ''),
   };
 }
 

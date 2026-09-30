@@ -133,11 +133,29 @@ Set these as environment variables (the `environment:` section of the compose fi
 | `MEMORA_BACKUP_PASSWORD_FILE` | —                                | A file with a password to encrypt new backups with ([BACKUP_RESTORE.md](BACKUP_RESTORE.md))                                |
 | `MEMORA_TRASH_DAYS`           | `30`                             | Days a deleted item stays in the recycle bin before it is deleted for good                                                 |
 | `MEMORA_HISTORY_RETENTION`    | `48h,14d,90d`                    | Page versions: all for 48 hours, then hourly for 14 days, daily for 90 days, weekly after. Named versions are always kept. |
+| `MEMORA_MAX_IMPORT_MB`        | `1024`                           | Largest file that can be imported (a `.memora` archive or a zip), in MB                                                    |
+| `MEMORA_GOTENBERG_URL`        | —                                | A Gotenberg service for one-click PDF export, for example `http://gotenberg:3000` (see below)                              |
 | `MEMORA_LOG_LEVEL`            | `info`                           | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                             |
 
 **`MEMORA_TRUST_PROXY`.** Memora slows down repeated failed logins per visitor address, and records addresses in the audit log. Behind a reverse proxy every request comes from the proxy, so Memora reads the real address from the proxy's `X-Forwarded-For` header, but only from proxies it trusts. The default trusts proxies on the same machine and on private networks, which covers the Synology reverse proxy and Docker's networks. Set `false` when nothing sits in front of Memora, or list addresses or ranges (for example `198.51.100.2,2001:db8::/32`) to be stricter.
 
 **Images from web pages.** When you paste part of a web page with pictures, Memora's server downloads them, so the page keeps working when the website changes. That needs the container to reach the internet (it does by default). Memora never downloads from addresses on your own network, whatever a pasted page points at.
+
+**Import and export.** Exports and imports of archives and zips run in the background on the server, one at a time, with their files in `/data/tmp` while they work. An export's file can be downloaded for a day, then it is deleted. Word, HTML and PDF files are made in your browser.
+
+### Optional: one-click PDFs (Gotenberg)
+
+Without anything extra, **Export → PDF** opens a print preview laid out in pages, and your browser's print dialog saves the PDF. To download PDFs in one click instead, run [Gotenberg](https://gotenberg.dev) next to Memora and tell Memora where it is. Add this to the compose file's `services:`, and `MEMORA_GOTENBERG_URL: 'http://gotenberg:3000'` to Memora's `environment:`:
+
+```yaml
+gotenberg:
+  image: gotenberg/gotenberg:8
+  container_name: memora-gotenberg
+  restart: unless-stopped
+  # No ports: only Memora talks to it, over the compose network.
+```
+
+Gotenberg runs a headless Chromium and uses a few hundred MB of RAM, so it is worth it only if you export PDFs often. Memora sends it the page with its images inside and a content security policy that forbids loading anything else, so a page can't make it fetch an address.
 
 ## Synology step by step
 

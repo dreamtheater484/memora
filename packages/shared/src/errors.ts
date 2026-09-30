@@ -31,6 +31,7 @@ export const API_ERROR_CODES = [
   'file_too_large',
   'fetch_failed',
   'invalid_content',
+  'pdf_failed',
   'internal',
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

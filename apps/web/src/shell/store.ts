@@ -1,4 +1,4 @@
-import type { Template } from '@memora/shared';
+import type { ExportScope, Template } from '@memora/shared';
 import { create } from 'zustand';
 
 /** A dialog the shell shows; at most one at a time. */
@@ -11,7 +11,9 @@ export type ShellDialog =
   | { kind: 'save-version'; pageId: string }
   | { kind: 'save-template'; pageId: string }
   | { kind: 'templates' }
-  | { kind: 'insert-template'; onPick: (template: Template) => void };
+  | { kind: 'insert-template'; onPick: (template: Template) => void }
+  | { kind: 'export'; scope: ExportScope; id?: string }
+  | { kind: 'print'; scope: 'page' | 'section'; id: string };
 
 /** Where an item is renamed in place: its tab, its navigation row, or a phone list heading. */
 export type RenameWhere = 'tabs' | 'nav' | 'list';

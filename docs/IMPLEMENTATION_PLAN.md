@@ -118,6 +118,9 @@ These are parked and listed in §17. The data model is designed so they can be a
 | D36 | Search (Phase 8)                        | **SQLite FTS5** over titles, text and tag names (`unicode61 remove_diacritics 2`, prefix indexes 2 and 3), keyed by a stable `page_search.docid`, and **kept current by triggers** on pages, page tags and tags, so every change updates the index in its own transaction. Queries are built from a small parser (phrases, exclusions, `tag:`, `in:`), every word a prefix; ranking is bm25 (title 10, text 1, tags 4) with a boost for recent pages. Matches are marked with control characters, never HTML.                                          | Triggers can't be forgotten by a code path, and the index can't drift from the pages. Page ids are text, whose implicit rowids may change on VACUUM, hence the stable docid. Marking without HTML leaves no injection surface. A test holds the 95th percentile under 100 ms with 10,000 pages.             |
 | D37 | Links between pages (Phase 8)           | Links name their page **by title** (`[[Title]]`, `wiki:Title`). `page_links` keeps, for each page, the titles it links to, rebuilt on every save; backlinks are resolved by title when read. **Renaming a page rewrites the links to it** in the same transaction (Markdown outside code, rich link marks and their text), unless another page still has the old title, and the pages that changed are announced to open browsers.                                                                                                                     | Links stay readable in exports and plain Markdown. Resolving by title when reading keeps backlinks right through renames, deletes and new pages without bookkeeping; rewriting on rename is what keeps the links working.                                                                                   |
 | D38 | Favourites, recent, templates (Phase 8) | **Favourites and recent pages live in the per-user UI state** (`ui.favorites`, `ui.recent`, at most 50), not in their own tables, and so does each section's default template. The five **built-in templates live in the shared code**; only users' own are rows.                                                                                                                                                                                                                                                                                      | The UI state already follows the user to every device and is kept for offline use, with one request for all of it. Built-ins in code change with the app and need no migration.                                                                                                                             |
+| D39 | Import and export jobs (Phase 9)        | Server exports and imports are **background jobs, one at a time**, in memory, with progress over the event channel and the export's file kept on disk for a day. Everything is **streamed**: exports read one page's content at a time into a streaming zip; uploads go straight to disk; imports read the zip entry by entry and park pages' text on disk until the single transaction that adds them.                                                                                                                                                | One job at a time keeps memory flat on a small NAS whatever the notes' size; a restart losing a job's record is harmless, as its file is only a download. One transaction per import means a failed import leaves nothing behind.                                                                           |
+| D40 | Archive format (Phase 9)                | `.memora` v1 as §8.4: a zip with **a SHA-256 for every file in the manifest**, files stored once by hash, rich pages also as HTML, the backup's encryption envelope. Imports check everything before storing anything, **give everything new ids** and place it after what is there, as new notebooks or into a chosen notebook (after a `pre-import` backup). Markdown zips from other apps import as folders → notebook, groups, sections and subpages.                                                                                              | New ids make an import safe to repeat and impossible to clash with what is there. Checked sums catch damaged or edited archives before they cause half an import. One envelope for backups and archives means one piece of cryptography to get right.                                                       |
+| D41 | Word, HTML and PDF (Phase 9)            | **Made in the browser** from the pages as rich documents (Markdown pages converted the way "Convert to rich text" does): Word with the `docx` library, HTML as one file with images inside, PDF through a print stylesheet that **Paged.js** lays out for the preview and the browser prints. With `MEMORA_GOTENBERG_URL`, the same document goes to Gotenberg for a one-click PDF, with images inlined and a policy that blocks other requests. Word, HTML and text files are imported in the browser too (mammoth for Word), read like pasted HTML.  | The server stays small: no Markdown renderer, DOM or Chromium in the image. One document model for every format keeps them consistent. Gotenberg stays optional, in its own container, for those who want PDFs without a print dialog.                                                                      |
 
 ---
 
@@ -452,7 +455,7 @@ templates/<template-id>.json
 - **`manifest.json`** looks like this: `{ "format": "memora-archive", "formatVersion": 1, "appVersion": "1.0.0", "exportedAt": "…", "scope": { "type": "notebook", "ids": [...] }, "counts": {...}, "sha256": {...} }`.
 - **Encryption envelope.** The file starts with the magic bytes `MEMORAENC1`, followed by KDF parameters (scrypt), a salt, a nonce, and the zip encrypted with AES-256-GCM. It keeps the `.memora` extension, and Memora recognises encrypted files automatically.
 - **Compatibility.** Memora imports every older `formatVersion`. A file newer than the running app is refused with a clear message.
-- The full specification goes in `docs/FILE_FORMAT.md` in Phase 9.
+- The full specification is in [`docs/FILE_FORMAT.md`](FILE_FORMAT.md).
 
 ### 8.5 Markdown folder export
 
@@ -1305,15 +1308,15 @@ Long lists (pages, search results, cards) render only what is visible on screen.
 
 ### Phase 9 — Import & export · L
 
-- [ ] Background job framework with progress over the WebSocket
-- [ ] `.memora` export for any scope, with optional encryption; the `FILE_FORMAT.md` specification
-- [ ] `.memora` import: as new or merged, new IDs where needed, integrity checks, version compatibility, report
-- [ ] Markdown: export a single page (`.md` or `.zip`) or a folder tree; import `.md` and `.zip` folders (front matter, relative images)
-- [ ] DOCX export (any page or section) and import (mammoth)
-- [ ] PDF: print stylesheet, Paged.js preview, one-click via Gotenberg when configured
-- [ ] HTML export and import, TXT import
-- [ ] Drop files onto the page list or section tabs to import them
-- [ ] Round-trip test suite
+- [x] Background job framework with progress over the WebSocket. _One job at a time, streamed, files kept for a day (D39); the browser also checks every 1.5 s._
+- [x] `.memora` export for any scope, with optional encryption; the `FILE_FORMAT.md` specification
+- [x] `.memora` import: as new or merged, new IDs where needed, integrity checks, version compatibility, report. _Merging takes a `pre-import` backup first (D40)._
+- [x] Markdown: export a single page (`.md` or `.zip`) or a folder tree; import `.md` and `.zip` folders (front matter, relative images)
+- [x] DOCX export (any page or section) and import (mammoth). _In the browser (D41)._
+- [x] PDF: print stylesheet, Paged.js preview, one-click via Gotenberg when configured
+- [x] HTML export and import, TXT import
+- [x] Drop files onto the page list or section tabs to import them
+- [x] Round-trip test suite. _Export everything → import into a fresh instance → identical notebooks, groups, sections, pages, files, tags, history and templates; also encrypted, merged, Markdown and damaged archives._
 
 **Acceptance:** export everything → import on a fresh instance → identical content; Word and PDF exports look right in Word, LibreOffice and PDF readers on Windows 11 and Ubuntu.
 

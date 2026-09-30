@@ -21,6 +21,7 @@ import { newWriteId, restore, settle, type Unstored } from './records';
 import { Sender, type SenderHost } from './sender';
 import { initialShared, useSync, type Shared } from './status';
 import { blobOf, openStore, type LocalStore } from './store';
+import { jobUpdated } from '../transfer/jobs';
 
 /*
  * The sync engine of one tab (§9.6). Tabs of the same browser share the store and a
@@ -422,6 +423,9 @@ export class SyncEngine implements SenderHost, DocHost, LiveHost {
         break;
       case 'hello':
         void this.follow(event.dataId);
+        break;
+      case 'job.updated':
+        jobUpdated(event.job);
         break;
     }
   }

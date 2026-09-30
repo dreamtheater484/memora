@@ -27,6 +27,9 @@ const TemplatesDialog = lazy(() => templateDialogs().then((m) => ({ default: m.T
 const InsertTemplateDialog = lazy(() =>
   templateDialogs().then((m) => ({ default: m.InsertTemplateDialog })),
 );
+const exportDialogs = () => import('../transfer/ExportDialog');
+const ExportDialog = lazy(() => exportDialogs().then((m) => ({ default: m.ExportDialog })));
+const PrintDialog = lazy(() => exportDialogs().then((m) => ({ default: m.PrintDialog })));
 
 /** A group of radio buttons drawn as swatches or tiles. */
 function Choices<T extends string>({
@@ -426,6 +429,8 @@ export function ShellDialogs() {
         {dialog?.kind === 'save-template' && <SaveTemplateDialog pageId={dialog.pageId} />}
         {dialog?.kind === 'templates' && <TemplatesDialog />}
         {dialog?.kind === 'insert-template' && <InsertTemplateDialog onPick={dialog.onPick} />}
+        {dialog?.kind === 'export' && <ExportDialog scope={dialog.scope} id={dialog.id} />}
+        {dialog?.kind === 'print' && <PrintDialog scope={dialog.scope} id={dialog.id} />}
       </Suspense>
     </Dialog>
   );

@@ -16,6 +16,7 @@ import {
   Search,
   Settings,
   SquareKanban,
+  Share2,
   SquarePlus,
   Star,
   StarOff,
@@ -253,6 +254,12 @@ export function NavMenu({
         >
           Move down
         </ContextMenuItem>
+        <ContextMenuItem
+          icon={<Share2 />}
+          onSelect={() => shell().openDialog({ kind: 'export', scope: 'notebook', id: nb.id })}
+        >
+          Export…
+        </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem icon={<Trash2 />} danger onSelect={() => commands.deleteNotebook(nb.id)}>
           Delete notebook
@@ -293,6 +300,12 @@ export function NavMenu({
           onSelect={() => shell().openDialog({ kind: 'move', type: 'group', ids: [group.id] })}
         >
           Move to…
+        </ContextMenuItem>
+        <ContextMenuItem
+          icon={<Share2 />}
+          onSelect={() => shell().openDialog({ kind: 'export', scope: 'group', id: group.id })}
+        >
+          Export…
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem icon={<Trash2 />} danger onSelect={() => commands.deleteGroup(group.id)}>
@@ -387,6 +400,14 @@ export function SectionMenuItems({ sectionId, where }: { sectionId: string; wher
           ))}
         </ContextMenuSubContent>
       </ContextMenuSub>
+      <ContextMenuItem
+        icon={<Share2 />}
+        onSelect={() =>
+          useShell.getState().openDialog({ kind: 'export', scope: 'section', id: section.id })
+        }
+      >
+        Export…
+      </ContextMenuItem>
       {!section.isInbox && (
         <>
           <ContextMenuItem

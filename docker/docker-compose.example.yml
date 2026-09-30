@@ -23,5 +23,6 @@ services:
       # MEMORA_SESSION_DAYS: '30' # "remember this device": days without use before logging out
       # MEMORA_SESSION_HOURS: '12' # otherwise: hours without use before logging out
       # MEMORA_MAX_HEAP_MB: '256' # Node.js heap cap in MB (default 256)
+      # MEMORA_GOTENBERG_URL: 'http://gotenberg:3000' # one-click PDFs: see "Optional: one-click PDFs" in docs/SETUP.md
     volumes:
       - ./data:/data # everything Memora stores lives here

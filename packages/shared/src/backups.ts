@@ -5,7 +5,13 @@
  * them; restoring backs up first and restarts Memora.
  */
 
-export const BACKUP_KINDS = ['scheduled', 'manual', 'pre-migration', 'pre-restore'] as const;
+export const BACKUP_KINDS = [
+  'scheduled',
+  'manual',
+  'pre-migration',
+  'pre-restore',
+  'pre-import',
+] as const;
 export type BackupKind = (typeof BACKUP_KINDS)[number];
 
 export interface BackupInfo {
@@ -39,4 +45,4 @@ export interface RestoreStarted {
 
 /** Backup file names: `memora-<kind>-<time>.db`, with `.enc` when encrypted. */
 export const BACKUP_NAME =
-  /^memora-(scheduled|manual|pre-migration|pre-restore)(-v[\w.+-]+?)?-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)\.db(\.enc)?$/;
+  /^memora-(scheduled|manual|pre-migration|pre-restore|pre-import)(-v[\w.+-]+?)?-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)\.db(\.enc)?$/;

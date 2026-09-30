@@ -20,6 +20,7 @@ import { AccountPage } from './settings/AccountPage';
 import { EditingPage } from './settings/EditingPage';
 import { SettingsLayout } from './settings/SettingsLayout';
 import { AppShell } from './shell/AppShell';
+import { SignedIn } from './SignedIn';
 
 export interface RouterContext {
   queryClient: QueryClient;
@@ -86,7 +87,7 @@ const appRoute = createRoute({
     }
     if (state.user.mustChangePassword) throw redirect({ to: '/change-password' });
   },
-  component: Outlet,
+  component: SignedIn,
 });
 
 /** The notes app. The URL says where you are; the shell renders every level. */
@@ -145,6 +146,12 @@ const editingRoute = createRoute({
   component: EditingPage,
 });
 
+const dataRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: 'data',
+  component: lazyRouteComponent(() => import('./settings/DataPage'), 'DataPage'),
+});
+
 const adminRoute = createRoute({
   getParentRoute: () => settingsRoute,
   id: 'admin',
@@ -193,6 +200,7 @@ const routeTree = rootRoute.addChildren([
       settingsIndexRoute,
       accountRoute,
       editingRoute,
+      dataRoute,
       adminRoute.addChildren([usersRoute, auditRoute, backupsRoute]),
     ]),
   ]),

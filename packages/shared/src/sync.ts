@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Job } from './transfer';
 import { PAGE_TYPES, idSchema, type PageMeta, type PageType, type TreeChanges } from './notes';
 
 /*
@@ -131,7 +132,9 @@ export type ServerEvent =
   | { type: 'tree.changed'; origin: string | null }
   /** A page's content was saved. */
   | { type: 'page.updated'; page: PageMeta; revision: number; origin: string | null }
-  | { type: 'presence'; devices: PresenceDevice[] };
+  | { type: 'presence'; devices: PresenceDevice[] }
+  /** An import or export moved on (§9.10). */
+  | { type: 'job.updated'; job: Job };
 
 /** Most pages one browser reports as open. */
 export const MAX_PRESENCE_PAGES = 50;

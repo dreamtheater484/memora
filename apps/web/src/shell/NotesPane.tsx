@@ -51,8 +51,6 @@ import { SectionBar } from './SectionBar';
 import { shortcutKeys } from './shortcuts';
 import { useShell } from './store';
 
-const soon = (what: string, phase: number) => () => toast(`${what} arrives in Phase ${phase}.`);
-
 function TitleEditor({ page }: { page: PageMeta }) {
   const actions = useNotesActions();
   const [text, setText] = useState(page.title);
@@ -183,7 +181,12 @@ function PageHead({ page, doc }: { page: PageMeta; doc: PageDoc | null }) {
               >
                 Save as template…
               </MenuItem>
-              <MenuItem icon={<Share2 />} onSelect={soon('Export', 9)}>
+              <MenuItem
+                icon={<Share2 />}
+                onSelect={() =>
+                  useShell.getState().openDialog({ kind: 'export', scope: 'page', id: page.id })
+                }
+              >
                 Export…
               </MenuItem>
               <MenuSeparator />

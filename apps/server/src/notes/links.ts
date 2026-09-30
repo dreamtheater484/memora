@@ -7,6 +7,20 @@ import type { SqliteDatabase } from '../db/client';
  */
 
 const FLAG = 'links_indexed';
+
+/** Rebuilds a page's list of linked titles (see NotesService for saves). */
+export function indexPageLinks(
+  db: SqliteDatabase,
+  pageId: string,
+  type: PageType,
+  content: string,
+): void {
+  db.prepare('DELETE FROM page_links WHERE source_page_id = ?').run(pageId);
+  const insert = db.prepare(
+    'INSERT OR IGNORE INTO page_links (source_page_id, target_title, target_key) VALUES (?, ?, ?)',
+  );
+  for (const title of linkedTitles(type, content)) insert.run(pageId, title, titleKey(title));
+}
 const BATCH = 200;
 
 /** Indexes every page's links unless that was done; answers how many pages were read. */

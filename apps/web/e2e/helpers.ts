@@ -4,10 +4,13 @@ import type {
   AuditEntry,
   BackupInfo,
   CurrentUser,
+  ImportReport,
+  Job,
   MeResponse,
   ServerEvent,
   SessionInfo,
   SessionResponse,
+  TreeChanges,
 } from '@memora/shared';
 import { expect, type Page, type Route, type WebSocketRoute } from '@playwright/test';
 import { FakeNotes } from './notes';
@@ -369,7 +372,18 @@ export class FakeApi {
         this.backups.unshift(made);
         return { status: 201, json: made };
       }
+      case 'GET /api/v1/exports/options':
+        return { json: { pdf: this.pdf } };
+      case 'POST /api/v1/exports':
+        return { status: 202, json: this.exportJob(body) };
+      case 'GET /api/v1/jobs':
+        return { json: [...this.jobs.values()].map((j) => j.job) };
       default: {
+        const job = path.match(/^\/api\/v1\/jobs\/([^/]+)$/);
+        if (job) {
+          const found = this.jobs.get(job[1]!);
+          return found ? { json: found.job } : error(404, 'not_found', 'Job not found.');
+        }
         const named = path.match(/^\/api\/v1\/admin\/backups\/([^/]+?)(\/restore)?$/);
         if (named) {
           const name = decodeURIComponent(named[1]!);
@@ -399,6 +413,111 @@ export class FakeApi {
   readonly web = new Map<string, Buffer>();
   private fetched = 0;
 
+  // Import and export (§9.10): jobs that finish a moment later, reported over the channel.
+
+  /** A PDF service (Gotenberg) is set up. */
+  pdf = false;
+  readonly jobs = new Map<string, { job: Job; file: Buffer | null }>();
+  private nextJob = 1;
+
+  private startJob(kind: Job['kind'], finish: (job: Job) => Partial<Job>, file: Buffer | null) {
+    const job: Job = {
+      id: `job-${this.nextJob++}`,
+      kind,
+      state: 'queued',
+      progress: 0,
+      message: 'Waiting to start',
+      fileName: null,
+      size: null,
+      exportReport: null,
+      importReport: null,
+      error: null,
+      createdAt: NOW,
+      finishedAt: null,
+      expiresAt: null,
+    };
+    this.jobs.set(job.id, { job, file });
+    const update = (patch: Partial<Job>) => {
+      Object.assign(job, patch);
+      this.publish({ type: 'job.updated', job: { ...job } });
+    };
+    setTimeout(() => update({ state: 'running', progress: 0.5, message: 'Pages: 1 of 2' }), 150);
+    setTimeout(() => update({ progress: 1, finishedAt: NOW, ...finish(job) }), 500);
+    return { ...job };
+  }
+
+  private exportJob(body: Record<string, unknown>): Job {
+    const markdownPage = body.format === 'markdown' && body.scope === 'page';
+    const extension = body.format === 'memora' ? 'memora' : markdownPage ? 'md' : 'zip';
+    const named =
+      body.scope === 'page'
+        ? this.notes.tree.pages.find((p) => p.id === body.id)?.title
+        : body.scope === 'notebook'
+          ? this.notes.tree.notebooks.find((n) => n.id === body.id)?.name
+          : body.scope === 'section'
+            ? this.notes.tree.sections.find((s) => s.id === body.id)?.name
+            : 'Memora';
+    const file = Buffer.from(markdownPage ? '# Exported\n' : 'PK fake archive');
+    return this.startJob(
+      'export',
+      () => ({
+        state: 'done',
+        message: 'Done',
+        fileName: `${named ?? 'Memora'} 2026-09-29.${extension}`,
+        size: file.length,
+        exportReport: { pages: 2, files: 0, lost: [] },
+        expiresAt: NOW + 24 * HOUR,
+      }),
+      file,
+    );
+  }
+
+  /** An import: a file whose name says "encrypted" needs the password "open sesame". */
+  private importJob(name: string, notebookId: string | null, password: string | undefined): Job {
+    return this.startJob(
+      'import',
+      () => {
+        if (name.includes('encrypted') && password !== 'open sesame') {
+          return {
+            state: 'failed',
+            error: password
+              ? 'The password is wrong, or the file is damaged.'
+              : 'This file is encrypted: enter its password.',
+          };
+        }
+        let sectionId = notebookId
+          ? this.notes.tree.sections.find((s) => s.notebookId === notebookId)?.id
+          : undefined;
+        let notebooks = 0;
+        if (!sectionId) {
+          const made = this.notes.respond('POST', '/api/v1/notebooks', {
+            name: name.replace(/\.[^.]+$/, ''),
+            color: 'teal',
+          })!.json as TreeChanges;
+          sectionId = made.sections![0]!.id;
+          notebooks = 1;
+        }
+        const page = this.notes.respond('POST', '/api/v1/pages', {
+          sectionId,
+          title: 'Imported page',
+          content: 'From the archive',
+        })!.json as TreeChanges;
+        this.publish({ type: 'tree.changed', origin: null });
+        const importReport: ImportReport = {
+          notebooks,
+          sections: notebooks,
+          pages: 1,
+          files: 0,
+          templates: 0,
+          skipped: [{ name: 'Broken page', reason: 'Its content is damaged.' }],
+          firstPageId: page.pages![0]!.id,
+        };
+        return { state: 'done', message: 'Done', importReport };
+      },
+      null,
+    );
+  }
+
   private async handle(route: Route) {
     const request = route.request();
     const method = request.method();
@@ -406,6 +525,44 @@ export class FakeApi {
     const path = url.pathname;
     const headers = request.headers();
     if (path.startsWith('/api/v1/assets/')) return this.file(route, path.split('/').pop()!, url);
+    // Files, not JSON: an import's body, an export's download, a PDF.
+    if (path === '/api/v1/imports' || /^\/api\/v1\/jobs\/[^/]+\/download$/.test(path)) {
+      this.requests.push({ method, path, headers, body: Object.fromEntries(url.searchParams) });
+      if (path === '/api/v1/imports') {
+        const job = this.importJob(
+          url.searchParams.get('name') ?? 'file',
+          url.searchParams.get('notebookId'),
+          headers['x-memora-archive-password'],
+        );
+        return route.fulfill({ status: 202, json: job }).catch(() => undefined);
+      }
+      const found = this.jobs.get(path.split('/')[4]!);
+      if (!found?.file || !found.job.fileName) {
+        return route.fulfill({
+          status: 404,
+          json: { error: { code: 'not_found', message: 'Gone.' } },
+        });
+      }
+      return route
+        .fulfill({
+          status: 200,
+          body: found.file,
+          contentType: 'application/octet-stream',
+          headers: { 'Content-Disposition': `attachment; filename="${found.job.fileName}"` },
+        })
+        .catch(() => undefined);
+    }
+    if (path === '/api/v1/exports/pdf') {
+      const body = request.postDataJSON() as Record<string, unknown>;
+      this.requests.push({ method, path, headers, body });
+      return route
+        .fulfill({
+          status: 200,
+          body: Buffer.from('%PDF-1.7 fake'),
+          contentType: 'application/pdf',
+        })
+        .catch(() => undefined);
+    }
     // A GET's query parameters come in as its body, like a request's fields.
     const body =
       (request.postDataJSON() as Record<string, unknown> | null) ??

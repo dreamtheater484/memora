@@ -27,6 +27,8 @@ import { eventRoutes } from './routes/events';
 import { notesRoutes } from './routes/notes';
 import { searchRoutes } from './routes/search';
 import { SearchService } from './search/service';
+import { transferRoutes } from './routes/transfer';
+import { JobService } from './transfer/jobs';
 
 export interface AppOptions {
   config: Config;
@@ -82,6 +84,7 @@ export async function buildApp({
             'req.headers.cookie',
             'req.headers.authorization',
             'req.headers["x-csrf-token"]',
+            'req.headers["x-memora-archive-password"]',
           ],
         }
       : false,
@@ -113,6 +116,9 @@ export async function buildApp({
       error: (obj, msg) => app.log.error(obj, msg),
     },
     now,
+  );
+  const jobs = new JobService(join(config.dataDir, 'tmp', 'jobs'), events, now, (error, job) =>
+    app.log.warn({ err: error, job: job.id, kind: job.kind }, 'job failed'),
   );
   let dataId: string | undefined;
   const deps: RouteDeps = {
@@ -180,6 +186,7 @@ export async function buildApp({
   searchRoutes(app, deps);
   backupRoutes(app, deps);
   await assetRoutes(app, deps);
+  await transferRoutes(app, { ...deps, jobs, version });
   eventRoutes(app, deps);
 
   const hasWebApp = existsSync(join(config.webDir, 'index.html'));
@@ -226,6 +233,9 @@ export async function buildApp({
         cleaned = cleanUnusedAssets(db, now());
         assetsCleanedAt = now();
       }
+      void jobs
+        .expire()
+        .catch((error: unknown) => app.log.warn({ err: error }, 'removing old exports failed'));
       if (thinned || purged.removed || cleaned) {
         app.log.info(
           { versionsThinned: thinned, rowsPurged: purged.removed, filesRemoved: cleaned },
@@ -237,6 +247,7 @@ export async function buildApp({
     }
   };
   app.addHook('onReady', async () => {
+    await jobs.prepare();
     runMaintenance();
     maintenance = setInterval(runMaintenance, MAINTENANCE_INTERVAL_MS);
     maintenance.unref();

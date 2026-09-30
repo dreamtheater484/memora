@@ -32,6 +32,7 @@ import {
   type SelectModifiers,
   type TreeNode,
 } from '../components/ui';
+import { cn } from '../lib/cn';
 import { dropSpot, startDrag } from '../lib/dnd';
 import { useMediaQuery } from '../lib/useMediaQuery';
 import { useNow } from '../lib/useNow';
@@ -45,6 +46,7 @@ import { NewPageMenu } from './NewPageMenu';
 import { DropIndicator, InlineRename } from './parts';
 import { shortcutKeys } from './shortcuts';
 import { useShell } from './store';
+import { useFileDrop } from '../transfer/drop';
 
 interface PageNode extends TreeNode {
   page: PageMeta;
@@ -215,6 +217,10 @@ export function PageList({ onOpen }: { onOpen?: () => void } = {}) {
   }, [nodes, collapsed, filter]);
   const selected = useMemo(() => new Set(selection), [selection]);
   const now = useNow();
+  const drop = useFileDrop(
+    () => section?.id ?? null,
+    (id) => go.page(id),
+  );
 
   if (!section) return null;
   const side = ui.pageListSide ?? 'right';
@@ -244,9 +250,21 @@ export function PageList({ onOpen }: { onOpen?: () => void } = {}) {
   return (
     <aside
       aria-label="Pages"
-      className="hue flex h-full min-h-0 flex-col"
+      className={cn(
+        'hue relative flex h-full min-h-0 flex-col',
+        drop.target && 'rounded-lg ring-2 ring-sec ring-inset',
+      )}
       style={hueStyle(section.color)}
+      {...drop.handlers}
     >
+      {drop.target && (
+        <p
+          role="status"
+          className="pointer-events-none absolute inset-x-3 bottom-3 z-10 rounded-lg bg-sec-soft px-3 py-2 text-center text-sm font-semibold text-sec-ink"
+        >
+          Drop to import into {section.name}
+        </p>
+      )}
       <div className="flex shrink-0 items-center gap-1.5 pt-3.5 pr-3 pb-2.5 pl-4">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-md font-semibold">
