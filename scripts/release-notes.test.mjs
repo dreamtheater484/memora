@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  absoluteLinks,
   imageTags,
   isPrerelease,
   mismatchedPackages,
@@ -42,6 +43,21 @@ describe('release notes', () => {
     expect(() =>
       notesFor('## [3.0.0] - 2027-01-01\n\n## [2.0.0] - 2026-01-01\n- x', '3.0.0'),
     ).toThrow(/empty/);
+  });
+
+  it('makes links into the repository absolute, at the tag', () => {
+    expect(
+      absoluteLinks(
+        '[plan](docs/PLAN.md), [a](./a.md#b), [web](https://x.org), [top](#top)',
+        '1.2.3',
+        'o/r',
+      ),
+    ).toBe(
+      '[plan](https://github.com/o/r/blob/v1.2.3/docs/PLAN.md), [a](https://github.com/o/r/blob/v1.2.3/a.md#b), [web](https://x.org), [top](#top)',
+    );
+    expect(notesFor('## [1.0.0] - 2026-12-01\n\nSee [the plan](docs/PLAN.md).', '1.0.0')).toMatch(
+      /\(https:\/\/github\.com\/[^/]+\/[^/]+\/blob\/v1\.0\.0\/docs\/PLAN\.md\)/,
+    );
   });
 
   it('has a section for the version the packages say', () => {

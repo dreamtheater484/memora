@@ -26,7 +26,7 @@ The full description is in [section 11 of the implementation plan](IMPLEMENTATIO
 - **Secrets at rest.** Two-step verification secrets are encrypted (AES-256-GCM) with an instance key kept in its own file (`data/secret.key`), not in the database or its backups. The database file itself isn't encrypted: use an encrypted volume ([ADR 0005](adr/0005-database-encryption-at-rest.md)).
 - **HTTPS is required** for real use. Browsers only enable offline mode, secure cookies and clipboard access over HTTPS. See [SETUP.md](SETUP.md).
 - **Container hardening:**
-  - Runs as a non-root user (`PUID`/`PGID`).
+  - Runs as a non-root user: the data folder's owner, or `PUID`/`PGID`.
   - Minimal Debian runtime image without a package manager toolchain.
   - Capped heap.
 - **Content safety:** all rendered Markdown and HTML is sanitised. A strict Content Security Policy allows only Memora's own scripts (no inline scripts, no eval), and the end-to-end tests run under it. Pages also get `nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, cross-origin isolation headers, a restrictive `Permissions-Policy`, and HSTS over HTTPS.

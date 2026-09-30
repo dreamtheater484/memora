@@ -51,11 +51,11 @@ The dev entry (`src/*.ts`, run by `tsx`) and the bundle (`dist/server.mjs`) both
 - **`docker/entrypoint.sh`:**
   - caps the V8 heap (`MEMORA_MAX_HEAP_MB`);
   - prepares `/data`;
-  - drops from root to `PUID:PGID` with `setpriv`;
+  - drops from root with `setpriv` to the data folder's owner, or to `PUID:PGID` when set (`docker/memora-user.sh`);
   - refuses to run as root;
   - never runs a recursive `chown` on existing data.
 - **Health check.** The image's `HEALTHCHECK` calls `/api/health` every 60 s. The route logs only at warn level, so these checks don't flood the log.
-- **`memora-admin`** (`docker/memora-admin.sh`) runs `dist/admin.mjs` as `PUID:PGID`, even when `docker exec` starts it as root, so files it creates in `/data` keep the right owner.
+- **`memora-admin`** (`docker/memora-admin.sh`) runs `dist/admin.mjs` as the server's user, even when `docker exec` starts it as root, so files it creates in `/data` keep the right owner.
 - **Publishing.** After CI passes on `main`, `.github/workflows/publish.yml` builds the image natively on amd64 and arm64 runners, runs the smoke test on each, and pushes `:edge` and `:sha-<commit>` to GHCR as one multi-architecture image.
 
 ## Database

@@ -34,7 +34,7 @@ docker rm -f memora
 ```
 
 ```bash
-docker run -d --name memora --restart unless-stopped -p 3000:3000 -e PUID=1000 -e PGID=1000 -v ./data:/data ghcr.io/dreamtheater484/memora:latest
+docker run -d --name memora --restart unless-stopped -p 3000:3000 -v ./data:/data ghcr.io/dreamtheater484/memora:latest
 ```
 
 **On Synology:** **Container Manager → Image** marks the memora image when a newer one is published. Choose **Update**: Container Manager downloads it and recreates the container. (Menu names can differ slightly between DSM versions.)
