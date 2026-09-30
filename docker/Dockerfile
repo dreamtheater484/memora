@@ -44,7 +44,7 @@ RUN pnpm --filter @memora/server deploy --prod --legacy /out/server \
 # ---------------------------------------------------------------------------------------------
 FROM debian:${DEBIAN_RELEASE}-slim AS runtime
 LABEL org.opencontainers.image.title="Memora" \
-      org.opencontainers.image.description="Self-hosted notebook with OneNote-style organisation, Markdown and rich notes, and Kanban boards." \
+      org.opencontainers.image.description="Self-hosted notebook with notebooks and section tabs, Markdown and rich notes, and Kanban boards." \
       org.opencontainers.image.licenses="MIT"
 
 ENV NODE_ENV=production \

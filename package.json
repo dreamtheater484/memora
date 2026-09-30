@@ -2,7 +2,7 @@
   "name": "memora",
   "version": "0.9.1",
   "private": true,
-  "description": "Self-hosted notebook with OneNote-style organisation, Markdown and rich notes, and Kanban boards.",
+  "description": "Self-hosted notebook with notebooks and section tabs, Markdown and rich notes, and Kanban boards.",
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@10.34.6",
