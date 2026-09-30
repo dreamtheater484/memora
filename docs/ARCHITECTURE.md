@@ -20,6 +20,7 @@ In production there is **one process in one container**. The server serves both 
 | ----------------- | ---------------------------------------------------- | --------------------------------------------- |
 | `apps/server`     | HTTP API, database, migrations, startup and shutdown | esbuild → `dist/server.mjs`, `dist/admin.mjs` |
 | `apps/web`        | Single-page app                                      | Vite → `dist/`                                |
+| `apps/desktop`    | The desktop app: the server and web app in Electron  | esbuild → `dist/main.cjs`; electron-builder   |
 | `packages/shared` | Schemas, types and pure helpers used by both sides   | Consumed as TypeScript source                 |
 
 ### Server bundle
@@ -134,6 +135,18 @@ The dev entry (`src/*.ts`, run by `tsx`) and the bundle (`dist/server.mjs`) both
 - **Search.** `fts_cards` (title, key and description, kept by triggers) is searched with the pages when `cards=1`.
 - **Events.** Changes publish `projects.changed` (projects, boards, labels: the navigation) or `board.changed` (with the board, and the card when it was one) to the user's other browsers.
 - **Archives** (`transfer/kanban.ts`). An export of everything adds a file per project and per board; importing gives new ids and a free key when one is taken ([FILE_FORMAT.md](FILE_FORMAT.md#kanban)).
+
+## Desktop app (`apps/desktop`, Phase 14)
+
+Memora for your computer is the same server and web app, packaged with Electron. Nothing in them is forked: the server runs in a desktop mode, and the web app hides what belongs to a server.
+
+- **Main process** (`src/main.ts`). One instance at a time (a second start brings the window forward). It starts the server, opens the window, and on quit asks the server to stop and waits for it, so the database closes cleanly. The server's own restart after a restore (exit code 75) starts it again; any other exit offers to start it again or show the log.
+- **The server** (`src/server.ts`) is the Docker image's `server.mjs`, run as Electron's utility process with the same heap cap (256 MB). It listens on `127.0.0.1` only, on a port kept in `desktop.json`: the web app keeps its offline copy and settings per address, so the port stays the same between launches. The data lives in the app's user folder (`…/Memora/Data`), laid out like a server's `/data`. Its output goes to `logs/memora.log`.
+- **Desktop mode in the server** (`MEMORA_DESKTOP_TOKEN`). The app makes a secret at each launch and passes it in; the window opens `/api/v1/auth/desktop?token=…`, which signs it in as the owner and sends it on. The owner's account is made on the first start, without a password; login and setup are switched off. Requests must be addressed to `127.0.0.1` or `localhost` on the app's port (no DNS rebinding). `MeResponse.desktop` tells the web app, which then hides logging out, passwords, two-step verification, devices, users and the audit log. A missed nightly backup is taken a minute after start. Argon2 is loaded only when a password is hashed, so the app ships without it.
+- **The window** (`src/window.ts`) runs the web app like a browser tab: sandboxed, with context isolation and no Node.js. Only Memora's own address opens in it; other links open in the computer's browser. A session that ended signs in again by itself. A right-click menu for text (spelling, cut, copy and paste) stands in for the browser's.
+- **Updates** (`src/updates.ts`): electron-updater reads the `latest*.yml` files of the newest GitHub release. Windows and the AppImage install updates themselves; macOS does once signed; elsewhere the app offers the download.
+- **Packaging.** `scripts/resources.mjs` puts the server bundle, its migrations, its packages outside the bundle (better-sqlite3 with this system's builds; it uses Node's stable API, so it runs in Electron as built) and the web app in `build/memora`, which becomes the app's resources. `electron-builder.config.cjs` makes the installers, with fixed names for the download page, and signs when the signing secrets are set ([SIGNING.md](SIGNING.md)).
+- **Tests.** `test/app.spec.ts` drives the packaged app with Playwright: it opens signed in, keeps a notebook across a restart at the same address, lists the licences, and closes the database cleanly. CI runs it on Ubuntu for every change; the release workflow on Windows, macOS and Ubuntu, against both the packaged app and the installed one.
 
 ## Live events (`apps/server/src/events`, `routes/events.ts`)
 

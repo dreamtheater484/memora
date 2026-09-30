@@ -1,5 +1,7 @@
 # Troubleshooting
 
+> Using **Memora for your computer**? Its own troubleshooting is in [DESKTOP.md](DESKTOP.md#troubleshooting). This page is about Memora Server.
+
 Find the symptom below. Most answers start with Memora's log:
 
 ```bash

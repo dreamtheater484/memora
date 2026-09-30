@@ -2,7 +2,7 @@
 
 Memora keeps your notes the way a paper binder does: **notebooks** hold **sections**, and sections hold **pages**. You write each page in Markdown or as rich text, and the page saves itself as you type. It works offline, on every device, and next to Kanban boards for your projects.
 
-This guide is for everyone who uses Memora. Installing and running it is in [SETUP.md](SETUP.md).
+This guide is for everyone who uses Memora, on a computer or through a server. Installing it is in [DESKTOP.md](DESKTOP.md) for the app on your computer, which has a few differences listed [there](DESKTOP.md#using-it), and in [SETUP.md](SETUP.md) for Memora Server.
 
 - [Getting around](#getting-around)
 - [Writing](#writing)

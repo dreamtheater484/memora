@@ -1,6 +1,8 @@
-# Installing Memora
+# Memora Server: installing with Docker
 
-This guide installs Memora with Docker: on a Synology NAS, on Linux, or on Windows. Using Memora is in the [user guide](USER_GUIDE.md); updating it is in [UPGRADE.md](UPGRADE.md).
+This guide installs **Memora Server** with Docker: on a Synology NAS, on Linux, or on Windows. The server keeps your notes in one place and in sync on every device, your phone included, in the browser. Using Memora is in the [user guide](USER_GUIDE.md); updating it is in [UPGRADE.md](UPGRADE.md).
+
+> **Just want Memora on your computer?** Get [Memora for your computer](DESKTOP.md) instead: download, open, done. No Docker, no server.
 
 ## What you need
 

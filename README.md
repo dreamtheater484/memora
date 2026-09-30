@@ -1,8 +1,20 @@
 # Memora
 
-A self-hosted notebook that runs in your browser: notebooks with coloured section tabs and page lists, first-class Markdown, a Word-like rich editor and built-in Kanban boards, in one app. It is designed to look great on a phone, a laptop and an ultra-wide monitor.
+A notebook for your own computer or your own server: notebooks with coloured section tabs and page lists, first-class Markdown, a Word-like rich editor and built-in Kanban boards, in one app. It is designed to look great on a phone, a laptop and an ultra-wide monitor.
 
 > **Version 0.9: a public beta.** Everything planned for 1.0 is in and tested; 1.0 follows after time in real use. What's in it: [CHANGELOG.md](CHANGELOG.md).
+
+## Get Memora
+
+|            | **Memora for your computer**                                                              | **Memora Server**                                            |
+| ---------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| For        | Everyone                                                                                  | Enthusiasts with Docker or a NAS                             |
+| Runs on    | Windows, macOS, Ubuntu                                                                    | Docker on Linux, Windows or macOS, or a Synology NAS         |
+| Your notes | On that computer                                                                          | On your server, in sync on every device, your phone included |
+| Installing | Download, open, done                                                                      | A compose file, and HTTPS for use away from home             |
+| Get it     | **[Download page](https://dreamtheater484.github.io/memora/)** · [Guide](docs/DESKTOP.md) | [Server guide](docs/SETUP.md)                                |
+
+Both are the same Memora, from the same code and the same release. You can start on your computer and move to a server later: export once, import once.
 
 ![Memora: a Markdown page beside its live preview, with notebooks, section tabs and the page list](docs/images/notes.png)
 
@@ -16,7 +28,7 @@ A self-hosted notebook that runs in your browser: notebooks with coloured sectio
 - **Kanban:** projects with boards, swimlanes, WIP limits and cards that drag with a mouse, a finger or the keyboard. Any note links to any card.
 - **Every screen:** panes with tabs on wide and ultra-wide monitors, a phone layout, and an installable app.
 - **Open formats:** Markdown, Word, HTML, PDF, and a documented `.memora` archive, in and out.
-- **Yours:** one small Docker container with one SQLite file, on a Synology NAS or any Docker host. No telemetry, nothing loaded from other sites, two-step verification, and a [security review](docs/SECURITY_REVIEW.md).
+- **Yours:** an app on your computer, or one small Docker container on a NAS or any Docker host, with one SQLite file. No telemetry, nothing loaded from other sites, two-step verification on the server, and a [security review](docs/SECURITY_REVIEW.md).
 
 | Kanban boards                                                    | Dark theme                                                 | Phones                                             |
 | ---------------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------- |
@@ -24,7 +36,11 @@ A self-hosted notebook that runs in your browser: notebooks with coloured sectio
 
 ## Quick start
 
-### Run with Docker
+### On your computer
+
+Download Memora for Windows, macOS or Ubuntu from the [download page](https://dreamtheater484.github.io/memora/), and open it. [docs/DESKTOP.md](docs/DESKTOP.md) has the details.
+
+### Run the server with Docker
 
 ```bash
 mkdir -p data && docker run -d --name memora --restart unless-stopped -p 3000:3000 -v ./data:/data ghcr.io/dreamtheater484/memora:latest
@@ -62,13 +78,14 @@ pnpm install
 pnpm dev
 ```
 
-The web app runs at `http://localhost:5173` and the API at `http://localhost:3000`. Read [CONTRIBUTING.md](CONTRIBUTING.md) before your first commit: it explains the privacy guards.
+The web app runs at `http://localhost:5173` and the API at `http://localhost:3000`. Read [CONTRIBUTING.md](CONTRIBUTING.md) before your first commit: it explains the privacy guards, and how to build the desktop app.
 
 ## Documentation
 
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md): scope, decisions, architecture, roadmap
 - [User guide](docs/USER_GUIDE.md): using Memora
-- [Setup guide](docs/SETUP.md): installing Memora with Docker
+- [Memora for your computer](docs/DESKTOP.md): the desktop app, and [signing it](docs/SIGNING.md)
+- [Server guide](docs/SETUP.md): installing Memora Server with Docker
 - [Updating](docs/UPGRADE.md) and [troubleshooting](docs/TROUBLESHOOTING.md)
 - [Backups and restoring](docs/BACKUP_RESTORE.md): the schedule, encryption, Hyper Backup, restoring
 - [Architecture](docs/ARCHITECTURE.md): how the code is organised
