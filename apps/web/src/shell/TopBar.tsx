@@ -36,7 +36,7 @@ import {
 import { hueStyle } from '../theme/sections';
 import { useTheme, type ThemeMode } from '../theme/theme';
 import { useCommands } from './commands';
-import { PROJECTS } from './demo';
+import { useProjects } from '../kanban/projects';
 import { isNotesLevel, useCurrent, useGo, type Current } from './location';
 import { shortcutKeys } from './shortcuts';
 import { useShell } from './store';
@@ -44,17 +44,19 @@ import { GlobalSaveIndicator } from './SyncStatus';
 
 const THEME_ICON = { system: <Monitor />, light: <Sun />, dark: <Moon /> };
 
-function boardOf(boardId: string | null) {
-  const project = PROJECTS.find((p) => p.boards.some((b) => b.id === boardId));
-  return { project, board: project?.boards.find((b) => b.id === boardId) };
+function useBoardOf(boardId: string | null) {
+  const data = useProjects();
+  const board = data.boards.find((b) => b.id === boardId);
+  return { project: data.projects.find((p) => p.id === board?.projectId), board };
 }
 
 function Crumbs() {
   const current = useCurrent();
   const go = useGo();
+  const boardOf = useBoardOf(current.boardId);
   let parts: { label: string; onClick?: () => void }[];
   if (current.level === 'board') {
-    const { project, board } = boardOf(current.boardId);
+    const { project, board } = boardOf;
     parts = [{ label: project?.name ?? '' }, { label: board?.name ?? '' }];
   } else if (current.path) {
     const { notebook, groups, section } = current.path;
@@ -126,10 +128,11 @@ function parentOf(current: Current, go: ReturnType<typeof useGo>): (() => void) 
 
 function PhoneTitle() {
   const current = useCurrent();
+  const boardOf = useBoardOf(current.boardId);
   const { level, section, page, notebook, group } = current;
   let over: ReactNode = null;
   let title: string;
-  if (level === 'board') title = boardOf(current.boardId).board?.name ?? 'Boards';
+  if (level === 'board') title = boardOf.board?.name ?? 'Boards';
   else if (level === 'home') title = 'Notes';
   else if (level === 'notebook') title = notebook?.name ?? 'Notebook';
   else if (level === 'group') {

@@ -35,7 +35,6 @@ import {
   IconButton,
   Kbd,
   PageTree,
-  toast,
   type TreeNode,
 } from '../components/ui';
 import { sectionHeading } from '../components/ui/styles';
@@ -45,8 +44,9 @@ import { shiftBefore, type NotesIndex } from '../notes/model';
 import { isFavorite, toggleFavorite } from '../notes/places';
 import { saveUiState, useNotesActions, useUiState } from '../notes/queries';
 import { hueStyle, sectionColor } from '../theme/sections';
+import { BoardsNav } from '../kanban/BoardsNav';
+import { openBoards, useProjects } from '../kanban/projects';
 import { useCommands } from './commands';
-import { PROJECTS } from './demo';
 import { isNotesLevel, useCurrent, useGo } from './location';
 import { DropIndicator, InlineRename, NotebookTile } from './parts';
 import { FavoritePlaces, RecentPlaces } from './Places';
@@ -91,17 +91,6 @@ function notebookNodes(index: NotesIndex): NavNode[] {
     icon: nb.icon,
     selectable: false,
     children: level(nb.id, null, nb.color),
-  }));
-}
-
-function boardNodes(): NavNode[] {
-  return PROJECTS.map((p) => ({
-    id: p.id,
-    label: p.name,
-    kind: 'project',
-    color: p.color,
-    selectable: false,
-    children: p.boards.map((b) => ({ id: b.id, label: b.name, kind: 'board', color: p.color })),
   }));
 }
 
@@ -192,8 +181,6 @@ function Row({
     </button>
   );
 }
-
-const soon = (what: string, phase: number) => () => toast(`${what} arrives in Phase ${phase}.`);
 
 export interface MenuTarget {
   kind: NavKind;
@@ -441,7 +428,7 @@ export function SectionMenuItems({ sectionId, where }: { sectionId: string; wher
 /** Navigation: quick links, notebooks with section groups, boards, and the footer. */
 export function Sidebar() {
   const current = useCurrent();
-  const { index, level, section, path, boardId } = current;
+  const { index, level, section, path } = current;
   const commands = useCommands();
   const go = useGo();
   const navigate = useNavigate();
@@ -451,9 +438,7 @@ export function Sidebar() {
   const [menuTarget, setMenuTarget] = useState<MenuTarget | null>(null);
 
   const nodes = useMemo(() => notebookNodes(index), [index]);
-  const boards = useMemo(() => boardNodes(), []);
   const expanded = useMemo(() => new Set(ui.expanded ?? []), [ui.expanded]);
-  const [boardsExpanded, setBoardsExpanded] = useState(() => new Set([PROJECTS[0]!.id]));
 
   // The way to the open section stays unfolded.
   const sectionId = section?.id;
@@ -553,18 +538,7 @@ export function Sidebar() {
           </ContextMenu>
         )}
 
-        <Heading addLabel="New project" onAdd={soon('Boards', 10)}>
-          Boards
-        </Heading>
-        <PageTree
-          label="Boards"
-          nodes={boards}
-          selectedId={boardId}
-          expanded={boardsExpanded}
-          onExpandedChange={setBoardsExpanded}
-          onSelect={(n) => go.board(n.id)}
-          renderRow={(node) => <NavRow node={node} />}
-        />
+        <BoardsNav />
       </div>
       <div className="shrink-0 border-t border-line px-2 py-1.5">
         <Row
@@ -587,6 +561,7 @@ export function Sidebar() {
 /** Tablet navigation: one button per notebook, plus the full navigation as a drawer. */
 export function Rail() {
   const { index, notebook, level } = useCurrent();
+  const projects = useProjects();
   const go = useGo();
   const navigate = useNavigate();
   const { setNavOpen, setPaletteOpen } = useShell();
@@ -635,7 +610,7 @@ export function Rail() {
         icon={<SquareKanban />}
         active={level === 'board'}
         tooltipSide="right"
-        onClick={() => go.board(PROJECTS[0]!.boards[0]!.id)}
+        onClick={() => openBoards(projects, go)}
       />
       <IconButton
         label="Search"

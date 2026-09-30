@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import { pageCardsQuery } from '../kanban/api';
 import { useMemo, type ReactNode } from 'react';
 import { versionsQuery } from '../history/api';
 import { backlinksQuery } from '../search/api';
@@ -54,6 +56,61 @@ function Backlinks({ pageId }: { pageId: string }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Kanban cards this note is linked to, with where they are (§9.11). */
+function LinkedCards({ pageId }: { pageId: string }) {
+  const navigate = useNavigate();
+  const cards = useQuery({ ...pageCardsQuery(pageId), retry: false });
+  const add = () => useShell.getState().openDialog({ kind: 'add-to-board', pageId });
+  return (
+    <div className="flex flex-col gap-1">
+      {cards.isError ? (
+        <Later>Linked cards need a connection to the server.</Later>
+      ) : !cards.data ? (
+        <Later>Loading…</Later>
+      ) : cards.data.length === 0 ? (
+        <Later>No cards yet.</Later>
+      ) : (
+        <ul aria-label="Linked cards" className="-mx-2 flex flex-col gap-px">
+          {cards.data.map((c) => (
+            <li key={c.id}>
+              <button
+                type="button"
+                onClick={() =>
+                  void navigate({
+                    to: '/b/$boardId',
+                    params: { boardId: c.boardId },
+                    search: { card: c.id },
+                  })
+                }
+                className="flex w-full flex-col items-start rounded-sm px-2 py-1 text-left text-xs hover:bg-hover"
+              >
+                <span className="w-full truncate font-medium text-fg">
+                  <span className="font-mono text-fg-3">{c.key}</span> {c.title}
+                </span>
+                <span className="w-full truncate text-fg-3">
+                  {c.boardName} ·{' '}
+                  {c.archivedAt
+                    ? 'Archived'
+                    : c.completedAt
+                      ? `${c.columnName} (done)`
+                      : c.columnName}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        type="button"
+        onClick={add}
+        className="self-start rounded-sm text-xs font-medium text-accent hover:underline"
+      >
+        Add to board…
+      </button>
+    </div>
   );
 }
 
@@ -158,6 +215,13 @@ export function Inspector() {
       </Block>
       <Block title="Backlinks">
         {page ? <Backlinks pageId={page.id} /> : <Later>Pages that link here appear here.</Later>}
+      </Block>
+      <Block title="Linked cards">
+        {page ? (
+          <LinkedCards pageId={page.id} />
+        ) : (
+          <Later>Kanban cards linked to the page appear here.</Later>
+        )}
       </Block>
       <Block title="Version history">
         {page ? (

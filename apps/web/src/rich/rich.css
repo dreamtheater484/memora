@@ -65,6 +65,15 @@
   pointer-events: none;
 }
 
+/* Card keys (WEB-42) of known projects: Ctrl+click opens the card. */
+.rich-content .card-link {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--accent);
+  text-decoration: underline dotted;
+  text-underline-offset: 0.18em;
+}
+
 /* Links to pages look like the preview's wiki links. */
 .rich-content a[href^='wiki:'] {
   text-decoration-style: dotted;

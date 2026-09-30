@@ -71,6 +71,12 @@
 .markdown-body .wiki-link {
   text-decoration-style: dotted;
 }
+/* Card keys (WEB-42) linked to their cards. */
+.markdown-body .card-link {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  text-decoration-style: dotted;
+}
 .markdown-body .wiki-link-missing {
   color: var(--danger);
   text-decoration: underline dashed;

@@ -24,6 +24,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import {
   Button,
+  Checkbox,
   Chip,
   Dialog,
   DialogContent,
@@ -278,6 +279,7 @@ export default function SearchView() {
     notebook: params.notebook,
     type: params.type,
     modified: params.modified,
+    cards: params.cards,
   };
   const setFilters = (next: Partial<SearchParams>) =>
     void navigate({
@@ -302,6 +304,7 @@ export default function SearchView() {
     notebookId: filters.notebook,
     type: filters.type,
     modified: filters.modified,
+    cards: filters.cards === '0' ? undefined : '1',
   };
   const active = !!(query.q || query.tagId || query.notebookId || query.type || query.modified);
   const results = useQuery({ ...searchQuery(query), enabled: active });
@@ -391,6 +394,13 @@ export default function SearchView() {
               ...MODIFIED_WITHIN.map((m) => ({ value: m, label: MODIFIED_LABEL[m] })),
             ]}
           />
+          <label className="flex items-center gap-2 text-sm text-fg-2">
+            <Checkbox
+              checked={filters.cards !== '0'}
+              onCheckedChange={(v) => setFilters({ cards: v === true ? undefined : '0' })}
+            />
+            Include cards
+          </label>
           {tag && (
             <Chip
               color={tag.color ?? undefined}
@@ -492,7 +502,7 @@ export default function SearchView() {
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
           </div>
-        ) : !results.data.hits.length ? (
+        ) : !results.data.hits.length && !results.data.cards?.length ? (
           <EmptyState
             icon={<Search />}
             title="Nothing found"
@@ -503,12 +513,54 @@ export default function SearchView() {
             <p role="status" className="px-3 pb-2 text-xs text-fg-3">
               {results.data.total >= 1000 ? 'Over 1,000' : results.data.total}{' '}
               {results.data.total === 1 ? 'page' : 'pages'}
+              {results.data.cards?.length
+                ? `, ${results.data.cards.length} ${results.data.cards.length === 1 ? 'card' : 'cards'}`
+                : ''}
             </p>
             <ul aria-label="Results" className="flex flex-col gap-px">
               {results.data.hits.map((hit) => (
                 <Hit key={hit.id} hit={hit} index={index} onOpen={() => go.page(hit.id)} />
               ))}
             </ul>
+            {!!results.data.cards?.length && (
+              <section aria-labelledby="cards-title" className="mt-5">
+                <h2 id="cards-title" className={cn(sectionHeading, 'mb-2 px-3')}>
+                  Cards
+                </h2>
+                <ul aria-label="Cards" className="flex flex-col gap-px">
+                  {results.data.cards.map((card) => (
+                    <li key={card.id}>
+                      <button
+                        type="button"
+                        data-hit
+                        onClick={() =>
+                          void navigate({
+                            to: '/b/$boardId',
+                            params: { boardId: card.boardId },
+                            search: { card: card.id },
+                          })
+                        }
+                        className="flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2 text-left hover:bg-hover focus-visible:bg-hover"
+                      >
+                        <span className="text-sm font-semibold">
+                          <span className="font-mono text-xs text-fg-3">{card.key}</span>{' '}
+                          <Marked text={card.title} />
+                        </span>
+                        {card.snippet && (
+                          <span className="line-clamp-2 text-xs text-fg-2">
+                            <Marked text={card.snippet} />
+                          </span>
+                        )}
+                        <span className="text-2xs text-fg-3">
+                          {card.boardName} · {card.columnName}
+                          {card.completedAt ? ' · done' : ''}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
           </>
         )}
       </div>

@@ -16,6 +16,7 @@ import {
   Repeat,
   Save,
   Share2,
+  SquareKanban,
   Star,
   Trash2,
   X,
@@ -188,6 +189,14 @@ function PageHead({ page, doc }: { page: PageMeta; doc: PageDoc | null }) {
                 }
               >
                 Export…
+              </MenuItem>
+              <MenuItem
+                icon={<SquareKanban />}
+                onSelect={() =>
+                  useShell.getState().openDialog({ kind: 'add-to-board', pageId: page.id })
+                }
+              >
+                Add to board…
               </MenuItem>
               <MenuSeparator />
               <MenuItem icon={<Trash2 />} danger onSelect={() => commands.deletePages([page.id])}>
