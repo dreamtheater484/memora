@@ -2,6 +2,8 @@
 
 Memora keeps everything in one SQLite database in its data folder: notes, pages' files, versions, users and settings. Backups are copies of that database, taken while Memora runs, so each one is complete and consistent.
 
+One file is deliberately left out: `secret.key`, the key that encrypts two-step verification secrets. Keep a copy of it apart from the backups, such as in your password manager ([restoring on a new machine](#on-a-new-machine) says why).
+
 This guide covers what Memora backs up on its own, how to keep a copy somewhere else (on a Synology NAS, with Hyper Backup), and how to restore, on the same machine or a new one.
 
 ## What Memora does on its own
@@ -94,6 +96,8 @@ docker restart memora
    ```
 
 Memora updates the database if the backup came from an older version (taking a backup first), and everything is there: sign in with your usual account.
+
+**Two-step verification** needs the instance key, `secret.key`, which is not in the backup. Copy yours into the new data folder (readable by the `PUID` user) before step 3 to keep everyone's authenticator app working; the restart in step 3 reads it. Without it, Memora makes a new key; people log in with a recovery code and set up their app again in **Settings → Account** (or an administrator turns it off for them).
 
 ### Restoring one page
 

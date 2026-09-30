@@ -34,15 +34,16 @@ The dev entry (`src/*.ts`, run by `tsx`) and the bundle (`dist/server.mjs`) both
 
 1. Read and validate the configuration from environment variables (`config.ts`, zod). Invalid values stop the process with a readable message.
 2. If a backup waits to be restored (`restore/`, D35), put it in place of `memora.db`.
-3. Open `memora.db` with the durability pragmas: WAL, `synchronous=FULL`, foreign keys.
-4. **Migrations** (`db/migrate.ts`):
+3. Read the instance key (`auth/secretKey.ts`, D47), making `secret.key` (mode 600) on first start. A damaged key stops the process with a readable message.
+4. Open `memora.db` with the durability pragmas: WAL, `synchronous=FULL`, foreign keys.
+5. **Migrations** (`db/migrate.ts`):
    - refuse to open a database written by a newer version (downgrade protection);
    - take a consistent backup before changing an existing database;
    - apply the pending Drizzle migrations.
-5. Record the instance ID and the version that created the database in `app_meta`.
-6. Listen, and start the backup schedule. If no account exists yet, print a one-time setup code to stdout (kept only in memory).
-7. Every 6 hours, delete expired sessions, prune the audit log (a year, at most 50,000 entries), thin out page versions, purge the recycle bin, and delete files nothing uses any more.
-8. On `SIGTERM`/`SIGINT`, close the server, then close the database, which checkpoints the WAL. After a restore was prepared, the same, but ending with exit code 75, for Docker's restart policy to start Memora again.
+6. Record the instance ID and the version that created the database in `app_meta`.
+7. Listen, and start the backup schedule. If no account exists yet, print a one-time setup code to stdout (kept only in memory).
+8. Every 6 hours, delete expired sessions, prune the audit log (a year, at most 50,000 entries), thin out page versions, purge the recycle bin, and delete files nothing uses any more.
+9. On `SIGTERM`/`SIGINT`, close the server, then close the database, which checkpoints the WAL. After a restore was prepared, the same, but ending with exit code 75, for Docker's restart policy to start Memora again.
 
 ## Container
 
@@ -73,10 +74,12 @@ The dev entry (`src/*.ts`, run by `tsx`) and the bundle (`dist/server.mjs`) both
 ## Authentication (`apps/server/src/auth`, `routes/`)
 
 - **Layers.** `repo/` wraps the tables (users, sessions, audit log) and is the only code that queries them. `auth/service.ts` holds the rules: setup, login, sessions and password changes. `routes/` turn HTTP requests into service calls and validate every body with the zod schemas from `@memora/shared`, which the web app uses too.
-- **Access gate** (`auth/plugin.ts`). Every `/api/` route declares `config.access`: `public`, `user` or `admin`. Registering a route without it stops the server at startup. One `onRequest` hook then applies the API rate limit, checks the origin of changes, resolves the session cookie, and enforces the route's access level, the CSRF token, and a pending password change. Handlers can rely on `request.auth` being set when their route needs a user.
+- **Access gate** (`auth/plugin.ts`). Every `/api/` route declares `config.access`: `public`, `user` or `admin`. Registering a route without it stops the server at startup. One `onRequest` hook then applies the API rate limit, checks the origin of changes, resolves the session cookie, and enforces the route's access level, the CSRF token, a pending password change, and two-step verification when an administrator requires it (`allowPendingTwoFactor` marks the routes that set it up). Handlers can rely on `request.auth` being set when their route needs a user.
 - **Sessions.** The cookie carries a random 32-byte token; the `sessions` table stores its SHA-256 hash, so a copy of the database can't be used to log in. Expiry slides with use; `last_seen_at` is written at most every 5 minutes. The CSRF token is an HMAC of the session token, so it needs no storage.
 - **Passwords.** Argon2id through `@node-rs/argon2`, at most two hashes at a time, so a burst of logins can't use much memory. Unknown usernames still cost one hash, so response times don't reveal which accounts exist.
-- **Throttling** (`auth/throttle.ts`). In-memory counters per username and per address, with doubling delays, capped at 10,000 entries.
+- **Two-step verification** (`auth/totp.ts`, `auth/twoFactor.ts`, D47). RFC 6238 codes on `node:crypto`; the step of the last accepted code is stored, so each code works once, even when two requests race. A right password with two-step verification on answers a ticket (in memory, five minutes, five tries), and `POST /auth/login/two-factor` turns ticket and code into a session. Secrets are sealed with AES-256-GCM under the instance key; recovery codes are stored as SHA-256 hashes. The "required" setting is in `app_meta`, cached in memory.
+- **Headers** (`app.ts`, `@memora/shared` `security.ts`). An `onSend` hook adds the Content Security Policy and the other security headers to every answer; API answers get a policy that loads nothing. The web app's preview server sends the same, so the end-to-end tests run under the real policy. The web build starts zod without its `new Function` probe (`vite.config.ts`), which the policy would report.
+- **Throttling** (`auth/throttle.ts`). In-memory counters per username and per address, and per account for two-step codes, with doubling delays, capped at 10,000 entries.
 - **Tests.** `auth/access.test.ts` lists every API route with its expected access level and fails when a route is added without an entry, then checks anonymous, regular-user and cross-user requests against each one.
 
 ## Notes (`apps/server/src/notes`, `routes/notes.ts`)

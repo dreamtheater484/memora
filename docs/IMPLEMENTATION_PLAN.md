@@ -126,6 +126,7 @@ These are parked and listed in §17. The data model is designed so they can be a
 | D44 | Workspace (Phase 11)                    | **The main pane stays the address's**; panes beside it hold tabs (a page, a board, a search, or the backlinks or history of the main page), one pane on wide screens and up to three on ultra-wide ones. Each device class keeps its panes in the browser's storage, per user; **named layouts live in the UI state** and follow the user. Tabs move by dragging (onto tabs, onto a pane's edge to split, into the main pane to open there) and by menus; Ctrl/Cmd+\\ opens the page in a new pane.                                                                                           | Links, back and forward keep meaning one thing (the main pane), while the panes are a place to keep things at hand. A 5120 px monitor and a 1920 px one need different panes, so each keeps its own; a named layout is a choice worth having everywhere.                                                    |
 | D45 | Accessibility audit (Phase 11)          | Automated: axe on every screen in both themes, a keyboard walkthrough that checks every Tab stop is visible and named and that Tab leaves every region, reduced motion honoured. Found and fixed: **Tab in the page list indented pages**, so the keyboard could never leave the list; indenting is now Alt+Shift+→/← (Tab moves on, as everywhere). A skip link leads past the bars to the content.                                                                                                                                                                                          | A trap for keyboard users is a WCAG failure (2.1.2) and worse than a less familiar shortcut; outliners use Alt+Shift+arrows for the same thing.                                                                                                                                                             |
 | D46 | Installed app (Phase 11)                | A manifest with icons and iOS splash screens (drawn from the logo by a script); an offline page for when not even the app is stored; **a new version is offered with "Reload"** (the waiting service worker is told to take over), still never forced. "Keep every page on this device" is a setting of the device: pages are fetched in the background, one tab at a time, and kept instead of the 100 most recent.                                                                                                                                                                          | Updating stays the user's choice, so nothing reloads under someone's typing, but it no longer needs every tab closed. What fits on a device is the device's business, not the account's.                                                                                                                    |
+| D47 | Two-step verification (Phase 12)        | **TOTP written on `node:crypto`**, with recovery codes and an administrator's "required"; secrets sealed with an **instance key file** (`data/secret.key`), not in the database or its backups. **Database encryption at rest parked** (ADR 0005).                                                                                                                                                                                                                                                                                                                                            | No dependency to trust for a security feature. A copy of the database or a backup doesn't give the second step away; a lost key still leaves recovery codes. An encrypted volume protects the rest, without running every install on a forked storage driver.                                               |
 
 ---
 
@@ -494,14 +495,15 @@ My Notebook/
 - **Account page.**
   - Change password and display name.
   - List active sessions and devices and revoke any of them.
-  - Set up 2FA with an authenticator app (TOTP) plus recovery codes. Arrives in Phase 12.
+  - Set up 2FA with an authenticator app (TOTP) plus recovery codes. _Phase 12: "Two-step verification" in Settings → Account; the password first, then a QR code, a first code, and ten recovery codes shown once (D47)._
 - **Admin.**
   - Create, disable and delete users, and reset passwords (sets a temporary password that must be changed at next login).
   - Assign roles.
-  - Enforce 2FA.
+  - Enforce 2FA. _Settings → Users → Security; only after turning it on for their own account. Turn it off for someone who lost their phone._
   - View the audit log.
 - **Command-line fallback** inside the container:
   - `memora-admin reset-password <user>`
+  - `memora-admin reset-2fa <user>`
   - `memora-admin list-users`
   - `memora-admin backup`
   - `memora-admin restore <file>`
@@ -879,12 +881,12 @@ My Notebook/
 
 ### 9.15 Encryption
 
-| Layer              | Status             | Notes                                                                                                                                                                                                                                                                                                           |
-| ------------------ | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| In transit (HTTPS) | Required, v1.0     | Handled by the reverse proxy or Tailscale.                                                                                                                                                                                                                                                                      |
-| Backups & exports  | **In scope, v1.0** | Optional password, AES-256-GCM with the scrypt KDF.                                                                                                                                                                                                                                                             |
-| Database at rest   | Optional, Phase 12 | SQLCipher-compatible driver (`better-sqlite3-multiple-ciphers`); key from a Docker secret; a tool to encrypt or decrypt an existing database. Decision point: if it complicates arm64 builds, it is parked. Until then, use a **Synology encrypted shared folder** for encryption at rest with no code changes. |
-| End-to-end         | Parked             | It would disable server-side search and export. Revisit together with sharing.                                                                                                                                                                                                                                  |
+| Layer              | Status                                                                     | Notes                                                                                                                                                                                                                                         |
+| ------------------ | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| In transit (HTTPS) | Required, v1.0                                                             | Handled by the reverse proxy or Tailscale.                                                                                                                                                                                                    |
+| Backups & exports  | **In scope, v1.0**                                                         | Optional password, AES-256-GCM with the scrypt KDF.                                                                                                                                                                                           |
+| Database at rest   | **Parked** (Phase 12, [ADR 0005](adr/0005-database-encryption-at-rest.md)) | Use a **Synology encrypted shared folder** (or LUKS, BitLocker) for encryption at rest with no code changes. Two-step verification secrets are sealed with the instance key (`data/secret.key`), which is not in the database or its backups. |
+| End-to-end         | Parked                                                                     | It would disable server-side search and export. Revisit together with sharing.                                                                                                                                                                |
 
 ### 9.16 Settings
 
@@ -942,7 +944,7 @@ All endpoints sit under `/api/v1`. They use JSON validated by zod, return errors
 - **Content safety.**
   - All rendered Markdown and HTML is sanitised: `rehype-sanitize`, plus DOMPurify for HTML pasted or imported into rich notes.
   - Mermaid runs with `securityLevel: 'strict'`, and KaTeX with `trust: false`.
-  - A strict Content Security Policy (`default-src 'self'`; images from `self`, `data:` and `blob:`; no remote scripts; no inline scripts).
+  - A strict Content Security Policy (`default-src 'self'`; scripts only from `self`, no inline scripts, no eval; images from `self`, `data:`, `blob:` and HTTPS sites, for pasted images the server couldn't download). _Phase 12: `packages/shared/src/security.ts`, sent by the server and by the end-to-end tests' preview server, with `nosniff`, `Referrer-Policy`, `X-Frame-Options`, COOP, CORP, `Permissions-Policy`, and HSTS over HTTPS._
 - **Uploads.**
   - Size limits.
   - File type checked from the file's actual contents, not its name.
@@ -961,7 +963,7 @@ All endpoints sit under `/api/v1`. They use JSON validated by zod, return errors
 - **Remote access advice (in the setup guide).**
   - Recommended: **Tailscale** (a private VPN); no ports are opened on your router.
   - If you expose Memora publicly: HTTPS only, 2FA turned on, the Synology firewall and auto-block enabled, and optionally the container port bound to `127.0.0.1` so only the reverse proxy can reach it.
-- **Security review** in Phase 12: a threat model and the OWASP ASVS Level 1 checklist.
+- **Security review** in Phase 12: a threat model and the OWASP ASVS Level 1 checklist. _In [SECURITY_REVIEW.md](SECURITY_REVIEW.md)._
 
 ---
 
@@ -1031,7 +1033,7 @@ No secrets are passed as plain environment variables. Anything secret uses a `*_
 | `MEMORA_SESSION_DAYS`         | `30`                             | Idle session length with "remember this device"                                                                                                           |
 | `MEMORA_SESSION_HOURS`        | `12`                             | Idle session length without it                                                                                                                            |
 | `MEMORA_GOTENBERG_URL`        | —                                | Turns on one-click PDF export                                                                                                                             |
-| `MEMORA_DB_KEY_FILE`          | —                                | (Phase 12) Turns on database encryption at rest                                                                                                           |
+| `MEMORA_SECRET_KEY_FILE`      | `/data/secret.key`               | The instance key that seals two-step verification secrets; made on first start. (Database encryption at rest, `MEMORA_DB_KEY_FILE`, is parked: ADR 0005.) |
 | `MEMORA_LOG_LEVEL`            | `info`                           | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                                                            |
 | `MEMORA_MAX_HEAP_MB`          | `256`                            | Node.js heap cap in MB. Keeps RAM use predictable.                                                                                                        |
 
@@ -1363,11 +1365,11 @@ Long lists (pages, search results, cards) render only what is visible on screen.
 
 ### Phase 12 — Security hardening & encryption at rest · M
 
-- [ ] Authenticator-app 2FA (TOTP) with recovery codes; admin can enforce it
-- [ ] Content Security Policy and headers tightened and verified; full audit-log coverage
-- [ ] Threat model, OWASP ASVS Level 1 checklist, fixes
-- [ ] Trivy and dependency scans clean (or findings documented)
-- [ ] **Decision point:** optional database encryption at rest (`better-sqlite3-multiple-ciphers`, key via `MEMORA_DB_KEY_FILE`, a tool to encrypt or decrypt an existing database, documented key backup). Park it if it harms arm64 builds or reliability.
+- [x] Authenticator-app 2FA (TOTP) with recovery codes; admin can enforce it. _RFC 6238 on `node:crypto` (no dependency); codes one step either side, each once; ten recovery codes, hashed. Logins answer a five-minute ticket, then the code; wrong codes slow the account down even with the right password. Tested against the RFC's vectors; the QR code is the standard `otpauth://` address that 2FAS, Aegis, Google and Microsoft Authenticator and password managers read (D47)._
+- [x] Content Security Policy and headers tightened and verified; full audit-log coverage. _One policy for the server and the end-to-end tests; a test checks that pages run under it without a single violation and that inline script is refused. Backups deleted, exports and imports, two-step and security changes are now audited._
+- [x] Threat model, OWASP ASVS Level 1 checklist, fixes. _[SECURITY_REVIEW.md](SECURITY_REVIEW.md); fixed: a password strength meter, the headers, zod's eval probe, audit gaps, a vulnerable `lodash-es`._
+- [x] Trivy and dependency scans clean (or findings documented). _In CI: `pnpm audit --prod --audit-level high` and Trivy (fixable high and critical) on the image. Both clean; one moderate advisory remains in a development-only tool (esbuild through drizzle-kit)._
+- [x] **Decision point:** optional database encryption at rest. _Parked ([ADR 0005](adr/0005-database-encryption-at-rest.md)). Not because of arm64 (prebuilt binaries exist) but because of what it adds: every install would run on a single-maintainer fork of the storage driver, for protection an encrypted volume already gives, since the key has to sit beside the data for unattended restarts. Instead, the secrets that must not leak from a database copy are sealed with an instance key kept outside it._
 
 **Acceptance:** the checklist is complete; 2FA works with common authenticator apps; the encryption-at-rest decision is recorded as an ADR.
 
