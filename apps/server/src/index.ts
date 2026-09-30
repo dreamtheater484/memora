@@ -1,5 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { buildApp } from './app';
+import { loadSecretKey, SecretKeyError } from './auth/secretKey';
 import { applyPendingRestore } from './backup/service';
 import { ConfigError, loadConfig } from './config';
 import { openDatabase } from './db/client';
@@ -27,6 +28,16 @@ async function main(): Promise<void> {
   mkdirSync(config.dataDir, { recursive: true });
   // A backup chosen to be restored goes in place before the database is opened (§9.14).
   const restored = applyPendingRestore(config.dataDir, config.databaseFile);
+  let secretKey;
+  try {
+    secretKey = loadSecretKey(config.secretKeyFile);
+  } catch (error) {
+    if (error instanceof SecretKeyError) {
+      console.error(error.message);
+      process.exit(1);
+    }
+    throw error;
+  }
   const db = openDatabase(config.databaseFile);
   let requestRestart = () => undefined as void;
   const app = await buildApp({
@@ -34,6 +45,7 @@ async function main(): Promise<void> {
     db,
     version: APP_VERSION,
     onRestart: () => requestRestart(),
+    secretKey,
   });
   if (restored) app.log.info({ backup: restored }, 'backup restored');
 

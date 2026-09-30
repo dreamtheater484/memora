@@ -37,7 +37,9 @@
         line-height: 1.5;
         opacity: 0.8;
       }
-      button {
+      a {
+        display: inline-block;
+        text-decoration: none;
         font: inherit;
         font-weight: 600;
         padding: 0.6rem 1.2rem;
@@ -57,7 +59,8 @@
         This device has no connection to your Memora server, and the app isn’t stored here yet. It
         opens as soon as the connection is back.
       </p>
-      <button type="button" onclick="location.reload()">Try again</button>
+      <!-- A link to this same address: inline scripts are not allowed (§11). -->
+      <a href="">Try again</a>
     </main>
   </body>
 </html>

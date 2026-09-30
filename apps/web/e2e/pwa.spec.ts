@@ -46,7 +46,7 @@ test('the manifest names the app and its icons, and every file is there', async 
 test('the offline page explains, and tries again', async ({ page }) => {
   await page.goto('/offline.html');
   await expect(page.getByRole('heading', { name: 'Memora can’t be reached' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Try again' })).toHaveAttribute('href', '');
   await expectNoA11yViolations(page);
 });
 

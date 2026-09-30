@@ -1,4 +1,3 @@
-import { PASSWORD_MIN_LENGTH } from '@memora/shared';
 import { useNavigate } from '@tanstack/react-router';
 import { KeyRound } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
@@ -6,6 +5,7 @@ import { Button, Field, PasswordInput, toast } from '../components/ui';
 import { ApiRequestError } from '../lib/api';
 import { AuthLayout, FormError } from './AuthLayout';
 import { useChangePassword, useCurrentUser, useLogout } from './queries';
+import { NewPasswordHint } from './NewPasswordHint';
 
 /** Shown after logging in with a one-time password from an administrator. */
 export function ChangePasswordPage() {
@@ -80,7 +80,7 @@ export function ChangePasswordPage() {
         <Field
           label="New password"
           error={fields.newPassword}
-          hint={`At least ${PASSWORD_MIN_LENGTH} characters. A few unrelated words work well.`}
+          hint={<NewPasswordHint password={newPassword} username={user.username} />}
         >
           {({ id, describedBy, invalid }) => (
             <PasswordInput

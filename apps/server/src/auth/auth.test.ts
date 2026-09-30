@@ -69,6 +69,8 @@ describe('first-run setup', () => {
       displayName: 'Alex Doe',
       role: 'admin',
       mustChangePassword: false,
+      twoFactor: false,
+      mustSetUpTwoFactor: false,
     });
     expect(res.json().csrfToken).toEqual(expect.any(String));
 

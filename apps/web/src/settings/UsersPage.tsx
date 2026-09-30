@@ -8,16 +8,20 @@ import {
   Ellipsis,
   KeyRound,
   Pencil,
+  ShieldOff,
   Trash2,
   UserPlus,
 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { FormError } from '../auth/AuthLayout';
 import {
+  securityQuery,
   useCreateUser,
   useCurrentUser,
   useDeleteUser,
   useResetPassword,
+  useResetTwoFactor,
+  useUpdateSecurity,
   useUpdateUser,
   usersQuery,
 } from '../auth/queries';
@@ -38,6 +42,7 @@ import {
   MenuTrigger,
   Select,
   Skeleton,
+  Switch,
   toast,
 } from '../components/ui';
 import { ApiRequestError, errorMessage } from '../lib/api';
@@ -53,12 +58,22 @@ type DialogState =
   | { kind: 'create' }
   | { kind: 'edit'; user: AdminUser }
   | { kind: 'reset'; user: AdminUser }
+  | { kind: 'two-factor'; user: AdminUser }
   | { kind: 'disable'; user: AdminUser }
   | { kind: 'delete'; user: AdminUser }
   | { kind: 'password'; result: TemporaryPasswordResponse; created: boolean }
   | null;
 
 export function UsersPage() {
+  return (
+    <>
+      <UsersSection />
+      <SecuritySection />
+    </>
+  );
+}
+
+function UsersSection() {
   const me = useCurrentUser();
   const users = useQuery(usersQuery);
   const update = useUpdateUser();
@@ -113,6 +128,7 @@ export function UsersPage() {
                     {!user.disabled && user.mustChangePassword && (
                       <Badge tone="warn">One-time password</Badge>
                     )}
+                    {user.twoFactor && <Badge tone="ok">Two-step</Badge>}
                   </div>
                   <div className="truncate text-xs text-fg-3">
                     @{user.username} ·{' '}
@@ -143,6 +159,14 @@ export function UsersPage() {
                         onSelect={() => setDialog({ kind: 'reset', user })}
                       >
                         Reset password…
+                      </MenuItem>
+                    )}
+                    {!self && user.twoFactor && (
+                      <MenuItem
+                        icon={<ShieldOff />}
+                        onSelect={() => setDialog({ kind: 'two-factor', user })}
+                      >
+                        Turn off two-step verification…
                       </MenuItem>
                     )}
                     {!self &&
@@ -192,6 +216,9 @@ export function UsersPage() {
             user={dialog.user}
             onDone={(result) => setDialog({ kind: 'password', result, created: false })}
           />
+        )}
+        {dialog?.kind === 'two-factor' && (
+          <TwoFactorResetDialog user={dialog.user} onDone={close} />
         )}
         {dialog?.kind === 'disable' && <DisableDialog user={dialog.user} onDone={close} />}
         {dialog?.kind === 'delete' && <DeleteDialog user={dialog.user} onDone={close} />}
@@ -346,6 +373,90 @@ function ResetDialog({
     >
       <FormError message={reset.error ? errorMessage(reset.error) : undefined} />
     </DialogContent>
+  );
+}
+
+function TwoFactorResetDialog({ user, onDone }: { user: AdminUser; onDone: () => void }) {
+  const reset = useResetTwoFactor();
+  return (
+    <DialogContent
+      title={`Turn off two-step verification for ${user.displayName}?`}
+      description="For someone who lost their phone and their recovery codes. They’re signed out everywhere and log in with their password alone (or set it up again, if it’s required)."
+      size="sm"
+      footer={
+        <>
+          <DialogClose asChild>
+            <Button variant="ghost">Cancel</Button>
+          </DialogClose>
+          <Button
+            variant="danger"
+            disabled={reset.isPending}
+            onClick={() =>
+              reset.mutate(user.id, {
+                onSuccess: () => {
+                  toast(`Two-step verification is off for ${user.displayName}.`);
+                  onDone();
+                },
+              })
+            }
+          >
+            Turn off
+          </Button>
+        </>
+      }
+    >
+      <FormError message={reset.error ? errorMessage(reset.error) : undefined} />
+    </DialogContent>
+  );
+}
+
+/** Instance-wide security settings. */
+function SecuritySection() {
+  const me = useCurrentUser();
+  const settings = useQuery(securityQuery);
+  const update = useUpdateSecurity();
+  const required = settings.data?.requireTwoFactor ?? false;
+  // Turning it on needs the admin's own first, or they would be held at the set-up too.
+  const blocked = !required && !me.twoFactor;
+
+  return (
+    <SettingsSection title="Security" description="Rules for everyone who logs in here.">
+      {settings.isPending ? (
+        <Skeleton className="h-10" />
+      ) : (
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <label htmlFor="require-two-factor" className="text-sm font-medium">
+              Require two-step verification
+            </label>
+            <p className="text-xs text-fg-2">
+              {blocked
+                ? 'Set it up for your own account first, on the Account page.'
+                : 'Everyone logs in with a code from their phone as well as their password. Those without it set it up at their next step in Memora.'}
+            </p>
+          </div>
+          <Switch
+            id="require-two-factor"
+            checked={required}
+            disabled={blocked || update.isPending}
+            onCheckedChange={(on) =>
+              update.mutate(
+                { requireTwoFactor: on },
+                {
+                  onSuccess: () =>
+                    toast(
+                      on
+                        ? 'Two-step verification is required.'
+                        : 'Two-step verification is optional.',
+                    ),
+                  onError: (error) => toast(errorMessage(error)),
+                },
+              )
+            }
+          />
+        </div>
+      )}
+    </SettingsSection>
   );
 }
 

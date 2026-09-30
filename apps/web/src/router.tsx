@@ -12,6 +12,7 @@ import { ChangePasswordPage } from './auth/ChangePasswordPage';
 import { LoginPage } from './auth/LoginPage';
 import { meQuery } from './auth/queries';
 import { SetupPage } from './auth/SetupPage';
+import { TwoFactorRequiredPage } from './auth/TwoFactorRequiredPage';
 import { safeRedirect } from './lib/redirect';
 import { validateSearchParams } from './search/api';
 import { settingsQuery, treeQuery } from './notes/queries';
@@ -58,6 +59,7 @@ const loginRoute = createRoute({
     const state = await me(context);
     if (state.setupRequired) throw redirect({ to: '/setup' });
     if (state.user?.mustChangePassword) throw redirect({ to: '/change-password' });
+    if (state.user?.mustSetUpTwoFactor) throw redirect({ to: '/set-up-two-factor' });
     if (state.user) throw redirect({ href: search.redirect ?? '/' });
   },
   component: LoginPage,
@@ -74,7 +76,22 @@ const changePasswordRoute = createRoute({
   component: ChangePasswordPage,
 });
 
-/** Everything below needs a signed-in user with their own password. */
+const twoFactorRequiredRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/set-up-two-factor',
+  beforeLoad: async ({ context }) => {
+    const state = await me(context);
+    if (!state.user) throw redirect({ to: '/login' });
+    if (state.user.mustChangePassword) throw redirect({ to: '/change-password' });
+    if (!state.user.mustSetUpTwoFactor) throw redirect({ to: '/' });
+  },
+  component: TwoFactorRequiredPage,
+});
+
+/**
+ * Everything below needs a signed-in user with their own password (and two-step verification,
+ * when an administrator requires it).
+ */
 const appRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'app',
@@ -86,6 +103,7 @@ const appRoute = createRoute({
       throw redirect({ to: '/login', search: back ? { redirect: back } : {} });
     }
     if (state.user.mustChangePassword) throw redirect({ to: '/change-password' });
+    if (state.user.mustSetUpTwoFactor) throw redirect({ to: '/set-up-two-factor' });
   },
   component: SignedIn,
 });
@@ -202,6 +220,7 @@ const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
   changePasswordRoute,
+  twoFactorRequiredRoute,
   appRoute.addChildren([
     notesRoute.addChildren([
       homeRoute,

@@ -1,4 +1,3 @@
-import { PASSWORD_MIN_LENGTH } from '@memora/shared';
 import { useNavigate } from '@tanstack/react-router';
 import { Sparkles } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
@@ -6,6 +5,7 @@ import { Button, Field, Input, Kbd, PasswordInput, toast } from '../components/u
 import { ApiRequestError } from '../lib/api';
 import { AuthLayout, FormError } from './AuthLayout';
 import { useSetup } from './queries';
+import { NewPasswordHint } from './NewPasswordHint';
 
 /**
  * First-run setup (§9.1): creates the administrator. The setup code from the server log proves
@@ -101,7 +101,7 @@ export function SetupPage() {
         <Field
           label="Password"
           error={fields.password}
-          hint={`At least ${PASSWORD_MIN_LENGTH} characters. A few unrelated words work well.`}
+          hint={<NewPasswordHint password={form.password} username={form.username} />}
         >
           {({ id, describedBy, invalid }) => (
             <PasswordInput

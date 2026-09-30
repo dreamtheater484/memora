@@ -2,7 +2,13 @@ import { existsSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
-import type { HealthResponse } from '@memora/shared';
+import {
+  API_CONTENT_SECURITY_POLICY,
+  CONTENT_SECURITY_POLICY,
+  SECURITY_HEADERS,
+  STRICT_TRANSPORT_SECURITY,
+  type HealthResponse,
+} from '@memora/shared';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { DEFAULT_FETCH_POLICY, type FetchPolicy } from './assets/fetch';
 import { cleanUnusedAssets } from './assets/cleanup';
@@ -10,7 +16,9 @@ import { AssetsService } from './assets/service';
 import { BackupService } from './backup/service';
 import { DEFAULT_HASH_PARAMS, PasswordHasher, type HashParams } from './auth/password';
 import { registerAuth } from './auth/plugin';
+import { loadSecretKey } from './auth/secretKey';
 import { AuthService } from './auth/service';
+import { TwoFactorService } from './auth/twoFactor';
 import type { Config } from './config';
 import type { SqliteDatabase } from './db/client';
 import { dataIdOf } from './db/meta';
@@ -49,6 +57,8 @@ export interface AppOptions {
    * so the container restarts it; tests just note the request.
    */
   onRestart?: () => void;
+  /** The instance's secret key; read from `config.secretKeyFile` when first needed otherwise. */
+  secretKey?: Buffer;
 }
 
 declare module 'fastify' {
@@ -74,6 +84,7 @@ export async function buildApp({
   hashParams = DEFAULT_HASH_PARAMS,
   fetchPolicy = DEFAULT_FETCH_POLICY,
   onRestart = () => undefined,
+  secretKey,
 }: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     // `base: null` drops pid/hostname from every line: inside Docker they are noise.
@@ -104,7 +115,12 @@ export async function buildApp({
   const orm = createOrm(db);
   const repos = createRepos(orm, now);
   const hasher = new PasswordHasher(hashParams);
-  const auth = new AuthService(db, repos, hasher, config, now);
+  const twoFactor = new TwoFactorService(
+    db,
+    () => secretKey ?? loadSecretKey(config.secretKeyFile),
+    now,
+  );
+  const auth = new AuthService(db, repos, hasher, config, now, twoFactor);
   const notes = new NotesService(db, orm, now);
   const search = new SearchService(db, now);
   const templates = new TemplatesService(orm, now);
@@ -162,6 +178,22 @@ export async function buildApp({
   });
 
   registerAuth(app, auth, config, now);
+
+  // Security headers on every answer (§11). Routes that set a stricter policy keep theirs.
+  app.addHook('onSend', async (request, reply) => {
+    for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+      if (!reply.hasHeader(name)) reply.header(name, value);
+    }
+    if (!reply.hasHeader('content-security-policy')) {
+      reply.header(
+        'Content-Security-Policy',
+        request.url.startsWith('/api/') ? API_CONTENT_SECURITY_POLICY : CONTENT_SECURITY_POLICY,
+      );
+    }
+    if (request.protocol === 'https') {
+      reply.header('Strict-Transport-Security', STRICT_TRANSPORT_SECURITY);
+    }
+  });
 
   // Unauthenticated on purpose (Docker health checks): reveals nothing beyond status and version.
   // Logged only on problems, so the periodic health check doesn't flood the container log.

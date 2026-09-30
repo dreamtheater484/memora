@@ -55,8 +55,8 @@ export function isUnreachable(error: unknown): boolean {
 interface SessionEvents {
   /** The server no longer knows this session (expired, revoked, signed out elsewhere). */
   onSignedOut?: () => void;
-  /** The server wants a new password before anything else. */
-  onPasswordChangeRequired?: () => void;
+  /** The server wants a new password, or two-step verification set up, before anything else. */
+  onSetUpRequired?: () => void;
 }
 
 let events: SessionEvents = {};
@@ -160,7 +160,9 @@ async function send<T>(
 
   // Login failures are answered on the form; anything else means the session is gone.
   if (code === 'unauthenticated') events.onSignedOut?.();
-  if (code === 'password_change_required') events.onPasswordChangeRequired?.();
+  if (code === 'password_change_required' || code === 'two_factor_required') {
+    events.onSetUpRequired?.();
+  }
   throw error;
 }
 

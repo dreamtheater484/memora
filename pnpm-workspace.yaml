@@ -12,3 +12,8 @@ ignoredBuiltDependencies:
   - better-sqlite3
   # Git hooks are installed by scripts/install-hooks.mjs instead (skipped in CI and Docker builds).
   - lefthook
+
+# Patched versions of transitive dependencies with published advisories (`pnpm audit`).
+overrides:
+  # Through mermaid > chevrotain: GHSA-r5fr-rjxr-66jc, GHSA-f23m-r3pf-42rh.
+  lodash-es: ^4.18.1

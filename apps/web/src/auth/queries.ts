@@ -5,11 +5,17 @@ import type {
   CreateUserRequest,
   CurrentUser,
   LoginRequest,
+  LoginResponse,
   MeResponse,
+  RecoveryCodesResponse,
+  SecuritySettings,
   SessionInfo,
   SessionResponse,
   SetupRequest,
   TemporaryPasswordResponse,
+  TwoFactorLoginRequest,
+  TwoFactorSetup,
+  TwoFactorStatus,
   UpdateUserRequest,
 } from '@memora/shared';
 import {
@@ -62,7 +68,7 @@ export const meQuery = queryOptions({
       return me;
     } catch (error) {
       const user = isUnreachable(error) ? rememberedUser() : null;
-      if (!user || user.mustChangePassword) throw error;
+      if (!user || user.mustChangePassword || user.mustSetUpTwoFactor) throw error;
       return { setupRequired: false, user, csrfToken: null };
     }
   },
@@ -109,10 +115,23 @@ export function signedOut(queryClient: QueryClient, { forget = false } = {}): vo
   }));
 }
 
+/** The password step: signs in, or answers a ticket when a code must follow. */
 export function useLogin() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: LoginRequest) => api<SessionResponse>('POST', '/auth/login', body),
+    mutationFn: (body: LoginRequest) => api<LoginResponse>('POST', '/auth/login', body),
+    onSuccess: (response) => {
+      if ('user' in response) signedIn(queryClient, response);
+    },
+  });
+}
+
+/** The second step: the code from the authenticator app, or a recovery code. */
+export function useLoginWithCode() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TwoFactorLoginRequest) =>
+      api<SessionResponse>('POST', '/auth/login/two-factor', body),
     onSuccess: (response) => signedIn(queryClient, response),
   });
 }
@@ -157,6 +176,70 @@ export function useUpdateProfile() {
     mutationFn: (displayName: string) => api<CurrentUser>('PATCH', '/auth/me', { displayName }),
     onSuccess: (user) =>
       queryClient.setQueryData<MeResponse>(meKey, (old) => (old ? { ...old, user } : old)),
+  });
+}
+
+// Two-step verification
+
+const twoFactorKey = ['auth', 'two-factor'] as const;
+
+export const twoFactorQuery = queryOptions({
+  queryKey: twoFactorKey,
+  queryFn: () => api<TwoFactorStatus>('GET', '/auth/two-factor'),
+});
+
+/** Keeps the signed-in user's `twoFactor` in step without asking the server again. */
+function setTwoFactor(queryClient: QueryClient, on: boolean) {
+  queryClient.setQueryData<MeResponse>(meKey, (old) => {
+    if (!old?.user) return old;
+    const user: CurrentUser = {
+      ...old.user,
+      twoFactor: on,
+      mustSetUpTwoFactor: !on && queryClient.getQueryData<TwoFactorStatus>(twoFactorKey)?.required,
+    };
+    rememberUser(user);
+    return { ...old, user };
+  });
+  void queryClient.invalidateQueries({ queryKey: twoFactorKey });
+}
+
+export const useStartTwoFactor = () =>
+  useMutation({
+    mutationFn: (password: string) =>
+      api<TwoFactorSetup>('POST', '/auth/two-factor/setup', { password }),
+  });
+
+export function useEnableTwoFactor() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (code: string) =>
+      api<RecoveryCodesResponse>('POST', '/auth/two-factor/enable', { code }),
+    // The user is set when the recovery codes have been seen: the forced set-up page stays
+    // until then.
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: twoFactorKey });
+      void queryClient.invalidateQueries({ queryKey: sessionsKey });
+    },
+  });
+}
+
+/** After the recovery codes were shown: the account is protected. */
+export const twoFactorDone = (queryClient: QueryClient) => setTwoFactor(queryClient, true);
+
+export function useNewRecoveryCodes() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (password: string) =>
+      api<RecoveryCodesResponse>('POST', '/auth/two-factor/recovery-codes', { password }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: twoFactorKey }),
+  });
+}
+
+export function useDisableTwoFactor() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (password: string) => api<void>('POST', '/auth/two-factor/disable', { password }),
+    onSuccess: () => setTwoFactor(queryClient, false),
   });
 }
 
@@ -212,6 +295,28 @@ export const useResetPassword = () =>
 
 export const useDeleteUser = () =>
   useUsersMutation((id: string) => api<void>('DELETE', `/admin/users/${id}`));
+
+export const useResetTwoFactor = () =>
+  useUsersMutation((id: string) => api<AdminUser>('POST', `/admin/users/${id}/two-factor/reset`));
+
+const securityKey = ['admin', 'security'] as const;
+
+export const securityQuery = queryOptions({
+  queryKey: securityKey,
+  queryFn: () => api<SecuritySettings>('GET', '/admin/security'),
+});
+
+export function useUpdateSecurity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: SecuritySettings) => api<SecuritySettings>('PATCH', '/admin/security', body),
+    onSuccess: (settings) => {
+      queryClient.setQueryData(securityKey, settings);
+      void queryClient.invalidateQueries({ queryKey: auditKey });
+      void queryClient.invalidateQueries({ queryKey: twoFactorKey });
+    },
+  });
+}
 
 const auditKey = ['admin', 'audit'] as const;
 

@@ -13,6 +13,7 @@ export const API_ERROR_CODES = [
   'forbidden',
   'csrf_failed',
   'password_change_required',
+  'two_factor_required',
   'not_found',
   'conflict',
   'too_many_requests',
@@ -34,6 +35,11 @@ export const API_ERROR_CODES = [
   'pdf_failed',
   'wip_limit',
   'key_taken',
+  'invalid_code',
+  'login_expired',
+  'two_factor_on',
+  'two_factor_off',
+  'two_factor_not_started',
   'internal',
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

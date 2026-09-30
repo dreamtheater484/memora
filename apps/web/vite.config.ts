@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
+import { CONTENT_SECURITY_POLICY, SECURITY_HEADERS } from '../../packages/shared/src/security';
 import { serviceWorker } from './sw/plugin';
 
 /**
@@ -17,6 +18,23 @@ function withoutDocument(): Plugin {
       if (id !== 'decode-named-character-reference') return null;
       const resolved = await this.resolve(id, importer, { ...options, skipSelf: true });
       return resolved && { ...resolved, id: resolved.id.replace(/index\.dom\.js$/, 'index.js') };
+    },
+  };
+}
+
+/**
+ * Zod compiles validators with `new Function` where it may, and tries once at start to find
+ * out. The app's content security policy forbids eval (§11), so the app's zod starts in the
+ * mode that neither compiles nor tries (each try is reported as a policy violation).
+ */
+function zodWithoutEval(): Plugin {
+  const from = '(_a.__zod_globalConfig = {})';
+  return {
+    name: 'memora-zod-without-eval',
+    transform(code, id) {
+      if (!/[\\/]zod[\\/]v4[\\/]core[\\/]core\.js$/.test(id)) return null;
+      if (!code.includes(from)) this.error('zod changed: update zodWithoutEval in vite.config.ts');
+      return code.replace(from, '(_a.__zod_globalConfig = { jitless: true })');
     },
   };
 }
@@ -40,9 +58,9 @@ export const pagedPolyfill = [
 export default defineConfig(({ mode }) => {
   const gallery = mode === 'gallery';
   return {
-    plugins: [withoutDocument(), react(), tailwindcss(), serviceWorker()],
+    plugins: [withoutDocument(), zodWithoutEval(), react(), tailwindcss(), serviceWorker()],
     resolve: { alias: pagedPolyfill },
-    worker: { plugins: () => [withoutDocument()] },
+    worker: { plugins: () => [withoutDocument(), zodWithoutEval()] },
     server: {
       port: 5173,
       // During development the API runs separately (`pnpm dev` starts both).
@@ -54,7 +72,12 @@ export default defineConfig(({ mode }) => {
         ignored: ['**/test-results/**', '**/playwright-report/**', '**/dist-gallery/**'],
       },
     },
-    preview: { port: 4173 },
+    // The built app is tested under the server's security headers (the dev server can't be:
+    // its hot reload runs inline scripts).
+    preview: {
+      port: 4173,
+      headers: { ...SECURITY_HEADERS, 'Content-Security-Policy': CONTENT_SECURITY_POLICY },
+    },
     build: {
       outDir: gallery ? 'dist-gallery' : 'dist',
       emptyOutDir: true,

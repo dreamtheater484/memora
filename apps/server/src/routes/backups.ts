@@ -13,7 +13,7 @@ export function backupRoutes(app: FastifyInstance, { backups, repos, restart }: 
   const config = { access: 'admin' as const };
   const audit = (
     request: Parameters<typeof authOf>[0],
-    event: 'backup_created' | 'backup_downloaded' | 'backup_restored',
+    event: 'backup_created' | 'backup_downloaded' | 'backup_restored' | 'backup_deleted',
     backup: string,
   ) => {
     const { user } = authOf(request);
@@ -48,6 +48,7 @@ export function backupRoutes(app: FastifyInstance, { backups, repos, restart }: 
 
   app.delete<Name>('/api/v1/admin/backups/:name', { config }, async (request, reply) => {
     await backups.remove(request.params.name);
+    audit(request, 'backup_deleted', request.params.name);
     return reply.code(204).send();
   });
 

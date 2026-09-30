@@ -74,6 +74,16 @@ The code proves that whoever creates the administrator can read the server's log
 - **Settings → Account → Devices** lists where you're logged in. Sign out any device you don't recognise. Changing your password signs out all your other devices.
 - **Settings → Audit log** (administrators) shows logins, failed logins and account changes for the last year.
 
+### Two-step verification
+
+Each person can turn on **two-step verification** in **Settings → Account**: logging in then also asks for a six-digit code from an authenticator app on their phone (2FAS, Aegis, Google Authenticator, Microsoft Authenticator, or the one built into a password manager such as Bitwarden or 1Password). Setting it up shows a QR code to scan and ten **recovery codes**. Each recovery code logs in once without the phone. Keep them somewhere safe, such as a password manager.
+
+Administrators can require it for everyone in **Settings → Users → Security**, after turning it on for their own account. Anyone without it is then asked to set it up before they can continue.
+
+Lost the phone and the recovery codes? An administrator turns it off for that person in **Settings → Users** (the person's **⋯** menu). For the last administrator, use `memora-admin reset-2fa <username>` (below).
+
+We strongly recommend two-step verification for everyone when Memora can be reached from the internet.
+
 ### Locked out? `memora-admin`
 
 For when the web interface can't help, such as a forgotten administrator password:
@@ -86,7 +96,11 @@ docker exec memora memora-admin list-users
 docker exec memora memora-admin reset-password <username>
 ```
 
-`reset-password` prints a one-time password and signs that user out everywhere. On Synology, run these over SSH with `sudo`, or use **Container Manager → Container → memora → Action → Open terminal** and type `memora-admin list-users`.
+```bash
+docker exec memora memora-admin reset-2fa <username>
+```
+
+`reset-password` prints a one-time password and signs that user out everywhere. `reset-2fa` turns off two-step verification for someone who lost their phone and their recovery codes, and signs them out everywhere. On Synology, run these over SSH with `sudo`, or use **Container Manager → Container → memora → Action → Open terminal** and type `memora-admin list-users`.
 
 `memora-admin hash-benchmark` shows how long one password check takes on your hardware. Around 100–500 ms is right; logins are slow on purpose, to make guessing expensive.
 
@@ -109,6 +123,11 @@ Everything is stored in the folder mounted at `/data`:
 | `memora.db`                      | The database: all users, notes, images and boards                                     |
 | `memora.db-wal`, `memora.db-shm` | SQLite working files while Memora runs (normal)                                       |
 | `backups/`                       | Automatic backups, including one taken before every upgrade that changes the database |
+| `secret.key`                     | The instance key: it encrypts two-step verification secrets. Made on first start.     |
+
+**Keep a copy of `secret.key`** somewhere safe, such as your password manager. It is not in the database or its backups, so a stolen backup doesn't give away anyone's two-step verification. Without it, after a restore on a new machine, authenticator codes stop working until people set up their app again (their recovery codes still work).
+
+**Encryption at rest.** Memora doesn't encrypt the database file itself ([ADR 0005](adr/0005-database-encryption-at-rest.md)). To protect everything against a stolen disk, put the data folder on an encrypted volume: a Synology **encrypted shared folder**, LUKS on Linux, or BitLocker on Windows.
 
 **Never copy `memora.db` while Memora is running** as a backup. Use the files in `backups/`, which are consistent snapshots, taken every night and before every update. [BACKUP_RESTORE.md](BACKUP_RESTORE.md) explains the schedule, encryption, copying them elsewhere with Hyper Backup, and restoring.
 
@@ -135,6 +154,7 @@ Set these as environment variables (the `environment:` section of the compose fi
 | `MEMORA_HISTORY_RETENTION`    | `48h,14d,90d`                    | Page versions: all for 48 hours, then hourly for 14 days, daily for 90 days, weekly after. Named versions are always kept. |
 | `MEMORA_MAX_IMPORT_MB`        | `1024`                           | Largest file that can be imported (a `.memora` archive or a zip), in MB                                                    |
 | `MEMORA_GOTENBERG_URL`        | —                                | A Gotenberg service for one-click PDF export, for example `http://gotenberg:3000` (see below)                              |
+| `MEMORA_SECRET_KEY_FILE`      | `/data/secret.key`               | Where the instance key is kept, for example a Docker secret. Made there on first start when it doesn't exist.              |
 | `MEMORA_LOG_LEVEL`            | `info`                           | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`                                                             |
 
 **`MEMORA_TRUST_PROXY`.** Memora slows down repeated failed logins per visitor address, and records addresses in the audit log. Behind a reverse proxy every request comes from the proxy, so Memora reads the real address from the proxy's `X-Forwarded-For` header, but only from proxies it trusts. The default trusts proxies on the same machine and on private networks, which covers the Synology reverse proxy and Docker's networks. Set `false` when nothing sits in front of Memora, or list addresses or ranges (for example `198.51.100.2,2001:db8::/32`) to be stricter.
@@ -274,8 +294,9 @@ For the first time on the NAS:
 2. Run `memora-admin hash-benchmark`. It should say roughly 100–500 ms per hash.
 3. Set up HTTPS (option A), install the CA on each device, and log in on each one, also over the VPN.
 4. Add a second, regular account. Log in with its one-time password in a private window, and choose a new password.
-5. Check **Settings → Audit log** shows these logins.
-6. Check the memory use in **Container Manager → Container**. It should stay around 50 MB.
+5. Turn on two-step verification for the administrator (**Settings → Account**), and store the recovery codes and a copy of `data/secret.key` in your password manager.
+6. Check **Settings → Audit log** shows these logins.
+7. Check the memory use in **Container Manager → Container**. It should stay around 50 MB.
 
 ## Updating
 
@@ -296,6 +317,8 @@ Memora updates the database automatically on start, and takes a backup first. A 
 | Container exits with _"newer version of Memora"_                                                         | You started an older image on a newer database. Use the newer image, or restore a backup.                                                                                                                                                       |
 | Lost the setup code                                                                                      | Check the log again, or restart the container to print a new one                                                                                                                                                                                |
 | Forgot a password                                                                                        | An administrator resets it in **Settings → Users**. For the last administrator: `memora-admin reset-password <username>`                                                                                                                        |
+| Lost the phone with the authenticator app                                                                | Log in with a recovery code, then set up the app again in **Settings → Account**. Without recovery codes: an administrator turns two-step verification off in **Settings → Users**, or `memora-admin reset-2fa <username>`                      |
+| Container exits with _"is not a Memora secret key"_                                                      | `secret.key` was damaged. Put back your copy, or remove the file: a new key is made, and two-step verification has to be set up again (recovery codes still work)                                                                               |
 | _"Too many attempts"_                                                                                    | Wait the time shown. Repeated failures double the wait, up to 15 minutes                                                                                                                                                                        |
 | _"Requests from other sites are not allowed"_                                                            | `MEMORA_BASE_URL` doesn't match the address in the browser. Set it to exactly that address, including `https://` and the port                                                                                                                   |
 | Log warns about _"signing in over plain HTTP"_                                                           | You're using plain HTTP. Set up HTTPS and `MEMORA_BASE_URL`                                                                                                                                                                                     |

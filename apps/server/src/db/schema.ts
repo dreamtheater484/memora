@@ -34,9 +34,11 @@ export const users = sqliteTable(
     mustChangePassword: integer('must_change_password', { mode: 'boolean' })
       .notNull()
       .default(false),
-    // Two-factor authentication arrives in Phase 12; the columns exist from the start.
+    /** Two-step verification (Phase 12): the secret, sealed with the instance's key. */
     totpSecretEnc: text('totp_secret_enc'),
     totpEnabled: integer('totp_enabled', { mode: 'boolean' }).notNull().default(false),
+    /** The time step of the last code used: each code works once. */
+    totpLastStep: integer('totp_last_step'),
     disabledAt: integer('disabled_at'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
@@ -71,6 +73,7 @@ export const sessions = sqliteTable(
   (t) => [index('sessions_user_id_idx').on(t.userId)],
 );
 
+/** Two-step verification's recovery codes: each works once, instead of a code from the app. */
 export const recoveryCodes = sqliteTable(
   'recovery_codes',
   {

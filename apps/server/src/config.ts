@@ -38,6 +38,7 @@ const envSchema = z.object({
   MEMORA_BACKUP_PASSWORD_FILE: z.string().optional(),
   MEMORA_MAX_IMPORT_MB: z.coerce.number().int().min(1).max(16384).default(1024),
   MEMORA_GOTENBERG_URL: z.url({ protocol: /^https?$/ }).optional(),
+  MEMORA_SECRET_KEY_FILE: z.string().min(1).optional(),
 });
 
 export interface Config {
@@ -67,6 +68,11 @@ export interface Config {
   trashMs: number;
   /** Which page versions are kept (§9.7). */
   historyRetention: RetentionRules;
+  /**
+   * The instance's secret key (made on first start): it encrypts what must not be readable
+   * from the database alone, such as two-step verification secrets.
+   */
+  secretKeyFile: string;
   /** When backups are taken, or null for never (`MEMORA_BACKUP_SCHEDULE=off`). */
   backupSchedule: Schedule | null;
   /** How many daily, weekly and monthly backups are kept. */
@@ -136,6 +142,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     backupPasswordFile: e.MEMORA_BACKUP_PASSWORD_FILE,
     maxImportBytes: e.MEMORA_MAX_IMPORT_MB * 1024 * 1024,
     gotenbergUrl: e.MEMORA_GOTENBERG_URL?.replace(/\/+$/, ''),
+    secretKeyFile: resolve(e.MEMORA_SECRET_KEY_FILE ?? join(dataDir, 'secret.key')),
   };
 }
 

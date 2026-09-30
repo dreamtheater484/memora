@@ -12,6 +12,7 @@ export * from './notes';
 export * from './rich';
 export * from './richHtml';
 export * from './search';
+export * from './security';
 export * from './sync';
 export * from './table';
 export * from './tags';
