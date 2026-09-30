@@ -265,6 +265,11 @@ export class FakeApi {
     this.down = false;
   }
 
+  /** Closes every live channel with this code (4401: the session can't go on as it is). */
+  closeChannels(code: number) {
+    for (const channel of this.channels) void channel.ws.close({ code });
+  }
+
   /** Tells every browser the server's data changed (a backup was restored). */
   restored(dataId: string) {
     this.dataId = dataId;

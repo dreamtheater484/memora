@@ -195,6 +195,28 @@ test('a new password shows how strong it looks', async ({ page }) => {
   await expectNoA11yViolations(page);
 });
 
+test('required while signed in: the set-up comes first, without logging out', async ({ page }) => {
+  const api = new FakeApi({ user: MEMBER });
+  await api.install(page);
+  await page.goto('/p/q4');
+  await expect(page.getByRole('navigation', { name: 'Navigation' })).toBeVisible();
+  await expect.poll(() => api.requests.some((r) => r.path === '/api/v1/tree')).toBe(true);
+
+  // An administrator requires it: the server closes the live channel.
+  api.twoFactor.required = true;
+  api.me = { ...api.me, user: { ...MEMBER, mustSetUpTwoFactor: true } };
+  api.closeChannels(4401);
+  await expect(page).toHaveURL(/\/set-up-two-factor$/);
+
+  await page.getByLabel('Your password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByLabel('Code from the app').fill(APP_CODE);
+  await page.getByRole('button', { name: 'Turn on' }).click();
+  await page.getByRole('checkbox').click();
+  await page.getByRole('button', { name: 'Continue to Memora' }).click();
+  await expect(page.getByRole('navigation', { name: 'Navigation' })).toBeVisible();
+});
+
 test.describe('administrators', () => {
   test('require it for everyone, and turn it off for someone who lost their phone', async ({
     page,
