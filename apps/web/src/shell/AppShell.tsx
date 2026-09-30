@@ -1,5 +1,5 @@
 import type { Projects, UiState } from '@memora/shared';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
   Clock,
@@ -12,6 +12,7 @@ import {
   Keyboard,
   Monitor,
   Moon,
+  MoveHorizontal,
   Notebook,
   PenLine,
   Search,
@@ -22,32 +23,29 @@ import {
   Trash2,
 } from 'lucide-react';
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
-import {
-  CommandPalette,
-  Sheet,
-  SheetContent,
-  SplitPane,
-  toast,
-  type PaletteItem,
-} from '../components/ui';
+import { CommandPalette, Sheet, SheetContent, toast, type PaletteItem } from '../components/ui';
 import { cn } from '../lib/cn';
 import { useDnd } from '../lib/dnd';
 import { formatRelative } from '../lib/time';
 import { DESKTOP_QUERY, useMediaQuery } from '../lib/useMediaQuery';
 import { useNow } from '../lib/useNow';
-import { rememberOpened, useRecent } from '../notes/places';
+import { rememberOpened, toggleFullWidth, useRecent } from '../notes/places';
 import { flushUiState, saveUiState, useUiState } from '../notes/queries';
 import { applyAccent, hueStyle } from '../theme/sections';
 import { useTheme } from '../theme/theme';
 import { useCommands, type Commands } from './commands';
-import { cardByKey } from '../kanban/api';
+import { cardByKey, projectsQuery } from '../kanban/api';
 import { OPEN_CARD_EVENT, useCardKeys } from '../kanban/keys';
-import { openBoards, useProjects } from '../kanban/projects';
+import { firstBoardId, openBoards, useProjects } from '../kanban/projects';
+import { splitRight } from '../workspace/actions';
+import { specOfMain } from '../workspace/model';
+import { useDeviceClass, useWorkspace } from '../workspace/store';
+import { WorkspaceRow } from '../workspace/Workspace';
 import { ShellDialogs } from './dialogs';
 import { useDropRules } from './dropRules';
 import { Inspector } from './Inspector';
 import { isNotesLevel, useCurrent, useGo, type Current } from './location';
-import { NotesPane, SecondPane } from './NotesPane';
+import { NotesPane } from './NotesPane';
 import { PageList } from './PageList';
 import { ContainerList, NotebookList } from './PhoneViews';
 import { shortcutKeys, useShortcuts } from './shortcuts';
@@ -141,9 +139,10 @@ function usePaletteItems(current: Current, commands: Commands, query: string): P
   const { index } = current;
   const go = useGo();
   const recent = useRecent();
-  const shell = useShell();
+  const ui = useUiState();
+  const queryClient = useQueryClient();
   const { setTheme, glass, setGlass } = useTheme();
-  const ultra = useMediaQuery('(min-width: 200rem)');
+  const cls = useDeviceClass();
   const now = useNow();
   const projects = useProjects();
   return useMemo(() => {
@@ -345,13 +344,27 @@ function usePaletteItems(current: Current, commands: Commands, query: string): P
         onSelect: () => setGlass(glass === 'off' ? 'auto' : 'off'),
       },
     );
-    if (ultra) {
+    if (cls) {
       items.push({
         id: 'cmd:split',
-        title: shell.secondPane ? 'Close the second pane' : 'Open the second pane',
+        title: current.page ? 'Open the page in a new pane' : 'Open a new pane',
         group: 'Commands',
         icon: <Columns2 />,
-        onSelect: () => shell.setSecondPane(!shell.secondPane),
+        hint: shortcutKeys('split-pane'),
+        keywords: 'split pane side by side workspace',
+        onSelect: () => splitRight(cls, specOfMain(current.page?.id, current.boardId)),
+      });
+    }
+    if (current.page) {
+      const page = current.page;
+      const full = !!ui.fullWidth?.includes(page.id);
+      items.push({
+        id: 'cmd:full-width',
+        title: full ? 'Show the page at a readable width' : 'Show the page at full width',
+        group: 'Commands',
+        icon: <MoveHorizontal />,
+        keywords: 'wide width line length',
+        onSelect: () => toggleFullWidth(queryClient, ui, page.id),
       });
     }
     // Full-text search (§9.8), for what typing here doesn't find by name.
@@ -393,11 +406,13 @@ function usePaletteItems(current: Current, commands: Commands, query: string): P
     current.notebook,
     commands,
     go,
-    shell,
     setTheme,
     glass,
     setGlass,
-    ultra,
+    cls,
+    ui,
+    queryClient,
+    current.boardId,
     now,
     projects,
   ]);
@@ -411,7 +426,7 @@ function usePaletteItems(current: Current, commands: Commands, query: string): P
  */
 export function AppShell() {
   const shell = useShell();
-  const { navOpen, pagesOpen, paletteOpen, secondPane, split } = shell;
+  const { navOpen, pagesOpen, paletteOpen } = shell;
   const current = useCurrent();
   const { level, section, page } = current;
   const commands = useCommands();
@@ -420,7 +435,6 @@ export function AppShell() {
   const ui = useUiState();
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const tablet = useMediaQuery('(min-width: 40rem)');
-  const ultra = useMediaQuery('(min-width: 200rem)');
   const [paletteQuery, setPaletteQuery] = useState('');
   const paletteItems = usePaletteItems(current, commands, paletteQuery);
   useDropRules(commands);
@@ -428,6 +442,9 @@ export function AppShell() {
   // The accent and the ambient glow follow the current section.
   const projects = useProjects();
   useCardKeyLinks(projects);
+  // Panes beside the main one on wide screens (§9.12).
+  const boardsKnown = useQuery(projectsQuery).status !== 'pending';
+  const { cls, ws } = useWorkspace(boardsKnown ? firstBoardId(projects) : undefined);
   const accent =
     level === 'board'
       ? projects.projects.find(
@@ -489,6 +506,10 @@ export function AppShell() {
     'next-page': () => commands.stepPage(1),
     'prev-section': () => commands.stepSection(-1),
     'next-section': () => commands.stepSection(1),
+    'split-pane': () => {
+      if (cls) splitRight(cls, specOfMain(page?.id, current.boardId));
+      else toast({ title: 'Panes side by side need a wider window.' });
+    },
   });
 
   const notes = isNotesLevel(level);
@@ -519,6 +540,17 @@ export function AppShell() {
 
   return (
     <div className="aurora-bg @container flex h-full flex-col">
+      {/* The first stop for the keyboard: past the bars and navigation, to the content. */}
+      <a
+        href="#main-content"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById('main-content')?.focus();
+        }}
+        className="sr-only z-50 rounded-md bg-surface px-3 py-2 text-sm font-semibold shadow-lg focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+      >
+        Skip to the content
+      </a>
       <TopBar />
       <SyncBanner />
       <div
@@ -539,24 +571,28 @@ export function AppShell() {
           <Sidebar />
         </div>
         {showPageList && left && pageListPanel}
-        {notes && ultra && secondPane ? (
-          <SplitPane
-            className="min-h-0"
-            size={split}
-            onSizeChange={shell.setSplit}
-            defaultSize={56}
-            min={30}
-            max={75}
-            label="Resize the second pane"
-            first={<main className={cn(panel, 'h-full [--glass-bg:var(--surface)]')}>{main}</main>}
-            second={
-              <div className={cn(panel, 'h-full [--glass-bg:var(--surface)]')}>
-                <SecondPane />
-              </div>
+        {cls && ws && ws.panes.length > 0 ? (
+          <WorkspaceRow
+            cls={cls}
+            ws={ws}
+            main={
+              <main
+                id="main-content"
+                tabIndex={-1}
+                className={cn(panel, 'h-full outline-none [--glass-bg:var(--surface)]')}
+              >
+                {main}
+              </main>
             }
           />
         ) : (
-          <main className={cn(panel, '[--glass-bg:var(--surface)]')}>{main}</main>
+          <main
+            id="main-content"
+            tabIndex={-1}
+            className={cn(panel, 'outline-none [--glass-bg:var(--surface)]')}
+          >
+            {main}
+          </main>
         )}
         {showPageList && !left && pageListPanel}
         {showPageList && (

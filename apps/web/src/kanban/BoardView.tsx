@@ -176,23 +176,37 @@ const useBoard = () => useContext(BoardContext)!;
 
 const DESKTOP = '(min-width: 64rem)';
 
-export default function BoardView({ boardId }: { boardId: string }) {
+/**
+ * A board (`/b/:id`). `embedded` is a board in a pane of the workspace (§9.12): its open card
+ * is its own, not the address's.
+ */
+export default function BoardView({
+  boardId,
+  embedded = false,
+}: {
+  boardId: string;
+  embedded?: boolean;
+}) {
   const { data: board, error } = useQuery(boardQuery(boardId));
-  const search = useSearch({ strict: false }) as { card?: string; beside?: string };
+  const route = useSearch({ strict: false }) as { card?: string; beside?: string; focus?: string };
+  const [own, setOwn] = useState<{ card?: string; focus?: string }>({});
+  const search: { card?: string; beside?: string; focus?: string } = embedded ? own : route;
   const navigate = useNavigate();
   const desktop = useMediaQuery(DESKTOP);
   const [filter, setFilter] = useState<CardFilter>({});
   const [archived, setArchived] = useState(false);
 
   const openCard = (cardId: string | null, focus?: string) =>
-    void navigate({
-      to: '/b/$boardId',
-      params: { boardId },
-      search: {
-        ...(cardId ? { card: cardId, ...(focus ? { focus } : {}) } : {}),
-        ...(search.beside ? { beside: search.beside } : {}),
-      },
-    });
+    embedded
+      ? setOwn(cardId ? { card: cardId, ...(focus ? { focus } : {}) } : {})
+      : void navigate({
+          to: '/b/$boardId',
+          params: { boardId },
+          search: {
+            ...(cardId ? { card: cardId, ...(focus ? { focus } : {}) } : {}),
+            ...(search.beside ? { beside: search.beside } : {}),
+          },
+        });
   const closeBeside = () =>
     void navigate({
       to: '/b/$boardId',
@@ -230,13 +244,17 @@ export default function BoardView({ boardId }: { boardId: string }) {
         key={search.card}
         cardId={search.card}
         board={board}
+        focus={search.focus}
         onClose={() => openCard(null)}
       />
     </Suspense>
   ) : null;
 
   return (
-    <section aria-label="Board" className="flex h-full min-h-0">
+    <section
+      aria-label={embedded ? `Board: ${board.board.name}` : 'Board'}
+      className="flex h-full min-h-0"
+    >
       <div className="flex min-w-0 flex-1 flex-col">
         <BoardHeader
           board={board}

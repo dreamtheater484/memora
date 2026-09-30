@@ -41,6 +41,7 @@ import { isNotesLevel, useCurrent, useGo, type Current } from './location';
 import { shortcutKeys } from './shortcuts';
 import { useShell } from './store';
 import { GlobalSaveIndicator } from './SyncStatus';
+import { LayoutMenu } from '../workspace/LayoutMenu';
 
 const THEME_ICON = { system: <Monitor />, light: <Sun />, dark: <Moon /> };
 
@@ -296,6 +297,7 @@ export function TopBar() {
             />
           </span>
         )}
+        <LayoutMenu />
         <AppearanceMenu />
         <span className="hidden @tablet:contents">
           <AccountMenu />

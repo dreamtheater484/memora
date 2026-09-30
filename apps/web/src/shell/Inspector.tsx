@@ -31,7 +31,7 @@ const Later = ({ children }: { children: ReactNode }) => (
 );
 
 /** Pages that link here (§9.9). */
-function Backlinks({ pageId }: { pageId: string }) {
+export function Backlinks({ pageId }: { pageId: string }) {
   const { index } = useCurrent();
   const go = useGo();
   const links = useQuery(backlinksQuery(pageId));

@@ -53,11 +53,6 @@ interface ShellState {
   selection: string[];
   /** Where a Shift+click range starts. */
   anchor: string | null;
-  /** Second editor pane on ultra-wide screens, and the page open there. */
-  secondPane: boolean;
-  secondPageId: string | null;
-  /** Share of the main pane when the second pane is open, in percent. */
-  split: number;
 
   setNavOpen: (open: boolean) => void;
   setPagesOpen: (open: boolean) => void;
@@ -67,8 +62,6 @@ interface ShellState {
   setRenaming: (renaming: Renaming | null) => void;
   setEditingTitle: (pageId: string | null) => void;
   select: (ids: string[], anchor?: string | null) => void;
-  setSecondPane: (open: boolean, pageId?: string | null) => void;
-  setSplit: (size: number) => void;
 }
 
 /** Layout and transient UI state; where you are lives in the URL. */
@@ -81,9 +74,6 @@ export const useShell = create<ShellState>()((set) => ({
   editingTitle: null,
   selection: [],
   anchor: null,
-  secondPane: true,
-  secondPageId: null,
-  split: 56,
 
   setNavOpen: (navOpen) => set({ navOpen }),
   setPagesOpen: (pagesOpen) => set({ pagesOpen }),
@@ -94,7 +84,4 @@ export const useShell = create<ShellState>()((set) => ({
   setEditingTitle: (editingTitle) => set({ editingTitle }),
   select: (selection, anchor) =>
     set((s) => ({ selection, anchor: anchor === undefined ? s.anchor : anchor })),
-  setSecondPane: (secondPane, pageId) =>
-    set((s) => ({ secondPane, secondPageId: pageId === undefined ? s.secondPageId : pageId })),
-  setSplit: (split) => set({ split }),
 }));
