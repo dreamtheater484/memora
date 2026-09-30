@@ -51,11 +51,11 @@ On Synology: **Container Manager → Container → memora → Log**.
 
 ## Time, memory and backups
 
-| Symptom                                              | What to do                                                                                                                                |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Backups run at the wrong hour, or times look shifted | Set `TZ` to your time zone (for example `Europe/Paris`) and recreate the container.                                                       |
-| Memora uses more memory than expected                | About 50 MB is normal. The Node.js heap is capped by `MEMORA_MAX_HEAP_MB` (256 by default); a big import or export uses more for a while. |
-| Backups, restoring, moving to a new machine          | See [BACKUP_RESTORE.md](BACKUP_RESTORE.md).                                                                                               |
+| Symptom                                              | What to do                                                                                                                                                                                   |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backups run at the wrong hour, or times look shifted | Set `TZ` to your time zone (for example `Europe/Paris`) and recreate the container.                                                                                                          |
+| Memora uses more memory than expected                | 100 to 150 MB is normal, the program itself included. The Node.js heap is capped by `MEMORA_MAX_HEAP_MB` (256 by default); a big import or export uses more for a while, up to about 400 MB. |
+| Backups, restoring, moving to a new machine          | See [BACKUP_RESTORE.md](BACKUP_RESTORE.md).                                                                                                                                                  |
 
 ## Still stuck?
 

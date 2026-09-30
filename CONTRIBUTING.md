@@ -156,5 +156,6 @@ docker build -f docker/Dockerfile -t memora:local . && node scripts/demo/screens
 
 - TypeScript in strict mode everywhere. Validate data at boundaries with zod schemas, preferably shared through `packages/shared`.
 - Keep RAM use modest. Memora runs on NAS hardware: prefer streaming over buffering, and justify new dependencies or caches.
+- A new dependency's licence must be on the list in `scripts/licenses.mjs`, or the build stops. Add a licence there only when it asks for nothing beyond shipping its notice (the list says why each one is fine).
 - Every feature meets the [definition of done](docs/IMPLEMENTATION_PLAN.md#134-definition-of-done-every-feature): tests, light and dark themes, phone to ultra-wide, keyboard accessible, docs updated.
 - Database changes: edit `apps/server/src/db/schema.ts`, run `pnpm db:generate`, and commit the generated migration. Migrations run automatically on start, with a backup first.

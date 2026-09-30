@@ -22,7 +22,7 @@ This guide is for everyone who uses Memora. Installing and running it is in [SET
 
 ![A Markdown page in the notes, with the notebooks on the left, section tabs along the top and the page list on the right](images/notes.png)
 
-- **Notebooks** are listed on the left, each with a colour and an icon. A new notebook comes with a first section, so there is always somewhere to write. Drag notebooks to reorder them; right-click (or long-press) for rename, colour and delete.
+- **Notebooks** are listed on the left, each with a colour and an icon. A new notebook comes with a first section, so there is always somewhere to write. Drag notebooks to reorder them. For rename, colour and delete, right-click a notebook (or long-press it), or use its **…** button, which appears when you point at it (always, on touch screens).
 - **Sections** are the coloured tabs along the top. Drag a tab to reorder it, or onto another notebook to move it; double-click to rename. When the tabs don't fit, an overflow menu lists them all.
 - **Section groups** gather sections under one tab, and nest up to four levels. The group's tab shows where you are ("Clients › Acme") and opens a menu of its sections.
 - **Pages** are listed beside the page, with the start of their text and when they changed. A page can have subpages, three levels deep.
@@ -31,7 +31,7 @@ This guide is for everyone who uses Memora. Installing and running it is in [SET
   - `Shift`-click or `Ctrl/Cmd`-click selects several pages, to move, copy or delete them together.
   - The page list's **⋯** menu moves the list to the other side of the screen.
 - **The Inbox** is a section of your own for things to sort out later. **Quick note** (`Ctrl/Cmd+Alt+N`, or the pen button on phones) starts a new page there from anywhere.
-- **Right-click** (or long-press) anything for its menu. Every menu item has a keyboard shortcut too, and `?` lists them all.
+- **Right-click** (or long-press) anything for its menu. Notebooks, section groups and sections also have a **…** button for it. Every menu item has a keyboard shortcut too, and `?` lists them all.
 
 Memora remembers where you were: the last section, the last page in each section, and what was expanded. It opens there again, on any of your devices.
 

@@ -4,14 +4,17 @@ This guide installs Memora with Docker: on a Synology NAS, on Linux, or on Windo
 
 ## What you need
 
-- A Docker host:
-  - Synology DSM 7.2+ with **Container Manager**;
-  - Docker Engine on Linux (for example Ubuntu 26.04);
-  - or Docker Desktop on Windows 11.
-- An x86-64 (amd64) or ARM64 CPU.
-- About 100 MB of free RAM for Memora itself. The Node.js heap is capped at 256 MB by default.
-- About 300 MB of disk space for the image, plus your notes.
-- **HTTPS** for real use (see [HTTPS](#https)). Plain HTTP works on your own network for trying Memora out.
+|                  | Needed                                                                                                                            |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Docker host**  | A Synology NAS with DSM 7.2 or later and **Container Manager**, Docker Engine on Linux, or Docker Desktop on Windows 11           |
+| **Processor**    | 64-bit: x86-64 (Intel or AMD) or ARM64                                                                                            |
+| **Memory (RAM)** | **512 MB free** recommended, 256 MB at the least                                                                                  |
+| **Disk**         | About 350 MB for the image, plus your notes, their images and files, and the backups                                              |
+| **HTTPS**        | For real use: offline mode and the installed app need it ([HTTPS](#https)). Plain HTTP on your own network is fine for trying it. |
+
+**Memory in practice.** Memora usually uses **100 to 150 MB**: that is what Container Manager and `docker stats` show, the program itself included. Large imports and exports take more for a while, up to about 400 MB, because the Node.js heap is capped at 256 MB (`MEMORA_MAX_HEAP_MB`). Memory hardly grows with the number of notes, which stay in the database on disk.
+
+**Disk in practice.** Disk use grows with your notes, images and files. The automatic backups keep up to about 25 copies of the database (daily, weekly and monthly ones; [BACKUP_RESTORE.md](BACKUP_RESTORE.md)), so leave room for that too, or keep fewer.
 
 ## Quick start (any Docker host)
 
@@ -183,17 +186,39 @@ Gotenberg runs a headless Chromium and uses a few hundred MB of RAM, so it is wo
 
 ## Synology step by step
 
-1. Install **Container Manager** from Package Center.
-2. In **File Station**, create the folder `docker/memora`, with a `data` folder inside it. Container Manager doesn't create a missing folder: it stops with _"Bind mount failed"_. Memora runs as the account that creates the `data` folder.
+**Can your NAS run it?** If Package Center offers **Container Manager**, yes: it needs DSM 7.2 or later and exists only for 64-bit models, and Memora is built for both kinds of 64-bit processor. **Control Panel → Info Center → General** shows the DSM version, the processor and the installed memory; **Resource Monitor** shows how much memory is free. A NAS with 2 GB of RAM or more usually has the 512 MB to spare; with 1 GB, check Resource Monitor first.
+
+1. Install **Container Manager** from Package Center. It creates the shared folder `docker`.
+2. In **File Station**, create the folder `memora` inside `docker`, and a folder `data` inside `memora`. Container Manager doesn't create a missing folder: it stops with _"Bind mount failed"_. Memora runs as the account that creates the `data` folder, so there is nothing to set up for permissions.
 3. **Container Manager → Project → Create**:
-   - Project name: `memora`.
-   - Path: `docker/memora`.
-   - Source: **Create docker-compose.yml**, and paste the example compose file with your time zone. If port 3000 is taken on the NAS, change only the first number of the port line, for example `'3003:3000'`, and use that port below.
-   - Leave **Web portal via Web Station** off: the reverse proxy in [HTTPS](#https) does that job, with the WebSocket header Memora needs.
-   - Start it. The first start downloads the image.
+   - **Project name:** `memora`.
+   - **Path:** `docker/memora`.
+   - **Source:** **Create docker-compose.yml**, and paste this, with your time zone:
+
+     ```yaml
+     services:
+       memora:
+         image: ghcr.io/dreamtheater484/memora:latest
+         container_name: memora
+         restart: unless-stopped
+         ports:
+           - '3000:3000'
+         environment:
+           TZ: 'Etc/UTC' # your time zone, for example Europe/Berlin
+         volumes:
+           - ./data:/data
+     ```
+
+     If port 3000 is taken on the NAS, change only the first number, for example `'3001:3000'`, and use that port below.
+
+   - **Web portal via Web Station:** leave it off. The reverse proxy in [HTTPS](#https) does that job, with the WebSocket header Memora needs.
+   - Finish the wizard. Container Manager downloads the image and starts Memora.
+
 4. **Container Manager → Container → memora → Log** shows the setup code.
-5. Open `http://<nas-ip>:3000` and create your administrator account.
-6. Set up [HTTPS](#https), then change the port line to `'127.0.0.1:3000:3000'`, so only the reverse proxy can reach Memora directly.
+5. Open `http://<nas-address>:3000` and create your administrator account.
+6. Set up [HTTPS](#https). Then change the port line to `'127.0.0.1:3000:3000'`, so only the reverse proxy can reach Memora directly, and build the project again (**Project → memora → Action → Build**).
+
+Updating later: [UPGRADE.md](UPGRADE.md#updating). Backing up to another disk or the cloud with Hyper Backup: [BACKUP_RESTORE.md](BACKUP_RESTORE.md).
 
 ### Images from your own fork
 
@@ -351,7 +376,7 @@ For the first time on the NAS:
 4. Add a second, regular account. Log in with its one-time password in a private window, and choose a new password.
 5. Turn on two-step verification for the administrator (**Settings → Account**), and store the recovery codes and a copy of `data/secret.key` in your password manager.
 6. Check **Settings → Audit log** shows these logins.
-7. Check the memory use in **Container Manager → Container**. It should stay around 50 MB.
+7. Check the memory use in **Container Manager → Container**. It is usually 100 to 150 MB.
 
 ## Updating
 
