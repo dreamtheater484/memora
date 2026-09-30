@@ -90,6 +90,37 @@ jobs:
             apps/web/test-results
           retention-days: 7
 
+  desktop:
+    name: Desktop app (Ubuntu)
+    runs-on: ubuntu-latest
+    # The app for Windows, macOS and Ubuntu is built and tested on each system by the release
+    # workflow; on every change, the Linux build checks the server and web app still run in it.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Package the app
+        working-directory: apps/desktop
+        run: |
+          pnpm build
+          pnpm resources
+          pnpm app:dir
+      - name: Test the app
+        working-directory: apps/desktop
+        run: xvfb-run -a pnpm test
+      - name: Upload the test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-test-results
+          path: apps/desktop/test-results
+          retention-days: 7
+
   docker:
     name: Docker image
     runs-on: ubuntu-latest
