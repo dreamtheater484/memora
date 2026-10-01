@@ -409,6 +409,8 @@ export const editorSettingsSchema = z
     whitespace: z.boolean(),
     /** Small previews of images under their `![]()` lines in the source. */
     imageThumbnails: z.boolean(),
+    /** Diagrams drawn in place of their code in the source, while the cursor is elsewhere. */
+    drawDiagrams: z.boolean(),
     /** Tables line up while you type in them. */
     formatTables: z.boolean(),
     /** Every table on the page lines up when you press Ctrl/Cmd+S. */
@@ -441,6 +443,7 @@ export const DEFAULT_EDITOR_SETTINGS: Required<EditorSettings> = {
   tabSize: 4,
   whitespace: false,
   imageThumbnails: true,
+  drawDiagrams: true,
   formatTables: true,
   formatTablesOnSave: false,
   pageType: 'markdown',

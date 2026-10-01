@@ -2,6 +2,7 @@ export * from './app';
 export * from './assets';
 export * from './auth';
 export * from './backups';
+export * from './diagrams';
 export * from './errors';
 export * from './health';
 export * from './history';

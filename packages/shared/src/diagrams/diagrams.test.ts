@@ -1,0 +1,453 @@
+import { describe, expect, it } from 'vitest';
+import {
+  colourDefinition,
+  detectDiagram,
+  diagramSummary,
+  diagramText,
+  parseDiagram,
+  parseFlowchart,
+  parseGantt,
+  parseMindmap,
+  parsePie,
+  parseSequence,
+  parseTimeline,
+  printDiagram,
+  printFlowchart,
+  printGantt,
+  printMindmap,
+  printPie,
+  printSequence,
+  printTimeline,
+  type DiagramModel,
+} from './index';
+
+const model = <T>(result: { ok: true; model: T } | { ok: false; reason: string }): T => {
+  if (!result.ok) throw new Error(result.reason);
+  return result.model;
+};
+
+/** Printing then reading again gives the same model. */
+function roundTrips(code: string) {
+  const first = model(parseDiagram(code));
+  const printed = printDiagram(first);
+  const again = model(parseDiagram(printed));
+  expect(again).toEqual(first);
+  return { first, printed };
+}
+
+describe('detectDiagram', () => {
+  it('reads the type from the first line, past front matter and directives', () => {
+    expect(detectDiagram('graph TD\n A-->B')).toBe('flowchart');
+    expect(detectDiagram('---\ntitle: Hi\n---\n%%{init: {}}%%\n\nflowchart LR')).toBe('flowchart');
+    expect(detectDiagram('sequenceDiagram')).toBe('sequence');
+    expect(detectDiagram('mindmap\n  root')).toBe('mindmap');
+    expect(detectDiagram('timeline')).toBe('timeline');
+    expect(detectDiagram('gantt')).toBe('gantt');
+    expect(detectDiagram('pie showData')).toBe('pie');
+    expect(detectDiagram('classDiagram\n A <|-- B')).toBe('other');
+    expect(detectDiagram('  \n%% just a comment')).toBeNull();
+  });
+});
+
+describe('flowcharts', () => {
+  it('reads boxes in every shape, arrows of every kind, chains and & lists', () => {
+    const chart = model(
+      parseFlowchart(`flowchart LR
+  A[Order received] --> B{"Paid?"}
+  B -->|yes| C([Ship])
+  B -- no --> D((Refund))
+  C -.-> E[(Archive)]
+  D ==> E
+  E --- F[[Sub]] & G{{Hex}}
+  F <--> G
+  G --o H[/In/] --x I[\\Out\\]
+  I ~~~ J>Flag] ---> K[/Trap\\] -. maybe .-> L[\\Alt/]
+  M(Round) === N(((Double)))`),
+    );
+    expect(chart.direction).toBe('LR');
+    const shapes = Object.fromEntries(chart.nodes.map((n) => [n.id, n.shape]));
+    expect(shapes).toEqual({
+      A: 'rect',
+      B: 'diamond',
+      C: 'stadium',
+      D: 'circle',
+      E: 'cylinder',
+      F: 'subroutine',
+      G: 'hexagon',
+      H: 'parallelogram',
+      I: 'parallelogram-alt',
+      J: 'asymmetric',
+      K: 'trapezoid',
+      L: 'trapezoid-alt',
+      M: 'round',
+      N: 'double-circle',
+    });
+    expect(chart.nodes.find((n) => n.id === 'B')!.label).toBe('Paid?');
+    const edge = (from: string, to: string) =>
+      chart.edges.find((e) => e.from === from && e.to === to)!;
+    expect(edge('B', 'C')).toMatchObject({ label: 'yes', line: 'solid', end: 'arrow' });
+    expect(edge('B', 'D')).toMatchObject({ label: 'no', line: 'solid', end: 'arrow' });
+    expect(edge('C', 'E')).toMatchObject({ line: 'dotted', end: 'arrow', label: '' });
+    expect(edge('D', 'E')).toMatchObject({ line: 'thick', end: 'arrow' });
+    expect(edge('E', 'F')).toMatchObject({ line: 'solid', end: 'none' });
+    expect(edge('E', 'G')).toMatchObject({ line: 'solid', end: 'none' });
+    expect(edge('F', 'G')).toMatchObject({ start: 'arrow', end: 'arrow' });
+    expect(edge('G', 'H')).toMatchObject({ end: 'circle' });
+    expect(edge('H', 'I')).toMatchObject({ end: 'cross' });
+    expect(edge('I', 'J')).toMatchObject({ line: 'invisible' });
+    expect(edge('J', 'K')).toMatchObject({ extra: 1, end: 'arrow' });
+    expect(edge('K', 'L')).toMatchObject({ line: 'dotted', label: 'maybe', end: 'arrow' });
+    expect(edge('M', 'N')).toMatchObject({ line: 'thick', end: 'none' });
+  });
+
+  it('keeps groups, directions, colours and other statements', () => {
+    const code = `---
+title: Shop
+---
+graph TD
+  %% the start
+  A --> B
+  subgraph shop [Shop floor]
+    direction LR
+    B
+    C:::m-green --> D:::urgent
+    subgraph inner
+      E
+    end
+  end
+  classDef m-blue fill:#000
+  class A,B m-blue
+  classDef urgent stroke:red
+  style E fill:#f9f
+  click A "https://example.com"`;
+    const chart = model(parseFlowchart(code));
+    expect(chart.head).toEqual(['---', 'title: Shop', '---']);
+    expect(chart.keyword).toBe('graph');
+    expect(chart.groups).toEqual([
+      { id: 'shop', label: 'Shop floor', parent: null, direction: 'LR' },
+      { id: 'inner', label: 'inner', parent: 'shop', direction: null },
+    ]);
+    const node = (id: string) => chart.nodes.find((n) => n.id === id)!;
+    expect(node('A')).toMatchObject({ colour: 'blue', group: null });
+    expect(node('B')).toMatchObject({ colour: 'blue', group: 'shop' });
+    expect(node('C')).toMatchObject({ colour: 'green', group: 'shop' });
+    expect(node('D')).toMatchObject({ classes: ['urgent'], group: 'shop' });
+    expect(node('E').group).toBe('inner');
+    expect(chart.extras).toEqual([
+      '%% the start',
+      'classDef urgent stroke:red',
+      'style E fill:#f9f',
+      'click A "https://example.com"',
+    ]);
+    const { printed } = roundTrips(code);
+    expect(printed).toBe(`---
+title: Shop
+---
+graph TD
+    A
+    subgraph shop ["Shop floor"]
+        direction LR
+        B
+        C
+        D:::urgent
+        subgraph inner
+            E
+        end
+    end
+    A --> B
+    C --> D
+    ${colourDefinition('blue')}
+    class A,B m-blue
+    ${colourDefinition('green')}
+    class C m-green
+    %% the start
+    classDef urgent stroke:red
+    style E fill:#f9f
+    click A "https://example.com"`);
+  });
+
+  it('quotes labels that need it, and reads them back', () => {
+    const chart = model(
+      parseFlowchart('flowchart LR\n  A["Total (net) #quot;x#quot;"] -->|"a|b"| B'),
+    );
+    expect(chart.nodes[0]!.label).toBe('Total (net) "x"');
+    chart.nodes[0]!.label = 'Line one\nline two; with "quotes" & more';
+    const printed = printFlowchart(chart);
+    expect(printed).toContain('A["Line one<br>line two; with #quot;quotes#quot; & more"]');
+    expect(model(parseFlowchart(printed)).nodes[0]!.label).toBe(
+      'Line one\nline two; with "quotes" & more',
+    );
+  });
+
+  it('reads statements split by semicolons and a group linked like a box', () => {
+    const chart = model(
+      parseFlowchart('flowchart TB\n A-->B; B-->C\n subgraph G\n C\n end\n A --> G'),
+    );
+    expect(chart.edges.map((e) => `${e.from}>${e.to}`)).toEqual(['A>B', 'B>C', 'A>G']);
+    expect(chart.nodes.map((n) => n.id)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('refuses what it can’t read faithfully, saying where', () => {
+    expect(parseFlowchart('flowchart LR\n  A@{ shape: rect } --> B')).toMatchObject({
+      ok: false,
+      line: 2,
+    });
+    expect(parseFlowchart('flowchart LR\n  A e1@--> B')).toMatchObject({ ok: false });
+    expect(parseFlowchart('flowchart LR\n  A[open --> B')).toMatchObject({ ok: false });
+    expect(parseFlowchart('flowchart LR\n subgraph X\n A')).toMatchObject({ ok: false });
+    expect(parseFlowchart('flowchart XY')).toMatchObject({ ok: false, line: 1 });
+  });
+});
+
+describe('sequence diagrams', () => {
+  const code = `sequenceDiagram
+    title Signing in
+    autonumber
+    actor U as User
+    participant S as Server
+    U->>+S: Sign in; please
+    S-->>-U: Token #35;1
+    Note over U,S: Session starts
+    loop Every minute
+        U-)S: Ping
+        alt Fresh
+            S-->>U: Pong
+        else Stale
+            S--xU: Gone
+        end
+    end
+    activate U
+    Note right of DB: implicit
+    %% kept`;
+
+  it('reads participants, messages, notes, blocks and kept statements', () => {
+    const diagram = model(parseSequence(code));
+    expect(diagram.title).toBe('Signing in');
+    expect(diagram.autonumber).toBe(true);
+    expect(diagram.participants).toEqual([
+      { id: 'U', label: 'User', kind: 'actor' },
+      { id: 'S', label: 'Server', kind: 'participant' },
+      { id: 'DB', label: 'DB', kind: 'participant' },
+    ]);
+    expect(diagram.steps[0]).toEqual({
+      kind: 'message',
+      from: 'U',
+      to: 'S',
+      arrow: '->>',
+      text: 'Sign in; please',
+      activation: '+',
+    });
+    expect(diagram.steps[1]).toMatchObject({ text: 'Token #1', activation: '-', arrow: '-->>' });
+    expect(diagram.steps[2]).toEqual({
+      kind: 'note',
+      side: 'over',
+      of: ['U', 'S'],
+      text: 'Session starts',
+    });
+    const loop = diagram.steps[3]!;
+    expect(loop).toMatchObject({ kind: 'block', block: 'loop' });
+    if (loop.kind !== 'block') throw new Error();
+    expect(loop.branches[0]!.steps[1]).toMatchObject({
+      block: 'alt',
+      branches: [{ text: 'Fresh' }, { text: 'Stale' }],
+    });
+    expect(diagram.steps.slice(4)).toEqual([
+      { kind: 'raw', text: 'activate U' },
+      { kind: 'note', side: 'right of', of: ['DB'], text: 'implicit' },
+      { kind: 'raw', text: '%% kept' },
+    ]);
+  });
+
+  it('writes it back as it reads', () => {
+    const { printed } = roundTrips(code);
+    expect(printed).toContain('U->>+S: Sign in#59; please');
+    expect(printed).toContain('    else Stale');
+    expect(printSequence(model(parseSequence(printed)))).toBe(printed);
+  });
+
+  it('refuses stray branches and unclosed blocks', () => {
+    expect(parseSequence('sequenceDiagram\n A->>B: x\n else nope')).toMatchObject({ ok: false });
+    expect(parseSequence('sequenceDiagram\n loop x\n A->>B: y')).toMatchObject({ ok: false });
+  });
+});
+
+describe('mind maps', () => {
+  it('reads the outline with shapes, icons and classes', () => {
+    const map = model(
+      parseMindmap(`mindmap
+  root((Project))
+    Goals
+      id1[Fast]
+        ::icon(fa fa-bolt)
+      Simple
+    b))Risks((
+      c)Scope(
+      {{Time}}
+      (Money)`),
+    );
+    expect(map.root).toMatchObject({ label: 'Project', shape: 'circle', id: 'root' });
+    expect(map.root.children.map((c) => [c.label, c.shape])).toEqual([
+      ['Goals', 'default'],
+      ['Risks', 'bang'],
+    ]);
+    expect(map.root.children[0]!.children[0]).toMatchObject({
+      label: 'Fast',
+      shape: 'square',
+      decorations: ['::icon(fa fa-bolt)'],
+    });
+    expect(map.root.children[1]!.children.map((c) => [c.label, c.shape])).toEqual([
+      ['Scope', 'cloud'],
+      ['Time', 'hexagon'],
+      ['Money', 'rounded'],
+    ]);
+  });
+
+  it('quotes labels in shapes; a plain topic with brackets gets the rounded shape', () => {
+    const map = model(parseMindmap('mindmap\n  root\n    Plain\n    t1[Old]'));
+    map.root.children[0]!.label = 'Fast (v2) #1';
+    map.root.children.push({
+      label: 'Say "hi"\nthere',
+      shape: 'hexagon',
+      id: null,
+      decorations: [],
+      children: [],
+    });
+    const printed = printMindmap(map);
+    expect(printed).toBe(
+      'mindmap\n  root\n    t2("Fast (v2) #1")\n    t1["Old"]\n    t3{{"Say \u201dhi\u201d<br>there"}}',
+    );
+    expect(model(parseMindmap(printed)).root.children.map((c) => [c.label, c.shape])).toEqual([
+      ['Fast (v2) #1', 'rounded'],
+      ['Old', 'square'],
+      ['Say \u201dhi\u201d\nthere', 'hexagon'],
+    ]);
+  });
+
+  it('has one central topic', () => {
+    expect(parseMindmap('mindmap\n  a\n  b')).toMatchObject({ ok: false });
+  });
+});
+
+describe('timelines, Gantt charts and pie charts', () => {
+  it('reads and writes a timeline', () => {
+    const timeline = model(
+      parseTimeline(`timeline
+    title Launch
+    2025 : Idea
+    section Q1
+      Jan : Plan : Hire
+          : Budget
+      Feb : Build
+    section Q2
+      Apr : Ship`),
+    );
+    expect(timeline.title).toBe('Launch');
+    expect(timeline.sections).toEqual([
+      { label: null, periods: [{ label: '2025', events: ['Idea'] }] },
+      {
+        label: 'Q1',
+        periods: [
+          { label: 'Jan', events: ['Plan', 'Hire', 'Budget'] },
+          { label: 'Feb', events: ['Build'] },
+        ],
+      },
+      { label: 'Q2', periods: [{ label: 'Apr', events: ['Ship'] }] },
+    ]);
+    timeline.sections[2]!.periods[0]!.events.push('Party: at 8');
+    const printed = printTimeline(timeline);
+    expect(printed).toContain('Apr : Ship : Party#58; at 8');
+    expect(model(parseTimeline(printed))).toEqual(timeline);
+  });
+
+  it('reads and writes a Gantt chart, giving a task with an id a start', () => {
+    const gantt = model(
+      parseGantt(`gantt
+    title Plan
+    dateFormat YYYY-MM-DD
+    axisFormat %d %b
+    excludes weekends
+    section Build
+    Design :done, d1, 2026-01-01, 5d
+    Code :active, crit, c1, after d1, 10d
+    Test :3d
+    Launch :milestone, after c1, 0d
+    section Later
+    Party :2026-03-01, until c1`),
+    );
+    expect(gantt).toMatchObject({
+      title: 'Plan',
+      excludesWeekends: true,
+      extras: ['axisFormat %d %b'],
+    });
+    expect(gantt.sections[0]!.tasks[1]).toEqual({
+      name: 'Code',
+      tags: ['active', 'crit'],
+      id: 'c1',
+      start: { kind: 'after', ids: ['d1'] },
+      end: { kind: 'duration', value: '10d' },
+    });
+    expect(gantt.sections[0]!.tasks[2]).toMatchObject({
+      id: null,
+      start: { kind: 'previous' },
+      end: { kind: 'duration', value: '3d' },
+    });
+    expect(gantt.sections[1]!.tasks[0]!.end).toEqual({ kind: 'until', ids: ['c1'] });
+    expect(model(parseGantt(printGantt(gantt)))).toEqual(gantt);
+    // An id needs a start: the task above gets one to start after.
+    gantt.sections[0]!.tasks[2]!.id = 't';
+    expect(printGantt(gantt)).toContain(
+      'Code :active, crit, c1, after d1, 10d\n    Test :t, after c1, 3d',
+    );
+  });
+
+  it('reads and writes a pie chart', () => {
+    const pie = model(parsePie('pie title Budget\n  "Rent" : 40\n  "Food #quot;in#quot;" : 25.5'));
+    expect(pie).toMatchObject({
+      title: 'Budget',
+      showData: false,
+      slices: [
+        { label: 'Rent', value: 40 },
+        { label: 'Food "in"', value: 25.5 },
+      ],
+    });
+    pie.showData = true;
+    expect(printPie(pie)).toBe(
+      'pie showData\n    title Budget\n    "Rent" : 40\n    "Food #quot;in#quot;" : 25.5',
+    );
+    expect(parsePie('pie\n  Rent : 40')).toMatchObject({ ok: false, line: 2 });
+  });
+});
+
+describe('diagramText', () => {
+  it('gives the words of every kind of diagram', () => {
+    expect(diagramText('flowchart LR\n A[Order received] -->|yes| B{Paid?}')).toBe(
+      'Order received · Paid? · yes',
+    );
+    expect(diagramText('sequenceDiagram\n A->>B: Hello')).toBe('A · B · Hello');
+    expect(diagramText('mindmap\n  root((Plan))\n    Goals')).toBe('Plan · Goals');
+    expect(diagramText('pie title Spend\n "Rent" : 1')).toBe('Spend · Rent');
+    expect(diagramText('classDiagram\n class Animal["An animal"]\n Animal : +int age')).toBe(
+      'An animal · +int age',
+    );
+  });
+
+  it('describes a diagram for screen readers', () => {
+    expect(diagramSummary('flowchart LR\n A[Start] --> B[End]')).toBe('Flowchart: Start, End');
+    expect(diagramSummary('gantt')).toBe('Gantt chart');
+  });
+});
+
+it('prints every model type it reads', () => {
+  const samples = [
+    'flowchart LR\n A --> B',
+    'sequenceDiagram\n A->>B: Hi',
+    'mindmap\n  root\n    a',
+    'timeline\n 2020 : x',
+    'gantt\n Task :2026-01-01, 1d',
+    'pie\n "a" : 1',
+  ];
+  for (const sample of samples) {
+    const parsed: DiagramModel = model(parseDiagram(sample));
+    expect(model(parseDiagram(printDiagram(parsed)))).toEqual(parsed);
+  }
+});

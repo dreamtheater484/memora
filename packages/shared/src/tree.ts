@@ -1,3 +1,4 @@
+import { diagramText } from './diagrams';
 import { SNIPPET_LENGTH, bySortKey, keysBetween } from './notes';
 
 /*
@@ -97,6 +98,10 @@ export function isWithin<T>(
   return false;
 }
 
+/** A ```mermaid block: its code is the third group. */
+const DIAGRAM_FENCE =
+  /^( {0,3})(`{3,}|~{3,})[ \t]*mermaid\b[^\n]*\n([\s\S]*?)\n {0,3}\2[`~]*[ \t]*$/gm;
+
 /**
  * Plain text of a Markdown page, for snippets and search: formatting marks, link targets and
  * HTML tags go, the words stay. Deliberately rough; it never needs to round-trip.
@@ -106,6 +111,10 @@ export function markdownToText(markdown: string): string {
   const escaped: string[] = [];
   return (
     markdown
+      // A diagram's words, not its code.
+      .replace(DIAGRAM_FENCE, (_, _indent: string, _fence: string, code: string) =>
+        diagramText(code),
+      )
       .replace(
         /\\([\\`*_{}[\]()#+\-.!|~$<>])/g,
         (_, c: string) => `\uE000${escaped.push(c) - 1}\uE001`,

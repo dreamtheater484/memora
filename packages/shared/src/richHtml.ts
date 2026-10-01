@@ -1,4 +1,5 @@
 import { ASSET_SCHEME } from './assets';
+import { DIAGRAM_LANGUAGE } from './diagrams';
 import { RICH_INDENT_EM, RICH_MAX_INDENT, type RichMark, type RichNode } from './rich';
 
 /*
@@ -15,6 +16,11 @@ const SAFE_URL = /^(https?:|mailto:|tel:|#)/i;
 export interface RichHtmlOptions {
   /** Where a page's file (`asset:<id>`) is found from the HTML file. */
   asset?: (id: string) => string | null;
+  /**
+   * A diagram's drawing (sanitised SVG markup) from its Mermaid code; without one, or when it
+   * answers null, the diagram is written as its code.
+   */
+  diagram?: (code: string) => string | null;
 }
 
 function url(value: unknown, options: RichHtmlOptions): string | null {
@@ -138,6 +144,7 @@ function render(node: RichNode, options: RichHtmlOptions): string {
     case 'codeBlock': {
       const language = typeof attrs?.language === 'string' ? attrs.language : '';
       const text = (node.content ?? []).map((c) => c.text ?? '').join('');
+      if (language === DIAGRAM_LANGUAGE) return diagramHtml(text, attrs, options);
       return `<pre><code${language ? ` class="language-${escape(language)}"` : ''}>${escape(text)}</code></pre>\n`;
     }
     case 'horizontalRule':
@@ -180,6 +187,22 @@ function render(node: RichNode, options: RichHtmlOptions): string {
 }
 
 /** The document's body as HTML. */
+/** A diagram: its drawing in a figure, aligned and sized as in the page, or else its code. */
+function diagramHtml(code: string, attrs: RichNode['attrs'], options: RichHtmlOptions): string {
+  const svg = options.diagram?.(code) ?? null;
+  const align = ['left', 'right'].includes(String(attrs?.align)) ? String(attrs?.align) : 'center';
+  const width = Number(attrs?.width);
+  const size = Number.isInteger(width) && width > 0 ? ` style="width: ${width}px"` : '';
+  const caption =
+    typeof attrs?.caption === 'string' && attrs.caption
+      ? `<figcaption>${escape(attrs.caption)}</figcaption>`
+      : '';
+  const body = svg
+    ? `<div class="diagram-svg"${size}>${svg}</div>`
+    : `<pre class="diagram-code"><code class="language-${DIAGRAM_LANGUAGE}">${escape(code)}</code></pre>`;
+  return `<figure class="diagram" data-align="${align}">${body}${caption}</figure>\n`;
+}
+
 export function richToHtml(doc: RichNode, options: RichHtmlOptions = {}): string {
   return render(doc, options);
 }
@@ -200,6 +223,10 @@ pre { background: #f6f8fa; padding: 0.8em; overflow: auto; } code { font-family:
 blockquote { border-left: 4px solid #d0d7de; margin-left: 0; padding-left: 1em; color: #59636e; }
 .callout { border-left: 4px solid #0969da; background: #f6f8fa; padding: 0.4em 1em; margin: 1em 0; }
 .task-list { list-style: none; padding-left: 1em; }
+figure.diagram { display: flex; flex-direction: column; align-items: center; margin: 1em 0; }
+figure.diagram[data-align="left"] { align-items: flex-start; } figure.diagram[data-align="right"] { align-items: flex-end; }
+.diagram-svg { max-width: 100%; } .diagram-svg svg { display: block; width: 100%; max-width: 100%; height: auto; }
+figcaption { font-size: 0.875em; color: #59636e; }
 </style>
 </head>
 <body>

@@ -1,3 +1,4 @@
+import { DIAGRAM_LANGUAGE, diagramText } from './diagrams';
 import { escapeCell, formatTable, type Align } from './table';
 
 /*
@@ -159,6 +160,15 @@ export function richToText(content: string | RichNode): string {
         line = String(node.attrs?.name ?? '');
         end();
         return;
+      case 'codeBlock':
+        // A diagram's words, not its code.
+        if (node.attrs?.language === DIAGRAM_LANGUAGE) {
+          end();
+          line = diagramText((node.content ?? []).map((c) => c.text ?? '').join(''));
+          end();
+          return;
+        }
+        break;
     }
     if (BLOCKS_WITH_TEXT.has(node.type)) end();
     for (const child of node.content ?? []) walk(child);
@@ -220,6 +230,7 @@ export const RICH_LOSSES = {
   tableBlocks: 'Lists, images and other blocks inside table cells (their text stays)',
   headerRow: 'Tables without a header row (the first row becomes one)',
   imageLayout: 'Image sizes and alignment',
+  diagramLayout: 'Diagram sizes, alignment and captions',
 } as const;
 export type RichLoss = keyof typeof RICH_LOSSES;
 
@@ -295,6 +306,9 @@ function block(node: RichNode, ctx: Context): string {
       return list(node, ctx);
     case 'codeBlock': {
       const code = plainText(node);
+      if (node.attrs?.width || node.attrs?.align || node.attrs?.caption) {
+        ctx.lost.add('diagramLayout');
+      }
       const longest = Math.max(0, ...[...code.matchAll(/`+/g)].map((m) => m[0].length));
       const fence = '`'.repeat(Math.max(3, longest + 1));
       const language = typeof node.attrs?.language === 'string' ? node.attrs.language : '';
