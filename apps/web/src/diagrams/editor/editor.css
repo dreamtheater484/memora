@@ -1,0 +1,665 @@
+/*
+ * The diagram editor (§9.4): full screen; the drawing on a quiet dotted canvas, its details
+ * beside it; on a phone, the drawing above and the details below.
+ */
+
+.diagram-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+  outline: none;
+}
+@media (min-width: 768px) {
+  .diagram-editor {
+    inset: 1rem;
+    border-radius: 1rem;
+    border: 1px solid var(--line-strong);
+    box-shadow: var(--shadow-pop);
+    overflow: hidden;
+  }
+}
+
+.diagram-editor-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.diagram-editor-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  color: var(--accent);
+}
+.diagram-editor-title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin-right: 0.5rem;
+}
+.diagram-editor-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.diagram-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.diagram-editor-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.diagram-editor-main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.diagram-editor-panel {
+  width: 23rem;
+  flex: none;
+  min-height: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+}
+.diagram-editor-body.is-code .diagram-editor-code {
+  width: min(32rem, 45%);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+}
+.diagram-editor-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+@media (max-width: 767px) {
+  .diagram-editor-body {
+    flex-direction: column;
+  }
+  .diagram-editor-main {
+    flex: none;
+    height: 42dvh;
+  }
+  .diagram-editor-panel {
+    width: auto;
+    flex: 1;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .diagram-editor-body.is-code .diagram-editor-code {
+    width: auto;
+    flex: 1;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}
+
+/* The canvas. */
+.diagram-canvas-frame {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+.diagram-canvas {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  outline: none;
+  cursor: grab;
+  touch-action: none;
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--line-strong) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.diagram-canvas:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus);
+}
+.diagram-canvas:active {
+  cursor: grabbing;
+}
+.diagram-canvas-content {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  /* Zooming follows the wheel at once (and what is drawn over it is placed from it). */
+  transition: none !important;
+}
+.diagram-canvas-content svg {
+  display: block;
+  max-width: none !important;
+}
+.diagram-canvas .node,
+.diagram-canvas .cluster,
+.diagram-canvas .edgeLabel,
+.diagram-canvas [data-et='participant'],
+.diagram-canvas [data-et='message'],
+.diagram-canvas [data-et='note'],
+.diagram-canvas .messageText,
+.diagram-canvas .mindmap-node {
+  cursor: pointer;
+}
+.diagram-canvas .diagram-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14px;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+.diagram-canvas path.is-selected {
+  stroke: var(--accent) !important;
+  stroke-width: 3px !important;
+}
+.diagram-canvas-error {
+  position: absolute;
+  left: 50%;
+  bottom: 3.75rem;
+  translate: -50% 0;
+  max-width: min(36rem, calc(100% - 2rem));
+  margin: 0;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.6rem;
+  border: 1px solid color-mix(in oklab, var(--danger), transparent 60%);
+  background: var(--raised);
+  color: var(--danger);
+  font-size: 0.85rem;
+  box-shadow: var(--shadow-card);
+}
+.diagram-zoom {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--raised);
+  box-shadow: var(--shadow-card);
+}
+.diagram-zoom-level {
+  min-width: 3rem;
+  text-align: center;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-2);
+}
+
+/* What's drawn over the diagram. */
+.diagram-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.diagram-ring {
+  position: absolute;
+  border: 2px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent), transparent 82%);
+}
+.diagram-ring.is-group {
+  border-style: dashed;
+}
+.diagram-overlay-control {
+  pointer-events: auto;
+}
+.diagram-plus {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 2px solid var(--surface);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  transition: transform 100ms ease;
+}
+.diagram-plus:hover,
+.diagram-plus:focus-visible {
+  transform: scale(1.15);
+}
+.diagram-plus svg {
+  width: 14px;
+  height: 14px;
+}
+.diagram-plus.is-beside {
+  width: 20px;
+  height: 20px;
+  background: var(--raised);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.diagram-link {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.diagram-link line {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+.diagram-label-input {
+  position: absolute;
+  height: 36px;
+  padding: 0 0.6rem;
+  border-radius: 8px;
+  border: 2px solid var(--accent);
+  background: var(--raised);
+  color: var(--fg);
+  text-align: center;
+  font-family: var(--font-sans);
+  box-shadow: var(--shadow-pop);
+  outline: none;
+}
+
+/* The panel. */
+.diagram-panel {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 1rem;
+}
+.diagram-panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+.diagram-panel-section h3 {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.diagram-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--fg-2);
+}
+.diagram-field-row {
+  display: flex;
+  gap: 0.6rem;
+}
+.diagram-field-row > * {
+  flex: 1;
+  min-width: 0;
+}
+.diagram-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
+.diagram-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.diagram-hint {
+  margin: 0;
+  padding: 0.75rem 1rem 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--fg-3);
+}
+.diagram-notice {
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--fg-2);
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--line);
+}
+.diagram-shapes {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.3rem;
+}
+.diagram-shape {
+  display: grid;
+  place-items: center;
+  height: 2.1rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--fg-2);
+}
+.diagram-shape:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.diagram-shape.is-on {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.diagram-swatch {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  border: 2px solid var(--line-strong);
+}
+.diagram-swatch.is-none {
+  background: linear-gradient(
+    135deg,
+    var(--surface) 45%,
+    var(--danger) 45% 55%,
+    var(--surface) 55%
+  );
+}
+.diagram-swatch.is-on {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--accent);
+}
+.diagram-outline,
+.diagram-outline ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.diagram-outline ul {
+  padding-left: 1rem;
+}
+.diagram-outline-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.4rem;
+  text-align: left;
+  font-size: 0.85rem;
+  color: var(--fg);
+}
+.diagram-outline-item:hover {
+  background: var(--hover);
+}
+.diagram-outline-item.is-on {
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+.diagram-outline-item.is-arrow {
+  font-size: 0.8rem;
+  color: var(--fg-2);
+}
+.diagram-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  flex: none;
+}
+.diagram-toolbar {
+  display: flex;
+  gap: 0.15rem;
+}
+
+/* Mind map outline. */
+.diagram-mind-outline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.diagram-mind-outline li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.diagram-bullet {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--fg-3);
+  flex: none;
+}
+.diagram-bullet.is-root {
+  width: 0.6rem;
+  height: 0.6rem;
+  background: var(--accent);
+}
+.diagram-mind-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.45rem;
+  border-radius: 0.4rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--fg);
+  font-size: 0.9rem;
+  outline: none;
+}
+.diagram-mind-input:hover {
+  background: var(--hover);
+}
+.diagram-mind-input:focus,
+.diagram-mind-input.is-on {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+/* Rows of steps, tasks, slices. */
+.diagram-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.diagram-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.3rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+}
+/* A pie slice: its name takes what the value, its share and the delete button leave. */
+.diagram-row.is-slice {
+  align-items: center;
+}
+.diagram-row.is-slice > * {
+  min-width: 0;
+  flex: 1;
+}
+.diagram-row.is-slice > .diagram-slice-value {
+  flex: 0 0 4.75rem;
+}
+.diagram-row.is-slice > .diagram-slice-share {
+  flex: 0 0 2.4rem;
+  text-align: right;
+}
+.diagram-row.is-slice > button {
+  flex: none;
+}
+.diagram-row.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.diagram-row.is-end,
+.diagram-row.is-branch .diagram-word {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.78rem;
+  color: var(--fg-3);
+}
+.diagram-row.is-branch {
+  align-items: center;
+}
+.diagram-row.is-block,
+.diagram-row.is-branch {
+  background: color-mix(in oklab, var(--accent-soft), transparent 50%);
+}
+.diagram-message {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.diagram-message-line {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+.diagram-message-line > * {
+  min-width: 0;
+}
+.diagram-message-line button[role='combobox'] {
+  min-width: 0;
+  flex: 1;
+}
+.diagram-message-line button[role='combobox'] > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.diagram-message-line button.diagram-arrow {
+  flex: 1.5;
+}
+.diagram-message-line.is-event {
+  padding-left: 1rem;
+}
+.diagram-row-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.diagram-word {
+  font-size: 0.8rem;
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+.diagram-raw {
+  flex: 1;
+  font-size: 0.78rem;
+  color: var(--fg-3);
+}
+.diagram-date {
+  height: 2rem;
+  padding: 0 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+/* The code beside the drawing. */
+.diagram-code {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.diagram-code .cm-editor {
+  height: 100%;
+}
+
+/* The template gallery. */
+.diagram-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.25rem 1.25rem 3rem;
+}
+.diagram-gallery h3 {
+  margin: 0 0 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.diagram-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.75rem;
+}
+.diagram-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 0.8rem;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  overflow: hidden;
+  text-align: left;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+.diagram-card:hover,
+.diagram-card:focus-visible {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
+}
+.diagram-card-preview {
+  display: grid;
+  place-items: center;
+  height: 10rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--bg);
+  overflow: hidden;
+  pointer-events: none;
+}
+.diagram-card-preview .diagram-drawing {
+  width: 100%;
+  height: 100%;
+  align-items: center;
+}
+/* The drawing scaled to fill the card, whatever its own size. */
+.diagram-card-preview svg {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0;
+  max-width: none !important;
+}
+.diagram-card-plus {
+  font-size: 2.2rem;
+  font-weight: 300;
+  color: var(--accent);
+}
+.diagram-card-name {
+  padding: 0.55rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-top: 1px solid var(--line);
+}

@@ -15,6 +15,13 @@ export type ShellDialog =
   | { kind: 'section-template'; sectionId: string }
   | { kind: 'export'; scope: ExportScope; id?: string }
   | { kind: 'print'; scope: 'page' | 'section'; id: string }
+  // Diagrams (§9.3, §9.4): null code starts from the template gallery.
+  | {
+      kind: 'diagram';
+      code: string | null;
+      page: 'markdown' | 'rich';
+      onDone: (code: string) => void;
+    }
   // Kanban (§9.11)
   | { kind: 'new-project' }
   | { kind: 'project'; projectId: string }

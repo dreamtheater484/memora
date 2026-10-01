@@ -264,10 +264,26 @@ export const RICH_KEYS: readonly { keys: string; label: string }[] = [
   { keys: 'Tab', label: 'Indent; next table cell' },
   { keys: 'Shift Tab', label: 'Outdent' },
   { keys: 'Mod Shift L', label: 'Align left (E centre, R right, J justify)' },
-  { keys: '/', label: 'Insert a table, image, callout…' },
+  { keys: '/', label: 'Insert a table, image, diagram, callout…' },
   { keys: '[[', label: 'Link to a page' },
   { keys: 'Mod F', label: 'Find and replace' },
   { keys: 'Esc Tab', label: 'Leave the editor' },
+];
+
+/** The diagram editor's keys (§9.4), for the reference sheet. */
+export const DIAGRAM_KEYS: readonly { keys: string; label: string }[] = [
+  { keys: 'Enter', label: 'Rename the selected box' },
+  { keys: 'Tab', label: 'Add a connected box (while renaming: and name the next)' },
+  { keys: 'Shift Enter', label: 'Add a box beside it' },
+  { keys: '← → ↑ ↓', label: 'Select the box that way' },
+  { keys: 'Shift Click', label: 'Select more boxes' },
+  { keys: 'Delete', label: 'Delete the selection' },
+  { keys: 'Enter', label: 'Mind map outline: add a topic' },
+  { keys: 'Tab', label: 'Mind map outline: a level in (Shift Tab out)' },
+  { keys: 'Alt ↑ ↓', label: 'Mind map outline: move a topic' },
+  { keys: 'Mod Z', label: 'Undo (Mod Shift Z redo)' },
+  { keys: 'Mod Wheel', label: 'Zoom' },
+  { keys: 'Esc', label: 'Clear the selection, then close' },
 ];
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
