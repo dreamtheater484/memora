@@ -22,7 +22,7 @@ import type { DocEditor, PageDoc } from '../sync/doc';
 import { currentSync } from '../sync/engine';
 import { textChange } from '../sync/merge';
 import { GridEditor } from './GridEditor';
-import { registerJump } from './jumps';
+import { registerFocus, registerJump } from './jumps';
 import MarkdownEditor, { type EditorHost } from './MarkdownEditor';
 import { insertFiles } from './paste';
 import { scrollPreviewTo, useScrollSync } from './scrollSync';
@@ -178,6 +178,16 @@ export default memo(function MarkdownPage({ page, doc, compact, autoFocus }: Mar
     [mode, preview, view],
   );
   useEffect(() => registerJump(page.id, jump), [page.id, jump]);
+  // Enter in the title continues here, at the start of the text.
+  useEffect(
+    () =>
+      registerFocus(page.id, () => {
+        if (mode === 'preview' || !view) return;
+        view.dispatch({ selection: { anchor: 0 }, scrollIntoView: true });
+        view.focus();
+      }),
+    [page.id, mode, view],
+  );
 
   // Long pages take a moment to count: only once typing pauses.
   const settled = useSettled(text, 400);

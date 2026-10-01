@@ -365,7 +365,7 @@ function usePaletteItems(current: Current, commands: Commands, query: string): P
         onSelect: () => splitRight(cls, specOfMain(current.page?.id, current.boardId)),
       });
     }
-    if (current.page) {
+    if (current.page?.type === 'markdown') {
       const page = current.page;
       const full = !!ui.fullWidth?.includes(page.id);
       items.push({
@@ -375,6 +375,18 @@ function usePaletteItems(current: Current, commands: Commands, query: string): P
         icon: <MoveHorizontal />,
         keywords: 'wide width line length',
         onSelect: () => toggleFullWidth(queryClient, ui, page.id),
+      });
+    }
+    // A rich page's text fills the pane unless its edge was dragged: this undoes that.
+    if (current.page?.type === 'rich' && ui.pageWidths?.[current.page.id]) {
+      const page = current.page;
+      items.push({
+        id: 'cmd:fit-text',
+        title: 'Fit the text to the pane',
+        group: 'Commands',
+        icon: <MoveHorizontal />,
+        keywords: 'wide width full text',
+        onSelect: () => saveUiState(queryClient, { pageWidths: { [page.id]: null } }, 0),
       });
     }
     // Full-text search (§9.8), for what typing here doesn't find by name.
