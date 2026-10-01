@@ -55,7 +55,7 @@ The source is on the left, the finished page on the right, and the two scroll to
   - GitHub-flavoured Markdown, with task lists you can tick in the preview and footnotes;
   - alerts (`> [!NOTE]`, `[!TIP]`, `[!WARNING]`…);
   - maths between `$…$` and `$$…$$`;
-  - diagrams in ` ```mermaid ` blocks;
+  - [diagrams](#diagrams) in ` ```mermaid ` blocks;
   - highlighted code, with a copy button.
 - **Find and replace** (`Ctrl/Cmd+F`) works with regular expressions too.
 - **Settings → Editing:** line numbers, wrapping, visible spaces, spelling, tab size, the longest line, and small pictures under image lines.
@@ -90,6 +90,23 @@ Converting a rich page to Markdown first lists what Markdown can't keep (colours
 - In rich pages, drag an image's corner to resize it; its menu sets the alignment, a caption and a description for screen readers. Click an image to see it full size.
 - **Other files** (a PDF, a spreadsheet) become a file block to download. The largest file is set by your administrator: 25 MB unless they changed it.
 - **Settings → Editing → Images** can shrink large photos as you paste them (off unless you turn it on). Screenshots stay sharp.
+
+### Diagrams
+
+![The diagram editor with a mind map: the drawing, and its outline beside it](images/diagrams.png)
+
+Flowcharts, mind maps, sequence diagrams, timelines, Gantt charts and pie charts, drawn in Memora's colours and edited by pointing and typing. Underneath, a diagram is [Mermaid](https://mermaid.js.org) code, so it travels with the page: Markdown exports, GitHub and other Mermaid tools draw it too.
+
+- **A new diagram:** type `/diagram` in any page, or use **Insert → Diagram** (rich pages) or the toolbar's **More → Diagram…** (Markdown pages). Pick a template from the gallery, or start blank.
+- **The editor** shows the drawing, with a panel for what is selected. **Done** puts the diagram in the page; **Cancel** or `Esc` leaves the page as it was. `Ctrl/Cmd+Z` undoes, and **Templates** starts again from another one.
+  - **Flowcharts:** click a box to select it, and `Enter` (or a double-click) to rename it. The **+** beside a selected box adds a connected one: type its name and press `Enter`, or `Tab` to go on to the next box. Drag one box onto another to connect them. The panel sets a box's shape and colour, and an arrow's label, line and ends. `Shift`-click selects more boxes, to group or delete them together; the arrow keys move between boxes.
+  - **Mind maps** are an outline: `Enter` adds a topic, `Tab` and `Shift+Tab` change its level, and `Alt+↑`/`↓` move it. Memora lays the map out around its centre, branches either side, each in its own colour.
+  - **Sequence diagrams:** the participants, then the steps in order: messages, notes, and blocks such as loops and alternatives. New steps go after the selected one.
+  - **Timelines, Gantt charts and pie charts** are lists: periods and their events; tasks with their dates or the task they follow; slices and their values.
+- **In rich pages** a diagram is selected like an image. Its toolbar opens the editor (or press `Enter`), sets the size (or drag the corner) and alignment, adds a caption and copies the diagram as a picture.
+- **In Markdown pages** diagrams are drawn in the source too, in place of their code. Point at one for **Edit diagram** and **Show code**; moving the cursor into it with the arrow keys shows its code. The preview has an **Edit** button, and the editor a **Code** tab. **Settings → Editing → Draw diagrams in the source** turns drawing in the source off.
+- **Mermaid the editor doesn't know**, a type it can't edit or features beyond it, is still drawn. Such a diagram opens as code; what the visual editor doesn't know is kept as you wrote it.
+- **Exports** draw diagrams too: as pictures in Word documents, and as sharp drawings in PDF and HTML.
 
 ## Links, tags and templates
 
@@ -255,6 +272,6 @@ The first account is the administrator. Administrators manage accounts and the s
 | `Ctrl/Cmd+F`            | Find (and replace) in the page                                                  |
 | `Esc`, then `Tab`       | Leave the editor, to move on with the keyboard                                  |
 
-In rich text pages, `Ctrl/Cmd+1` and `Ctrl/Cmd+Enter` handle to-dos, `Tab` and `Shift+Tab` indent, and `Ctrl+Space` clears formatting. `?` lists each editor's keys.
+In rich text pages, `Ctrl/Cmd+1` and `Ctrl/Cmd+Enter` handle to-dos, `Tab` and `Shift+Tab` indent, and `Ctrl+Space` clears formatting. The diagram editor's keys are in [Diagrams](#diagrams). `?` lists each editor's keys.
 
 In lists and trees, the arrow keys move and expand, `Enter` opens, and `Shift`-click or `Ctrl/Cmd`-click selects several.

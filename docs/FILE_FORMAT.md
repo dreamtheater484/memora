@@ -89,7 +89,7 @@ Times are milliseconds since 1970 (UTC). Colours are one of `coral`, `orange`, `
 **The page's content** is next to it:
 
 - `<id>.md`: a Markdown page's text, as Memora stores it ([the dialect](IMPLEMENTATION_PLAN.md#82-markdown-dialect)). Files are referred to as `asset:<asset-id>`, links to pages as `[[Page title]]`.
-- `<id>.rich.json`: a rich page's document: TipTap/ProseMirror JSON, `{ "type": "doc", "content": [...] }`. Images and attached files have `"src": "asset:<asset-id>"`; links to pages have `"href": "wiki:<title>"`.
+- `<id>.rich.json`: a rich page's document: TipTap/ProseMirror JSON, `{ "type": "doc", "content": [...] }`. Images and attached files have `"src": "asset:<asset-id>"`; links to pages have `"href": "wiki:<title>"`. A diagram is a `codeBlock` whose `language` is `mermaid` and whose text is the Mermaid code, with optional `width` (pixels), `align` (`left`, `center` or `right`) and `caption`.
 - `<id>.html`: the rich page as a standalone HTML file with its images linked from `assets/`. Memora writes it for reading and ignores it on import.
 
 `sortKey` orders siblings: items sort by it as plain strings. On import, items keep their order and go after what is already there.

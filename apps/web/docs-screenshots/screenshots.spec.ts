@@ -31,7 +31,9 @@ async function signedIn(browser: Browser, options: BrowserContextOptions = {}) {
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Log in' }).click();
   await page.waitForURL((url) => !url.pathname.startsWith('/login'));
-  const tree = (await (await page.request.get('/api/v1/tree')).json()) as Tree;
+  // From the page, which has the session cookie (a request context leaves out a secure one
+  // over plain http).
+  const tree = (await page.evaluate(async () => (await fetch('/api/v1/tree')).json())) as Tree;
   const pageId = (title: string) => tree.pages.find((p) => p.title === title)!.id;
   return { page, pageId, close: () => context.close() };
 }
@@ -44,7 +46,9 @@ async function settled(page: Page) {
 }
 
 async function boardId(page: Page) {
-  const { boards } = (await (await page.request.get('/api/v1/projects')).json()) as {
+  const { boards } = (await page.evaluate(async () =>
+    (await fetch('/api/v1/projects')).json(),
+  )) as {
     boards: { id: string; name: string }[];
   };
   return boards[0]!.id;
@@ -57,7 +61,9 @@ test('notes: a Markdown page beside its preview', async ({ browser }) => {
   });
   await page.goto(`/p/${pageId('Website relaunch plan')}`);
   const preview = page.locator('[data-preview] .markdown-body');
-  await expect(preview.locator('.mermaid-diagram svg')).toBeVisible({ timeout: 20_000 });
+  await expect(preview.locator('.mermaid-diagram .diagram-drawing > svg')).toBeVisible({
+    timeout: 20_000,
+  });
   await expect(preview.locator('.katex').first()).toBeVisible();
   await settled(page);
   await page.screenshot({ path: `${OUT}/notes.png` });
@@ -70,6 +76,21 @@ test('rich: a rich text page', async ({ browser }) => {
   await expect(page.getByRole('table')).toBeVisible();
   await settled(page);
   await page.screenshot({ path: `${OUT}/rich.png` });
+  await close();
+});
+
+test('diagrams: the diagram editor with a mind map', async ({ browser }) => {
+  const { page, pageId, close } = await signedIn(browser);
+  await page.goto(`/p/${pageId('Relaunch ideas')}`);
+  const drawn = page.locator('.cm-diagram');
+  await expect(drawn.locator('.diagram-drawing > svg')).toBeVisible({ timeout: 20_000 });
+  await drawn.hover();
+  await drawn.getByRole('button', { name: 'Edit diagram' }).click();
+  const editor = page.locator('.diagram-editor');
+  await expect(editor.locator('.diagram-canvas svg')).toBeVisible();
+  await editor.locator('.diagram-canvas g.mindmap-node').filter({ hasText: 'Design' }).click();
+  await settled(page);
+  await page.screenshot({ path: `${OUT}/diagrams.png` });
   await close();
 });
 
