@@ -11,7 +11,7 @@ import { DestinationPicker } from './DestinationPicker';
 import { destinations } from './destinations';
 import { useGo } from './location';
 import { NOTEBOOK_ICON } from './icons';
-import { EDITOR_KEYS, LIST_KEYS, SHORTCUTS, keysLabel } from './shortcuts';
+import { EDITOR_KEYS, LIST_KEYS, RICH_KEYS, SHORTCUTS, keysLabel } from './shortcuts';
 import { useShell } from './store';
 
 const close = () => useShell.getState().closeDialog();
@@ -420,6 +420,12 @@ function ShortcutsDialog() {
             Markdown editor
           </h3>
           <div className="divide-y divide-line">{EDITOR_KEYS.map((k) => row(k.keys, k.label))}</div>
+        </section>
+        <section>
+          <h3 className="mb-1 text-2xs font-semibold tracking-wider text-fg-3 uppercase">
+            Rich text editor
+          </h3>
+          <div className="divide-y divide-line">{RICH_KEYS.map((k) => row(k.keys, k.label))}</div>
         </section>
       </div>
       <p className="mt-4 text-sm text-fg-2">

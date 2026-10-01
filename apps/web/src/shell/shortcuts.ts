@@ -247,6 +247,29 @@ export const EDITOR_KEYS: readonly { keys: string; label: string }[] = [
   { keys: 'Esc Tab', label: 'Leave the editor' },
 ];
 
+/** The rich text editor's keys, as in a notebook or word processor, for the reference sheet. */
+export const RICH_KEYS: readonly { keys: string; label: string }[] = [
+  { keys: 'Mod B', label: 'Bold' },
+  { keys: 'Mod I', label: 'Italic' },
+  { keys: 'Mod U', label: 'Underline' },
+  { keys: 'Mod Shift S', label: 'Strikethrough' },
+  { keys: 'Ctrl Space', label: 'Clear formatting' },
+  { keys: 'Mod K', label: 'Link' },
+  { keys: 'Mod Alt 1…6', label: 'Heading 1 to 6' },
+  { keys: 'Mod Alt 0', label: 'Normal text' },
+  { keys: 'Mod Shift 7', label: 'Numbered list' },
+  { keys: 'Mod Shift 8', label: 'Bullet list' },
+  { keys: 'Mod 1', label: 'To-do, or tick it' },
+  { keys: 'Mod Enter', label: 'Tick or untick a to-do' },
+  { keys: 'Tab', label: 'Indent; next table cell' },
+  { keys: 'Shift Tab', label: 'Outdent' },
+  { keys: 'Mod Shift L', label: 'Align left (E centre, R right, J justify)' },
+  { keys: '/', label: 'Insert a table, image, callout…' },
+  { keys: '[[', label: 'Link to a page' },
+  { keys: 'Mod F', label: 'Find and replace' },
+  { keys: 'Esc Tab', label: 'Leave the editor' },
+];
+
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 /** Keys as shown to people: "Ctrl Alt N", or "⌘ ⌥ N" on a Mac. */

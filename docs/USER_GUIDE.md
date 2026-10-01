@@ -65,16 +65,23 @@ The source is on the left, the finished page on the right, and the two scroll to
 
 ![A rich text page with a table, a note box and an image](images/rich.png)
 
-Rich text pages work like a word processor. The toolbar has **Home**, **Insert** and **Table** tabs; on narrow screens, **More** has everything.
+Rich text pages work like a page of a notebook, with a word processor's tools. The toolbar has **Home**, **Insert** and **Table** tabs. When the window is too narrow for one row, the toolbar takes two; on phones, **More** has everything.
 
-- Headings, bold, italic, underline, strikethrough, superscript and subscript; text colours and highlights; fonts, sizes, alignment and line spacing.
-- Lists, task lists, quotes, note boxes, dividers, code blocks and maths.
+- **The text starts at the top left**, under the title, and fills the pane. Drag its right edge to make it narrower: each page keeps its own width. Double-click the edge, or choose **Fit the text to the pane** in the page's **⋯** menu, to fill the pane again.
+- `Enter` in the title goes on to the text. Clicking beside or below the text puts the cursor on the nearest line.
+- Headings, bold, italic, underline, strikethrough, superscript and subscript; text colours and highlights; fonts, sizes, alignment and line spacing. `Ctrl+Space` clears the formatting of the selected text.
+- **To-dos:** `Ctrl/Cmd+1` makes a line a to-do, and ticks it when it already is one. `Ctrl/Cmd+Enter` ticks or unticks it. Done items are struck through.
+- **`Tab` and `Shift+Tab` indent:** a list item moves a level, and other text moves in or out a step. In a table they go to the next or previous cell. `Esc`, then `Tab`, leaves the page.
+- Lists, quotes, note boxes, dividers, code blocks and maths.
 - Tables with a header row, merged cells, cell colours and resizable columns: right-click a cell for the table menu.
 - Selecting text shows a small formatting menu; `/` inserts blocks; the handle beside a block drags it elsewhere.
 - **Pasting from Word, Google Docs and web pages** keeps the formatting, cleaned up: lists stay lists, and stray fonts and colours go.
-- **Settings → Editing → Show pages as** lays the page out as an A4 or Letter sheet, to see what a Word or PDF export will look like.
+- **Settings → Editing → Rich text pages:**
+  - **Spacing:** **Compact** (the default) keeps lines and paragraphs close together, as in a notebook; **Comfortable** gives them more room.
+  - **Font** and **Font size** for text without its own. The toolbar's font list has common fonts. In the desktop app and in Chrome or Edge, **This computer's fonts…** lists the fonts installed on your computer; a page set in one of them shows a similar font on computers that don't have it.
+  - **Show pages as** lays the page out as an A4 or Letter sheet, to see what a Word or PDF export will look like.
 
-Converting a rich page to Markdown first lists what Markdown can't keep (colours, font sizes, merged cells). The page as it was is always kept in its history.
+Converting a rich page to Markdown first lists what Markdown can't keep (colours, font sizes, indents, merged cells). The page as it was is always kept in its history.
 
 ### Images and files
 
@@ -145,7 +152,7 @@ On a wide screen, **panes** open beside the main page: one on a wide screen, up 
 - Drag the edge between panes to resize them.
 - **Save this layout…** in the layout menu keeps the panes and their tabs under a name, to come back to.
 - Each kind of screen (wide, ultra-wide) remembers its own panes.
-- **Settings → Editing → Line length** sets how wide text runs (70 to 100 characters). A page's **Full width** option uses the whole pane.
+- **Settings → Editing → Line length** sets how wide Markdown text runs (70 to 100 characters). A Markdown page's **Full width** option uses the whole pane. Rich text fills the pane; drag its right edge to make it narrower.
 
 ## Offline and the app
 
@@ -247,5 +254,7 @@ The first account is the administrator. Administrators manage accounts and the s
 | `Ctrl/Cmd+S`            | Send changes to the server now                                                  |
 | `Ctrl/Cmd+F`            | Find (and replace) in the page                                                  |
 | `Esc`, then `Tab`       | Leave the editor, to move on with the keyboard                                  |
+
+In rich text pages, `Ctrl/Cmd+1` and `Ctrl/Cmd+Enter` handle to-dos, `Tab` and `Shift+Tab` indent, and `Ctrl+Space` clears formatting. `?` lists each editor's keys.
 
 In lists and trees, the arrow keys move and expand, `Enter` opens, and `Shift`-click or `Ctrl/Cmd`-click selects several.

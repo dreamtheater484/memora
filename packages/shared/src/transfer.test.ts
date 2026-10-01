@@ -53,6 +53,16 @@ describe('front matter', () => {
 });
 
 describe('rich pages as HTML', () => {
+  it('keeps indented paragraphs indented, within reason', () => {
+    const para = (indent: unknown) => ({
+      type: 'paragraph',
+      attrs: { indent },
+      content: [{ type: 'text', text: 'x' }],
+    });
+    const html = richToHtml({ type: 'doc', content: [para(2), para(99), para('1em')] }, {});
+    expect(html).toBe('<p style="margin-left: 4em">x</p>\n<p>x</p>\n<p>x</p>\n');
+  });
+
   it('writes the document, escaping text and dropping unsafe addresses', () => {
     const html = richToHtml(
       {

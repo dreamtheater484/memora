@@ -1,4 +1,4 @@
-import type { RichNode } from '@memora/shared';
+import { richFont, type RichNode } from '@memora/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { FakeApi, PNG, expectNoA11yViolations, fontsReady } from './helpers';
 import { richDoc } from './notes';
@@ -6,7 +6,8 @@ import { richDoc } from './notes';
 /*
  * The rich text editor (Phase 6, §9.4, §9.5): formatting as in a word processor, the
  * Word-like toolbar, images and files, cleaned-up pasting, and converting pages between
- * Markdown and rich text.
+ * Markdown and rich text. Pages behave like a notebook's: text from the top left, an edge
+ * to set its width, to-dos ticked from the keyboard, Tab that indents.
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -122,6 +123,181 @@ test('the toolbar is grouped Home, Insert and Table, and condenses on narrow pan
     () => document.scrollingElement!.scrollWidth - document.scrollingElement!.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test('to-dos sit on their line, are ticked from the keyboard, and done ones are struck through', async ({
+  page,
+}) => {
+  const api = await open(page, '');
+  await editor(page).click();
+  await page.keyboard.type('[ ] Buy milk');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Eggs');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Tab');
+  await page.keyboard.type('Free range');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  const done = editor(page).locator('li[data-checked="true"]');
+  await expect(done.locator('p')).toHaveText('Free range');
+  await expect(done.locator('p')).toHaveCSS('text-decoration-line', 'line-through');
+  // The box is on the line of its text, and a nested to-do is clearly further in.
+  const lines = await editor(page).evaluate((root) =>
+    [...root.querySelectorAll('li[data-checked]')].map((li) => {
+      const box = li.querySelector('input')!.getBoundingClientRect();
+      const text = li.querySelector('p')!.getBoundingClientRect();
+      return { offset: box.top + box.height / 2 - (text.top + text.height / 2), left: text.left };
+    }),
+  );
+  for (const line of lines) expect(Math.abs(line.offset)).toBeLessThan(3);
+  expect(lines[2]!.left - lines[1]!.left).toBeGreaterThan(18);
+  await expect(editor(page).locator('ul[data-type="taskList"]').first()).toHaveScreenshot(
+    'todos.png',
+  );
+
+  // Ctrl+1 makes a line a to-do, and ticks it when it is one.
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Call the bank');
+  await page.keyboard.press('ControlOrMeta+1');
+  const bank = editor(page).locator('li[data-checked]').filter({ hasText: 'Call the bank' });
+  await expect(bank).toHaveAttribute('data-checked', 'false');
+  await page.keyboard.press('ControlOrMeta+1');
+  await expect(bank).toHaveAttribute('data-checked', 'true');
+  await expect
+    .poll(() => JSON.stringify(stored(api)), { timeout: 10_000 })
+    .toMatch(/"checked":true.*Call the bank/);
+});
+
+test('Tab indents in the page, and Escape then Tab leaves it', async ({ page }) => {
+  const api = await open(page, richDoc('Notes from the call'));
+  await editor(page).getByText('Notes from the call').click();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  const paragraph = editor(page).locator('p').first();
+  await expect(paragraph).toHaveAttribute('data-indent', '2');
+  await expect(editor(page)).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(paragraph).toHaveAttribute('data-indent', '1');
+  await expect.poll(() => JSON.stringify(stored(api)), { timeout: 10_000 }).toContain('"indent":1');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Tab');
+  await expect(editor(page)).not.toBeFocused();
+});
+
+test('Ctrl+Space clears the formatting of the selection', async ({ page }) => {
+  await open(page, '');
+  await editor(page).click();
+  await page.keyboard.press('ControlOrMeta+b');
+  await page.keyboard.type('bold words');
+  await expect(editor(page).locator('strong')).toHaveText('bold words');
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.press('Control+Space');
+  await expect(editor(page).locator('strong')).toHaveCount(0);
+});
+
+test('Enter in the title goes on to the text, without losing what is typed', async ({ page }) => {
+  const api = await open(page, richDoc('First line'));
+  await page
+    .getByRole('main')
+    .getByRole('heading', { name: 'Pricing experiments', level: 1 })
+    .click();
+  // Typed at once, as a quick typist would.
+  await page.keyboard.type('Price list');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Intro. ');
+  await expect(editor(page)).toBeFocused();
+  await expect(editor(page).locator('p').first()).toHaveText('Intro. First line');
+  await expect
+    .poll(() => api.notes.tree.pages.find((p) => p.id === 'pricing')?.title)
+    .toBe('Price list');
+});
+
+test('a click beside or below the text puts the cursor there', async ({ page }) => {
+  await open(page, richDoc('Alpha\n\nBeta'));
+  const box = (await page.locator('.rich-sheet').boundingBox())!;
+  const text = (await editor(page).boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, text.y + text.height + 80);
+  await page.keyboard.type(' end');
+  await expect(editor(page).locator('p').last()).toHaveText('Beta end');
+  const alpha = (await editor(page).getByText('Alpha').boundingBox())!;
+  await page.mouse.click(box.x + 4, alpha.y + alpha.height / 2);
+  await page.keyboard.type('First: ');
+  await expect(editor(page).locator('p').first()).toHaveText('First: Alpha');
+});
+
+test('the text starts under the title, and its right edge sets its width', async ({ page }) => {
+  const api = await open(page, richDoc('Some text'));
+  const title = page.getByRole('main').getByRole('heading', { level: 1 }).first();
+  const [text, heading, pane] = await Promise.all([
+    editor(page).boundingBox(),
+    title.boundingBox(),
+    page.locator('.rich-sheet').boundingBox(),
+  ]);
+  expect(Math.abs(text!.x - heading!.x)).toBeLessThan(2);
+  // It fills the pane, inside the page's margins.
+  expect(pane!.x + pane!.width - (text!.x + text!.width)).toBeLessThan(40);
+
+  const edge = page.getByRole('separator', { name: 'Text width' });
+  const grip = (await edge.boundingBox())!;
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + grip.width / 2 - 300, grip.y + 20, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(() => api.notes.settings.ui.pageWidths?.pricing).toBeGreaterThan(0);
+  const narrowed = api.notes.settings.ui.pageWidths!.pricing!;
+  expect(Math.abs((await editor(page).boundingBox())!.width - narrowed)).toBeLessThan(2);
+  // The keyboard moves it too.
+  await edge.focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => api.notes.settings.ui.pageWidths?.pricing).toBe(narrowed - 20);
+  // A double-click fits the text to the pane again, as does the page menu.
+  await edge.dblclick();
+  await expect.poll(() => api.notes.settings.ui.pageWidths?.pricing).toBeUndefined();
+  expect((await editor(page).boundingBox())!.width).toBeGreaterThan(text!.width - 2);
+});
+
+test('rich text takes its font, size and spacing from Settings → Editing', async ({ page }) => {
+  const api = new FakeApi();
+  api.notes.settings.editor = {
+    richFont: richFont('Georgia'),
+    richFontSize: 14,
+    richSpacing: 'comfortable',
+  };
+  await open(page, richDoc('Some text'), 'pricing', api);
+  const paragraph = editor(page).locator('p').first();
+  await expect(paragraph).toHaveCSS('font-size', '18.6667px');
+  await expect(paragraph).toHaveCSS('font-family', /^Georgia/);
+  await expect(page.getByRole('button', { name: 'Font', exact: true })).toHaveText('Georgia');
+  await expect(page.getByRole('button', { name: 'Font size', exact: true })).toHaveText('14');
+
+  await page.goto('/settings/editing');
+  await page.getByRole('radio', { name: 'Compact' }).click();
+  await expect.poll(() => api.notes.settings.editor.richSpacing).toBe('compact');
+});
+
+test('at laptop widths the toolbar wraps rather than hiding the essentials', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await open(page, richDoc('Some text'));
+  for (const name of [
+    'Text style',
+    'Font',
+    'Font size',
+    'Bold',
+    'Italic',
+    'Underline',
+    'Text colour',
+    'Highlight',
+    'Alignment',
+    'Bullet list',
+    'Numbered list',
+    'Task list',
+    'Decrease indent',
+    'Increase indent',
+    'Link',
+  ]) {
+    await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
+  }
 });
 
 test('text from Word keeps its formatting, cleaned', async ({ page }) => {

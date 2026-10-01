@@ -166,8 +166,14 @@ export class FakeNotes {
       const ui = (body.ui ?? {}) as Settings['ui'];
       const editor = (body.editor ?? {}) as Settings['editor'];
       const lastPages = { ...this.settings.ui.lastPages, ...ui.lastPages };
+      // Per page, as the server keeps them: null takes a page's width away.
+      const pageWidths = Object.fromEntries(
+        Object.entries({ ...this.settings.ui.pageWidths, ...ui.pageWidths }).filter(
+          ([, width]) => width !== null,
+        ),
+      );
       this.settings = {
-        ui: { ...this.settings.ui, ...ui, lastPages },
+        ui: { ...this.settings.ui, ...ui, lastPages, pageWidths },
         editor: { ...this.settings.editor, ...editor },
       };
       return { json: this.settings };

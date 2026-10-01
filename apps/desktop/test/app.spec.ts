@@ -87,6 +87,19 @@ test('opens signed in, keeps the notes, and closes cleanly', async () => {
   expect(me).toMatchObject({ desktop: true, user: { role: 'admin' } });
   // No service worker in the app: its server is always there.
   expect(await page.evaluate(async () => (await fetch('/sw.js')).status)).toBe(404);
+  // Rich pages can offer the computer's own fonts (after a click, as in the app).
+  await page.getByRole('main').click({ position: { x: 5, y: 5 } });
+  expect(
+    await page.evaluate(async () => {
+      const list = (window as unknown as { queryLocalFonts: () => Promise<unknown[]> })
+        .queryLocalFonts;
+      try {
+        return Array.isArray(await list.call(window)) ? 'allowed' : 'no list';
+      } catch (error) {
+        return String(error);
+      }
+    }),
+  ).toBe('allowed');
 
   await page.evaluate(async (csrf) => {
     const response = await fetch('/api/v1/notebooks', {

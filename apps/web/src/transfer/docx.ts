@@ -1,4 +1,4 @@
-import { ASSET_SCHEME, type RichMark, type RichNode } from '@memora/shared';
+import { ASSET_SCHEME, RICH_MAX_INDENT, type RichMark, type RichNode } from '@memora/shared';
 import {
   AlignmentType,
   BorderStyle,
@@ -176,10 +176,15 @@ class Writer {
 
   private paragraph(node: RichNode, options: IParagraphOptions = {}): Paragraph {
     const align = node.attrs?.textAlign;
+    // Indent steps as Word's own: half an inch (720 twips) each.
+    const indent = Number(node.attrs?.indent);
     return new Paragraph({
       ...options,
       ...(typeof align === 'string' && align in ALIGN
         ? { alignment: ALIGN[align as keyof typeof ALIGN] }
+        : {}),
+      ...(Number.isInteger(indent) && indent > 0 && indent <= RICH_MAX_INDENT
+        ? { indent: { left: indent * 720 } }
         : {}),
       children: [
         ...((options.children as ParagraphChild[] | undefined) ?? []),

@@ -157,15 +157,27 @@ test.describe('on a wide screen', () => {
     await expect(pane(page, 2)).toBeHidden();
   });
 
-  test('text keeps a readable width; a page can be full width', async ({ page }) => {
-    const api = await open(page, '/p/comp');
-    const text = page.getByRole('main').locator('.rich-sheet');
+  test('Markdown keeps a readable width, or full width; rich text fills the pane', async ({
+    page,
+  }) => {
+    const api = await open(page, '/p/q4');
+    await page.getByRole('radio', { name: 'Source' }).click();
+    const text = page.getByRole('main').locator('.cm-content');
     const narrow = (await text.boundingBox())!.width;
     expect(narrow).toBeLessThan(900);
     await page.getByRole('button', { name: 'Page actions' }).click();
     await page.getByRole('menuitemcheckbox', { name: 'Full width' }).click();
     await expect.poll(async () => (await text.boundingBox())!.width).toBeGreaterThan(narrow + 150);
-    await expect.poll(() => api.notes.settings.ui.fullWidth).toEqual(['comp']);
+    await expect.poll(() => api.notes.settings.ui.fullWidth).toEqual(['q4']);
+
+    // Rich text fills the pane, as in a notebook; its right edge narrows it.
+    await page.goto('/p/comp');
+    const sheet = (await page.getByRole('main').locator('.rich-sheet').boundingBox())!;
+    const rich = (await page.getByRole('main').locator('.ProseMirror').boundingBox())!;
+    expect(rich.width).toBeGreaterThan(sheet.width - 120);
+    await page.getByRole('button', { name: 'Page actions' }).click();
+    await expect(page.getByRole('menuitemcheckbox', { name: 'Full width' })).toBeHidden();
+    await page.keyboard.press('Escape');
 
     // The longest line is a setting.
     await page.goto('/settings/editing');

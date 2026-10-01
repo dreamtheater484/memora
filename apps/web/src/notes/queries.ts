@@ -152,6 +152,14 @@ export function saveUiState(queryClient: QueryClient, patch: UiState, delay = 80
         ),
       );
     }
+    if (patch.pageWidths) {
+      // Per page as well, and null fits the page's text to the pane again.
+      ui.pageWidths = Object.fromEntries(
+        Object.entries({ ...old?.ui.pageWidths, ...patch.pageWidths }).filter(
+          ([, width]) => width !== null,
+        ),
+      );
+    }
     return { ui, editor: old?.editor ?? {} };
   });
   pendingUi = {
@@ -161,6 +169,7 @@ export function saveUiState(queryClient: QueryClient, patch: UiState, delay = 80
     ...(patch.sectionTemplates
       ? { sectionTemplates: { ...pendingUi?.sectionTemplates, ...patch.sectionTemplates } }
       : {}),
+    ...(patch.pageWidths ? { pageWidths: { ...pendingUi?.pageWidths, ...patch.pageWidths } } : {}),
   };
   clearTimeout(uiTimer);
   uiTimer = setTimeout(() => flushUiState(), delay);

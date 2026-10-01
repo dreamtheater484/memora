@@ -8,6 +8,7 @@ import {
   FolderInput,
   LayoutTemplate,
   Link2,
+  MoveHorizontal,
   NotebookPen,
   PenLine,
   Plus,
@@ -34,10 +35,11 @@ import {
   toast,
 } from '../components/ui';
 import { cn } from '../lib/cn';
+import { focusPage } from '../editor/jumps';
 import { useFocusOnMount } from '../lib/useFocusOnMount';
 import { formatDateTime, formatRelative } from '../lib/time';
 import { isFavorite, toggleFavorite, toggleFullWidth } from '../notes/places';
-import { useNotesActions, useUiState } from '../notes/queries';
+import { saveUiState, useNotesActions, useUiState } from '../notes/queries';
 import type { PageDoc } from '../sync/doc';
 import { pickTemplate, useTemplates } from '../templates/templates';
 import { usePageDoc } from '../sync/hooks';
@@ -70,7 +72,13 @@ function TitleEditor({ page }: { page: PageMeta }) {
       onChange={(e) => setText(e.target.value)}
       onBlur={() => finish(true)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') finish(true);
+        if (e.key === 'Enter') {
+          // As in a notebook: Enter in the title goes on to the page's text.
+          // At once, so nothing typed next is lost; the field's blur saves the title.
+          e.preventDefault();
+          focusPage(page.id);
+          if (document.activeElement === e.currentTarget) finish(true);
+        }
         if (e.key === 'Escape') finish(false);
       }}
       className="w-full min-w-0 rounded-sm bg-transparent font-display text-[1.4375rem] leading-tight font-semibold tracking-[-0.03em] outline-none placeholder:text-fg-3 focus-visible:ring-2 focus-visible:ring-focus @tablet:text-[2.125rem]"
@@ -141,12 +149,26 @@ function PageHead({ page, doc }: { page: PageMeta; doc: PageDoc | null }) {
               <MenuItem icon={<Link2 />} onSelect={copyLink}>
                 Copy link
               </MenuItem>
-              <MenuCheckboxItem
-                checked={!!ui.fullWidth?.includes(page.id)}
-                onCheckedChange={() => toggleFullWidth(queryClient, ui, page.id)}
-              >
-                Full width
-              </MenuCheckboxItem>
+              {page.type === 'markdown' ? (
+                <MenuCheckboxItem
+                  checked={!!ui.fullWidth?.includes(page.id)}
+                  onCheckedChange={() => toggleFullWidth(queryClient, ui, page.id)}
+                >
+                  Full width
+                </MenuCheckboxItem>
+              ) : (
+                // A rich page's text fills the pane, unless its edge was dragged.
+                ui.pageWidths?.[page.id] && (
+                  <MenuItem
+                    icon={<MoveHorizontal />}
+                    onSelect={() =>
+                      saveUiState(queryClient, { pageWidths: { [page.id]: null } }, 0)
+                    }
+                  >
+                    Fit the text to the pane
+                  </MenuItem>
+                )
+              )}
               <MenuSeparator />
               <MenuItem
                 icon={<FolderInput />}

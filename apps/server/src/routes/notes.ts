@@ -299,6 +299,7 @@ export function notesRoutes(
   // Settings
 
   const MAX_LAST_PAGES = 1000;
+  const MAX_PAGE_WIDTHS = 1000;
 
   const readUi = (userId: string): UiState => {
     const stored = uiStateSchema.safeParse(repos.settings.get(userId, 'ui') ?? {});
@@ -318,7 +319,7 @@ export function notesRoutes(
 
   /**
    * Merges the given fields into the stored ones; `lastPages` and `sectionTemplates` merge per
-   * section (a null template removes the section's).
+   * section (a null template removes the section's), and `pageWidths` per page (null too).
    */
   app.patch('/api/v1/settings', { config }, async (request) => {
     const userId = owner(request);
@@ -341,6 +342,17 @@ export function notesRoutes(
         const merged = { ...current.sectionTemplates, ...patch.sectionTemplates };
         ui.sectionTemplates = Object.fromEntries(
           Object.entries(merged).filter(([, template]) => template !== null),
+        );
+      }
+      if (patch.pageWidths) {
+        // Most recent last; the oldest pages drop out beyond the limit.
+        const kept = Object.entries(current.pageWidths ?? {}).filter(
+          ([k]) => !(k in patch.pageWidths!),
+        );
+        ui.pageWidths = Object.fromEntries(
+          [...kept, ...Object.entries(patch.pageWidths)]
+            .filter(([, width]) => width !== null)
+            .slice(-MAX_PAGE_WIDTHS),
         );
       }
       repos.settings.set(userId, 'ui', ui);

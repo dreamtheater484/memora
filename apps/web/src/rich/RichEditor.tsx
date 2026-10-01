@@ -16,6 +16,7 @@ import { richExtensions } from './schema';
 import { slashItems } from './slashItems';
 import { pageLinks, slashCommands } from './suggestions';
 import { Find } from './find';
+import { RichKeys } from './keys';
 import { FileView, ImageView } from './views';
 import { WikiLinks } from './wikiLinks';
 import { CardKeys } from './cardKeys';
@@ -91,6 +92,7 @@ class Bridge implements RichHost {
   editLink = () => this.host.editLink();
   editMath = (target: Parameters<RichHost['editMath']>[0]) => this.host.editMath(target);
   openLink = (href: string) => this.host.openLink(href);
+  pickFont = () => this.host.pickFont();
 }
 
 function editorExtensions(bridge: Bridge, extra?: AnyExtension): AnyExtension[] {
@@ -114,6 +116,7 @@ function editorExtensions(bridge: Bridge, extra?: AnyExtension): AnyExtension[] 
     CodeHighlight,
     DragHandle,
     Find,
+    RichKeys,
     CardKeys.configure({ known: knownCardKey, open: openCardKey }),
     WikiLinks.configure({
       exists: (title) => {

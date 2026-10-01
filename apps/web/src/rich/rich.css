@@ -1,19 +1,131 @@
 /*
  * Rich pages (§9.4, §9.13): the Markdown preview's typography (the editor carries the
- * `markdown-body` class), plus what only rich pages have: the sheet of paper, tables with
- * resizable columns and coloured cells, image frames, file cards, callout titles, the drag
- * handle and the placeholder.
+ * `markdown-body` class), set like a notebook: the page's default font and size, lines and
+ * paragraphs close together (or roomier), and the text from the top left, under the title,
+ * as wide as the pane or as its edge was dragged. Plus what only rich pages have: the sheet
+ * of paper, tables with resizable columns and coloured cells, image frames, file cards,
+ * callout titles, the drag handle and the placeholder.
  */
 
 @import 'katex/dist/katex.min.css';
 
-/* The page: fitting the pane, or a sheet of A4 or Letter paper. */
+/* The page: filling the pane, or a sheet of A4 or Letter paper. */
 .rich-sheet {
-  /* A readable width, centred (§9.12); the padding comes on top. */
-  box-sizing: content-box;
-  max-width: var(--measure, 80ch);
-  margin-inline: auto;
-  padding: 1rem var(--page-pad) 30vh;
+  box-sizing: border-box;
+  padding: 0.75rem var(--page-pad) 30vh;
+}
+
+/* The text: from the left, under the title; as wide as the pane, or as its edge was dragged. */
+.rich-column {
+  position: relative;
+  width: var(--text-width, 100%);
+  max-width: 100%;
+}
+.rich-sheet-a4 .rich-column,
+.rich-sheet-letter .rich-column {
+  width: auto;
+}
+
+/* The text's right edge, to drag (a grip shows near its top while the page is hovered). */
+.rich-width-handle {
+  position: absolute;
+  top: 0;
+  right: -0.875rem;
+  bottom: 0;
+  width: 0.75rem;
+  cursor: col-resize;
+  touch-action: none;
+}
+.rich-width-handle::before,
+.rich-width-handle::after {
+  position: absolute;
+  left: calc(50% - 1px);
+  width: 2px;
+  border-radius: 1px;
+  content: '';
+  transition: opacity 0.15s;
+}
+.rich-width-handle::before {
+  top: 0.25rem;
+  height: 2rem;
+  background: var(--line-strong);
+  opacity: 0;
+}
+.rich-width-handle::after {
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+  opacity: 0;
+}
+.rich-sheet:hover .rich-width-handle::before {
+  opacity: 1;
+}
+.rich-width-handle:hover::after,
+.rich-width-handle:focus-visible::after,
+.rich-width-handle[data-dragging]::after {
+  opacity: 1;
+}
+.rich-width-handle:focus-visible {
+  outline: none;
+}
+@media (hover: none) {
+  .rich-width-handle {
+    display: none;
+  }
+}
+
+/* The page's default font and size (Settings → Editing); headings take the font too. */
+.markdown-body.rich-content {
+  font-family: var(--rich-font, inherit);
+  font-size: var(--rich-size, 1rem);
+}
+.markdown-body.rich-content :where(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--rich-heading-font, var(--font-display));
+}
+/* No rule under headings: that's for documents (the Markdown preview), not notebooks. */
+.markdown-body.rich-content h2 {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+/* Compact spacing (the default): lines close together, and a little space between blocks. */
+.rich-sheet[data-spacing='compact'] .markdown-body.rich-content {
+  line-height: 1.45;
+}
+.rich-sheet[data-spacing='compact']
+  .rich-content
+  :where(
+    p,
+    ul,
+    ol,
+    blockquote,
+    pre,
+    .tableWrapper,
+    .markdown-alert,
+    .rich-image,
+    .rich-file,
+    [data-type='block-math']
+  ) {
+  margin-bottom: 0.35em;
+}
+.rich-sheet[data-spacing='compact'] .rich-content :where(h1, h2, h3, h4, h5, h6) {
+  margin: 0.9em 0 0.3em;
+}
+/* A page that starts with a heading starts at the top, as with any other block. */
+.rich-sheet[data-spacing='compact'] .rich-content > :first-child {
+  margin-top: 0;
+}
+.rich-sheet[data-spacing='compact'] .rich-content :where(li + li) {
+  margin-top: 0.1em;
+}
+.rich-sheet[data-spacing='compact'] .rich-content :where(li > p, li > div > p) {
+  margin-bottom: 0;
+}
+.rich-sheet[data-spacing='compact'] .rich-content :where(li > :where(ul, ol)) {
+  margin-top: 0.1em;
+}
+.rich-sheet[data-spacing='compact'] .rich-content hr {
+  margin: 0.8em 0;
 }
 [data-page-view='a4'] [data-rich-scroll],
 [data-page-view='letter'] [data-rich-scroll] {
@@ -103,38 +215,52 @@
   content: 'Caution';
 }
 
-/* Task lists. */
+/*
+ * To-do lists. The editor's items have no data-type of their own, so they are found as the
+ * list's children: the box on the first line of the text, a target bigger than the box,
+ * ticked ones struck through and dimmed, and nested ones indented under their parent's text.
+ */
 .rich-content ul[data-type='taskList'] {
   list-style: none;
-  padding-left: 0.2em;
+  padding-left: 0;
 }
-.rich-content li[data-type='taskItem'] {
+.rich-content ul[data-type='taskList'] > li {
   display: flex;
-  gap: 0.5em;
+  gap: 0.35em;
   align-items: flex-start;
 }
-.rich-content li[data-type='taskItem'] > label {
+.rich-content ul[data-type='taskList'] > li > label {
+  display: flex;
   flex: none;
-  margin-top: 0.2em;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4em;
+  height: 1.45em;
+  height: 1lh;
+  cursor: pointer;
   user-select: none;
 }
-.rich-content li[data-type='taskItem'] > label input {
-  width: 1em;
-  height: 1em;
+.rich-content ul[data-type='taskList'] > li > label input {
+  width: 1.1em;
+  height: 1.1em;
+  margin: 0;
   accent-color: var(--accent);
   cursor: pointer;
 }
-.rich-content li[data-type='taskItem'] > div {
+.rich-content ul[data-type='taskList'] > li > div {
   flex: 1;
   min-width: 0;
 }
-.rich-content li[data-type='taskItem'][data-checked='true'] > div {
+.rich-content ul[data-type='taskList'] > li > div > p {
+  margin: 0;
+}
+.rich-content ul[data-type='taskList'] > li[data-checked='true'] > div > p {
   color: var(--fg-3);
   text-decoration: line-through;
   text-decoration-color: color-mix(in oklab, var(--fg-3) 60%, transparent);
 }
-.rich-content li[data-type='taskItem'] > div > p {
-  margin: 0;
+.rich-content ul[data-type='taskList'] ul[data-type='taskList'] {
+  margin: 0.1em 0 0;
 }
 
 /* Code blocks, coloured by Shiki through the same variables as the preview. */

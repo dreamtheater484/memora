@@ -27,15 +27,47 @@ export const EMPTY_RICH_DOC: RichNode = { type: 'doc', content: [{ type: 'paragr
 export const CALLOUT_KINDS = ['note', 'tip', 'important', 'warning', 'caution'] as const;
 export type CalloutKind = (typeof CALLOUT_KINDS)[number];
 
-/** The curated fonts (§9.4): the stored value is the CSS font family. */
+/**
+ * The fonts on offer (§9.4): the stored value is the CSS font family. Each common font names
+ * a look-alike that Linux has (Carlito for Calibri, Caladea for Cambria), then its kind.
+ * Text can also have a font of the computer's own (the desktop app lists them).
+ */
 export const RICH_FONTS = [
   { label: 'Serif', value: 'Georgia, "Times New Roman", serif' },
   { label: 'Monospace', value: '"JetBrains Mono Variable", ui-monospace, monospace' },
   { label: 'Display', value: '"Bricolage Grotesque Variable", sans-serif' },
+  { label: 'Arial', value: 'Arial, "Liberation Sans", Helvetica, sans-serif' },
+  { label: 'Calibri', value: 'Calibri, Carlito, sans-serif' },
+  { label: 'Cambria', value: 'Cambria, Caladea, serif' },
+  { label: 'Courier New', value: '"Courier New", "Liberation Mono", Courier, monospace' },
+  { label: 'Georgia', value: 'Georgia, "DejaVu Serif", serif' },
+  { label: 'Times New Roman', value: '"Times New Roman", "Liberation Serif", Times, serif' },
+  { label: 'Verdana', value: 'Verdana, "DejaVu Sans", Geneva, sans-serif' },
 ] as const;
+export type RichFontLabel = (typeof RICH_FONTS)[number]['label'];
 
-/** Font sizes on offer, in points as in Word; text without one is 12 pt. */
+/** A font on offer, by its name. */
+export const richFont = (label: RichFontLabel): string =>
+  RICH_FONTS.find((f) => f.label === label)!.value;
+
+/** The name to show for a stored font family: its label, or the first family it names. */
+export function richFontLabel(value: string): string {
+  const known = RICH_FONTS.find((f) => f.value === value);
+  if (known) return known.label;
+  return (
+    value
+      .split(',')[0]!
+      .trim()
+      .replace(/^["']|["']$/g, '') || value
+  );
+}
+
+/** Font sizes on offer, in points as in Word; text without one has the default size. */
 export const RICH_FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72] as const;
+
+/** How far a paragraph can be indented with Tab, in steps of RICH_INDENT_EM. */
+export const RICH_MAX_INDENT = 8;
+export const RICH_INDENT_EM = 2;
 
 /** Text colours, readable on the light and the dark theme. */
 export const RICH_TEXT_COLORS = [
@@ -182,6 +214,7 @@ export const RICH_LOSSES = {
   fontSize: 'Font sizes',
   align: 'Text alignment',
   lineSpacing: 'Line spacing',
+  indent: 'Indented paragraphs',
   mergedCells: 'Merged table cells (they are split again)',
   columnWidth: 'Table column widths',
   tableBlocks: 'Lists, images and other blocks inside table cells (their text stays)',
@@ -221,6 +254,7 @@ function noteBlockAttrs(node: RichNode, ctx: Context) {
   const align = node.attrs?.textAlign;
   if (align && align !== 'left') ctx.lost.add('align');
   if (node.attrs?.lineSpacing) ctx.lost.add('lineSpacing');
+  if (node.attrs?.indent) ctx.lost.add('indent');
 }
 
 /** Prefixes every line: the first with `first`, the rest with `rest`. */
@@ -379,6 +413,7 @@ function cellText(cell: RichNode, ctx: Context): string {
   const parts = (cell.content ?? []).map((child) => {
     if (child.type === 'paragraph' || child.type === 'heading') {
       if (child.attrs?.lineSpacing) ctx.lost.add('lineSpacing');
+      if (child.attrs?.indent) ctx.lost.add('indent');
       return inline(child.content ?? [], inner);
     }
     ctx.lost.add('tableBlocks');

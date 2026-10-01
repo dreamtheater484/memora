@@ -6,7 +6,7 @@ import {
   type PageView,
 } from '@memora/shared';
 import { Extension, type Editor } from '@tiptap/core';
-import { NodeSelection } from '@tiptap/pm/state';
+import { NodeSelection, Selection, TextSelection } from '@tiptap/pm/state';
 import { CellSelection } from '@tiptap/pm/tables';
 import { useEditorState } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
@@ -24,7 +24,16 @@ import {
   Strikethrough,
   Underline,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import {
   Dialog,
   IconButton,
@@ -37,7 +46,7 @@ import {
   toast,
 } from '../components/ui';
 import { floatingPanel } from '../components/ui/styles';
-import { registerJump } from '../editor/jumps';
+import { registerFocus, registerJump } from '../editor/jumps';
 import { cn } from '../lib/cn';
 import { prepareImage } from '../lib/images';
 import { downloadImage } from '../lib/remoteImages';
@@ -45,10 +54,11 @@ import { useKeyboardInset } from '../lib/useKeyboardInset';
 import { useSettled } from '../lib/useSettled';
 import { PreviewHostContext, type PreviewHost } from '../markdown/context';
 import { OutlineButton } from '../markdown/OutlineButton';
-import { saveEditorSettings, useEditorSettings, useNotes } from '../notes/queries';
+import { saveEditorSettings, useEditorSettings, useNotes, useUiState } from '../notes/queries';
 import { summaryOf } from '../notes/summary';
 import { FindBar } from './FindBar';
 import { LinkPreview } from './LinkPreview';
+import { LocalFontsDialog } from './LocalFonts';
 import { wikiLinksKey } from './wikiLinks';
 import { cardKeysKey } from './cardKeys';
 import { useCardKeys } from '../kanban/keys';
@@ -60,12 +70,15 @@ import type { RichHost } from './host';
 import { richOutline } from './outline';
 import RichEditor from './RichEditor';
 import { RichToolbar, TableMenuItems } from './RichToolbar';
+import { TextWidthHandle } from './TextWidth';
 import { RichViewHostContext, type RichViewHost } from './viewHost';
 
 /*
  * A rich text page (§9.4): the Word-like toolbar, the editor, a menu on selected text, and
  * optionally a sheet of paper (A4 or Letter) showing how an export will look. On a phone the
- * toolbar sits just above the keyboard while typing.
+ * toolbar sits just above the keyboard while typing. As in a notebook, the text starts at the
+ * top left and fills the pane unless its edge was dragged, and a click anywhere on the page
+ * puts the cursor on the nearest line.
  */
 
 const keepFocus = (e: React.MouseEvent) => e.preventDefault();
@@ -83,7 +96,8 @@ export interface RichPageProps {
   autoFocus?: boolean;
 }
 
-type DialogState = { kind: 'link' } | { kind: 'math'; target: MathTarget } | null;
+type DialogState =
+  { kind: 'link' } | { kind: 'math'; target: MathTarget } | { kind: 'fonts' } | null;
 
 export default memo(function RichPage({ page, doc, compact, autoFocus }: RichPageProps) {
   const settings = useEditorSettings();
@@ -95,6 +109,8 @@ export default memo(function RichPage({ page, doc, compact, autoFocus }: RichPag
   const [tableMenu, setTableMenu] = useState<{ x: number; y: number } | null>(null);
   const [focused, setFocused] = useState(false);
   const [finding, setFinding] = useState(false);
+  const [column, setColumn] = useState<HTMLDivElement | null>(null);
+  const width = useUiState().pageWidths?.[page.id] ?? null;
   const inset = useKeyboardInset();
 
   const pages = useMemo(
@@ -143,6 +159,7 @@ export default memo(function RichPage({ page, doc, compact, autoFocus }: RichPag
           input.click();
         }),
       editLink: () => setDialog({ kind: 'link' }),
+      pickFont: () => setDialog({ kind: 'fonts' }),
       editMath: (target) => setDialog({ kind: 'math', target }),
       openLink: (href) => {
         if (href.startsWith('wiki:')) {
@@ -240,6 +257,20 @@ export default memo(function RichPage({ page, doc, compact, autoFocus }: RichPag
     [editor],
   );
   useEffect(() => registerJump(page.id, jump), [page.id, jump]);
+  // Enter in the title continues here, at the start of the text.
+  useEffect(
+    () =>
+      registerFocus(page.id, () => {
+        if (!editor) return;
+        // Not the focus command: that waits a frame, and keys typed meanwhile would be lost.
+        const { view } = editor;
+        view.dispatch(
+          view.state.tr.setSelection(Selection.atStart(view.state.doc)).scrollIntoView(),
+        );
+        view.focus();
+      }),
+    [page.id, editor],
+  );
 
   // Ctrl/Cmd+K makes a link in the editor (search moves to Ctrl/Cmd+P, as in Markdown pages).
   const shortcuts = useMemo(
@@ -315,6 +346,47 @@ export default memo(function RichPage({ page, doc, compact, autoFocus }: RichPag
     setTableMenu({ x: event.clientX, y: event.clientY });
   };
 
+  // A click beside or below the text puts the cursor on the nearest line, as in a notebook.
+  const focusNearest = (event: React.MouseEvent) => {
+    if (!editor || event.button !== 0) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('.ProseMirror, button, a, input, textarea, select, [role="separator"]')) {
+      return;
+    }
+    event.preventDefault();
+    const { view } = editor;
+    const box = view.dom.getBoundingClientRect();
+    const at =
+      event.clientY < box.bottom
+        ? view.posAtCoords({
+            left: Math.min(Math.max(event.clientX, box.left + 1), box.right - 1),
+            top: Math.max(event.clientY, box.top + 1),
+          })
+        : null;
+    // At once rather than with the focus command, which waits a frame.
+    const selection = at
+      ? TextSelection.near(view.state.doc.resolve(at.pos))
+      : Selection.atEnd(view.state.doc);
+    view.dispatch(view.state.tr.setSelection(selection).scrollIntoView());
+    view.focus();
+  };
+
+  const defaults = useMemo(
+    () => ({ font: settings.richFont, size: settings.richFontSize }),
+    [settings.richFont, settings.richFontSize],
+  );
+
+  // The page's default font and size (Settings → Editing); a side pane shows it smaller.
+  const sheetStyle = useMemo(() => {
+    const size = `${settings.richFontSize}pt`;
+    return {
+      '--rich-size': compact ? `calc(${size} * 0.875)` : size,
+      ...(settings.richFont
+        ? { '--rich-font': settings.richFont, '--rich-heading-font': settings.richFont }
+        : {}),
+    } as CSSProperties;
+  }, [settings.richFontSize, settings.richFont, compact]);
+
   const pinned = focused && inset > 0;
   return (
     <div
@@ -327,12 +399,12 @@ export default memo(function RichPage({ page, doc, compact, autoFocus }: RichPag
     >
       <div
         className={cn(
-          'flex h-10 shrink-0 items-center gap-2 border-b border-line px-(--page-pad)',
-          pinned && 'fixed inset-x-0 z-40 border-t bg-panel',
+          'flex shrink-0 items-center gap-2 border-b border-line px-(--page-pad)',
+          pinned ? 'fixed inset-x-0 z-40 h-10 border-t bg-panel' : 'min-h-10 py-1',
         )}
         style={pinned ? { bottom: inset } : undefined}
       >
-        <RichToolbar editor={editor} host={host} end={end} />
+        <RichToolbar editor={editor} host={host} defaults={defaults} wrap={!pinned} end={end} />
       </div>
       <div className="relative min-h-0 flex-1">
         {finding && editor && (
@@ -344,28 +416,34 @@ export default memo(function RichPage({ page, doc, compact, autoFocus }: RichPag
           data-rich-scroll
           className="h-full overflow-auto [contain:strict]"
           onContextMenu={openTableMenu}
+          onMouseDown={focusNearest}
         >
           <div
-            className={cn(
-              'rich-sheet',
-              view !== 'off' && `rich-sheet-${view}`,
-              compact && 'text-sm',
-            )}
+            className={cn('rich-sheet', view !== 'off' && `rich-sheet-${view}`)}
+            data-spacing={settings.richSpacing}
+            style={sheetStyle}
           >
-            <PreviewHostContext.Provider value={previewHost}>
-              <RichViewHostContext.Provider value={viewHost}>
-                <RichEditor
-                  doc={doc}
-                  label={compact ? 'Page content, second pane' : 'Page content'}
-                  settings={settings}
-                  host={host}
-                  autoFocus={autoFocus}
-                  onEditor={setEditor}
-                  extra={shortcuts}
-                />
-                <LinkPreview editor={editor} summaryOf={linkSummary} />
-              </RichViewHostContext.Provider>
-            </PreviewHostContext.Provider>
+            <div
+              ref={setColumn}
+              className="rich-column"
+              style={width ? ({ '--text-width': `${width}px` } as CSSProperties) : undefined}
+            >
+              <PreviewHostContext.Provider value={previewHost}>
+                <RichViewHostContext.Provider value={viewHost}>
+                  <RichEditor
+                    doc={doc}
+                    label={compact ? 'Page content, second pane' : 'Page content'}
+                    settings={settings}
+                    host={host}
+                    autoFocus={autoFocus}
+                    onEditor={setEditor}
+                    extra={shortcuts}
+                  />
+                  <LinkPreview editor={editor} summaryOf={linkSummary} />
+                </RichViewHostContext.Provider>
+              </PreviewHostContext.Provider>
+              {view === 'off' && <TextWidthHandle pageId={page.id} width={width} column={column} />}
+            </div>
           </div>
         </div>
       </div>
@@ -390,6 +468,9 @@ export default memo(function RichPage({ page, doc, compact, autoFocus }: RichPag
       <Dialog open={!!dialog} onOpenChange={(open) => !open && setDialog(null)}>
         {editor && dialog?.kind === 'link' && (
           <LinkDialog editor={editor} onDone={() => setDialog(null)} />
+        )}
+        {editor && dialog?.kind === 'fonts' && (
+          <LocalFontsDialog editor={editor} onDone={() => setDialog(null)} />
         )}
         {editor && dialog?.kind === 'math' && (
           <MathDialog editor={editor} target={dialog.target} onDone={() => setDialog(null)} />
