@@ -198,12 +198,6 @@ export function insertCodeBlock(language = ''): Command {
   };
 }
 
-export const insertMermaid: Command = (view) => {
-  const sample = 'flowchart LR\n  A[Start] --> B[Next]';
-  insertBlock(view, `\`\`\`mermaid\n${sample}\n\`\`\``, 11, sample.length);
-  return true;
-};
-
 export const insertMath: Command = (view) => {
   insertBlock(view, '$$\nE = mc^2\n$$', 3, 8);
   return true;

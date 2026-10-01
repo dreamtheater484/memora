@@ -30,6 +30,7 @@ import {
   TextStyle,
 } from '@tiptap/extension-text-style';
 import StarterKit from '@tiptap/starter-kit';
+import { DiagramBlocks, type DiagramBlocksOptions } from './diagram';
 
 /*
  * The rich page schema (§8.3, §9.4): every node and mark a rich page can hold. The same list
@@ -366,15 +367,21 @@ export const RichTableHeader = TableHeader.extend({
 export const LINK_PROTOCOLS = ['wiki', 'asset'];
 
 export interface RichSchemaOptions {
-  /** How the editor shows images and files; without, they are plain HTML. */
-  views?: { image?: NodeViewRenderer; file?: NodeViewRenderer };
+  /** How the editor shows images, files and diagrams; without, they are plain HTML. */
+  views?: {
+    image?: NodeViewRenderer;
+    file?: NodeViewRenderer;
+    codeBlock?: DiagramBlocksOptions['view'];
+  };
   /** A formula was clicked, to edit it. */
   onMathClick?: (node: PMNode, pos: number) => void;
+  /** Enter on a selected diagram: open it in the diagram editor. */
+  onDiagramEdit?: DiagramBlocksOptions['onEdit'];
 }
 
 /** Every node and mark of a rich page. */
 export function richExtensions(options: RichSchemaOptions = {}): AnyExtension[] {
-  const { views = {}, onMathClick } = options;
+  const { views = {}, onMathClick, onDiagramEdit } = options;
   const katexOptions = { throwOnError: false, trust: false };
   return [
     StarterKit.configure({
@@ -413,5 +420,6 @@ export function richExtensions(options: RichSchemaOptions = {}): AnyExtension[] 
     Callout,
     views.image ? RichImage.extend({ addNodeView: () => views.image! }) : RichImage,
     views.file ? FileBlock.extend({ addNodeView: () => views.file! }) : FileBlock,
+    DiagramBlocks.configure({ view: views.codeBlock ?? null, onEdit: onDiagramEdit ?? null }),
   ];
 }

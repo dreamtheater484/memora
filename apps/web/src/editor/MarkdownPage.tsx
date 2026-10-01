@@ -1,3 +1,4 @@
+import { Text } from '@codemirror/state';
 import type { EditorView, ViewUpdate } from '@codemirror/view';
 import { EditorView as View } from '@codemirror/view';
 import type { PageMeta, Table, ViewMode } from '@memora/shared';
@@ -5,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Columns2, Eye, PenLine } from 'lucide-react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, SegmentedControl } from '../components/ui';
+import { openDiagramEditor } from '../diagrams/open';
 import { cn } from '../lib/cn';
 import { useWidth } from '../lib/useWidth';
 import { prepareImage } from '../lib/images';
@@ -21,6 +23,7 @@ import { useGo } from '../shell/location';
 import type { DocEditor, PageDoc } from '../sync/doc';
 import { currentSync } from '../sync/engine';
 import { textChange } from '../sync/merge';
+import { fenceAtLine, locateFence } from './diagrams';
 import { GridEditor } from './GridEditor';
 import { registerFocus, registerJump } from './jumps';
 import MarkdownEditor, { type EditorHost } from './MarkdownEditor';
@@ -151,6 +154,35 @@ export default memo(function MarkdownPage({ page, doc, compact, autoFocus }: Mar
         previewEditor.set(next);
         doc.edited(() => next, previewEditor);
       }
+    },
+    [doc, previewEditor, view],
+  );
+
+  // The preview's Edit button on a diagram: the visual editor, its result put back in place.
+  const editDiagram = useCallback(
+    (line: number) => {
+      const fence = fenceAtLine(Text.of(doc.content().split('\n')), line);
+      if (!fence) return;
+      openDiagramEditor({
+        code: fence.code,
+        page: 'markdown',
+        onDone: (code) => {
+          if (code === fence.code) return;
+          const current = doc.content();
+          const target = locateFence(Text.of(current.split('\n')), fence);
+          if (!target) return;
+          if (view) {
+            view.dispatch({
+              changes: { from: target.codeFrom, to: target.codeTo, insert: code },
+              userEvent: 'input.diagram',
+            });
+          } else {
+            const next = current.slice(0, target.codeFrom) + code + current.slice(target.codeTo);
+            previewEditor.set(next);
+            doc.edited(() => next, previewEditor);
+          }
+        },
+      });
     },
     [doc, previewEditor, view],
   );
@@ -296,6 +328,7 @@ export default memo(function MarkdownPage({ page, doc, compact, autoFocus }: Mar
               <Preview
                 text={text}
                 onToggleTask={toggle}
+                onEditDiagram={editDiagram}
                 className={cn('mx-auto max-w-(--measure)', compact && 'text-sm')}
               />
             </PreviewHostContext.Provider>

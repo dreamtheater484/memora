@@ -60,13 +60,13 @@ import {
   insertDate,
   insertLink,
   insertMath,
-  insertMermaid,
   insertRule,
   setHeading,
   toggleList,
   toggleQuote,
   toggleWrap,
 } from './commands';
+import { newDiagram } from './diagrams';
 import { TablePicker } from './TablePicker';
 import { insertTable, tableCommands } from './tables';
 import { textChange } from '../sync/merge';
@@ -344,8 +344,8 @@ export const EditorToolbar = memo(function EditorToolbar({
             <MenuItem icon={<SquareCode />} onSelect={run(insertCodeBlock())}>
               Code block
             </MenuItem>
-            <MenuItem icon={<Network />} onSelect={run(insertMermaid)}>
-              Diagram (Mermaid)
+            <MenuItem icon={<Network />} onSelect={run(newDiagram)}>
+              Diagram…
             </MenuItem>
             <MenuItem icon={<Sigma />} onSelect={run(insertMath)}>
               Formula

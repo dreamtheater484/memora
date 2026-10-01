@@ -9,6 +9,7 @@ import {
   type CalloutKind,
 } from '@memora/shared';
 import type { Editor } from '@tiptap/core';
+import { NodeSelection } from '@tiptap/pm/state';
 import { useEditorState } from '@tiptap/react';
 import {
   AlignCenter,
@@ -36,6 +37,7 @@ import {
   ListOrdered,
   Merge,
   Minus,
+  Network,
   PaintBucket,
   Redo2,
   RemoveFormatting,
@@ -75,6 +77,8 @@ import { TablePicker } from '../editor/TablePicker';
 import { cn } from '../lib/cn';
 import { useWidth } from '../lib/useWidth';
 import { keysLabel } from '../shell/shortcuts';
+import { isDiagram } from './diagram';
+import { newDiagram } from './diagramActions';
 import { insertFiles } from './files';
 import type { RichHost } from './host';
 
@@ -96,7 +100,13 @@ const STYLES = [
   { id: 'h4', label: 'Heading 4' },
   { id: 'codeBlock', label: 'Code' },
 ] as const;
-type StyleId = (typeof STYLES)[number]['id'];
+/** A selected diagram (a code block underneath) has no text style to change. */
+type StyleId = (typeof STYLES)[number]['id'] | 'diagram';
+
+const diagramSelected = (editor: Editor) => {
+  const { selection } = editor.state;
+  return selection instanceof NodeSelection && isDiagram(selection.node);
+};
 
 const CALLOUT_LABELS: Record<CalloutKind, string> = {
   note: 'Note',
@@ -114,6 +124,7 @@ const ALIGNS = [
 ] as const;
 
 function styleOf(editor: Editor): StyleId {
+  if (diagramSelected(editor)) return 'diagram';
   if (editor.isActive('codeBlock')) return 'codeBlock';
   for (const level of [1, 2, 3, 4] as const) {
     if (editor.isActive('heading', { level })) return `h${level}`;
@@ -122,6 +133,7 @@ function styleOf(editor: Editor): StyleId {
 }
 
 function setStyle(editor: Editor, id: StyleId) {
+  if (id === 'diagram' || diagramSelected(editor)) return;
   const chain = editor.chain().focus();
   if (id === 'paragraph') chain.setParagraph().run();
   else if (id === 'codeBlock') chain.toggleCodeBlock().run();
@@ -460,7 +472,7 @@ export const RichToolbar = memo(function RichToolbar({
       <span className={group}>
         <Dropdown
           label="Text style"
-          value={STYLES.find((s) => s.id === state.style)!.label}
+          value={STYLES.find((s) => s.id === state.style)?.label ?? 'Diagram'}
           width="w-[7.5rem]"
           show={at(30)}
         >
@@ -669,6 +681,7 @@ export const RichToolbar = memo(function RichToolbar({
       <Tool label="Image" icon={<ImagePlus />} onRun={pick(true)} />
       <Tool label="File" icon={<FileUp />} onRun={pick(false)} show={at(24)} />
       <Tool label="Link" icon={<Link2 />} keys="Mod K" onRun={() => host.editLink()} />
+      <Tool label="Diagram" icon={<Network />} onRun={() => newDiagram(editor)} />
       <Divider show={at(30)} />
       <Tool
         label="Note box"
@@ -1106,6 +1119,9 @@ function MoreMenu({
           onSelect={() => host.editMath({ pos: null, latex: '', inline: true })}
         >
           Formula in the text…
+        </MenuItem>
+        <MenuItem icon={<Network />} onSelect={() => newDiagram(editor)}>
+          Diagram…
         </MenuItem>
         <MenuItem icon={<Minus />} onSelect={() => chain().setHorizontalRule().run()}>
           Divider

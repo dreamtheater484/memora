@@ -337,6 +337,93 @@
   cursor: col-resize;
 }
 
+/* Diagrams: drawn, aligned, resized by their sides, with a caption (§9.4). */
+.rich-content .rich-diagram-view {
+  margin: 0 0 1rem;
+}
+.rich-content .rich-diagram {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.rich-content .rich-diagram[data-align='left'] {
+  align-items: flex-start;
+}
+.rich-content .rich-diagram[data-align='right'] {
+  align-items: flex-end;
+}
+.rich-content .rich-diagram-frame {
+  position: relative;
+  max-width: 100%;
+  border-radius: 0.5rem;
+  cursor: default;
+}
+.rich-content .rich-diagram-frame .diagram-drawing {
+  justify-content: inherit;
+}
+.rich-content .rich-diagram-frame[style*='width'] .diagram-drawing svg {
+  width: 100%;
+  min-width: 0;
+}
+.rich-content .rich-diagram.is-selected .rich-diagram-frame {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.rich-content .rich-diagram figcaption {
+  margin-top: 0.4rem;
+  font-size: 0.875em;
+  color: var(--fg-2);
+  text-align: center;
+  align-self: stretch;
+}
+.rich-content .rich-diagram[data-align='left'] figcaption {
+  text-align: left;
+}
+.rich-content .rich-diagram[data-align='right'] figcaption {
+  text-align: right;
+}
+.rich-content .rich-diagram figcaption input {
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  outline: none;
+}
+.rich-content .rich-diagram-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-width: 16rem;
+  padding: 1rem 1.25rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: 0.5rem;
+  color: var(--fg-2);
+  font-size: 0.9em;
+}
+.rich-content .rich-diagram-empty p {
+  margin: 0;
+}
+.rich-content .rich-diagram-empty button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--raised);
+  color: var(--fg);
+  font-weight: 600;
+}
+.rich-content .rich-diagram-empty button svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
 /* Images: a frame to resize, aligned, with a caption. */
 .rich-content .rich-image {
   margin: 0 0 1rem;

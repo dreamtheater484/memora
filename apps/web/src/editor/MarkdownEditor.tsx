@@ -32,7 +32,9 @@ import { insertLink, setHeading, toggleList, toggleWrap, wrapOnType } from './co
 import { completions, type CompletionHost } from './completion';
 import { pasteAndDrop, type FileHost } from './paste';
 import { autoFormatTables, tableSupport } from './tables';
+import { useTheme } from '../theme/theme';
 import { editorTheme, markdownHighlight } from './theme';
+import { drawnDiagrams, refreshDiagrams } from './diagrams';
 import { imageThumbnails, type LocalFile } from './thumbnails';
 import { wideCharacters } from './wide';
 
@@ -68,6 +70,7 @@ const whitespace = new Compartment();
 const tabs = new Compartment();
 const spelling = new Compartment();
 const thumbnails = new Compartment();
+const diagrams = new Compartment();
 const tableFormatting = new Compartment();
 
 function configured(settings: Required<EditorSettings>, host: EditorHost) {
@@ -80,6 +83,7 @@ function configured(settings: Required<EditorSettings>, host: EditorHost) {
     tabs: [EditorState.tabSize.of(settings.tabSize), indentUnit.of(' '.repeat(settings.tabSize))],
     spelling: EditorView.contentAttributes.of({ spellcheck: String(settings.spellcheck) }),
     thumbnails: settings.imageThumbnails ? imageThumbnails(host.localFile) : [],
+    diagrams: settings.drawDiagrams ? drawnDiagrams() : [],
     tableFormatting: autoFormatTables.of(settings.formatTables),
   };
 }
@@ -154,6 +158,7 @@ export default function MarkdownEditor({
       tabs.of(initial.tabs),
       spelling.of(initial.spelling),
       thumbnails.of(initial.thumbnails),
+      diagrams.of(initial.diagrams),
       tableFormatting.of(initial.tableFormatting),
       markdown({ base: markdownLanguage, codeLanguages: languages }),
       syntaxHighlighting(markdownHighlight),
@@ -228,10 +233,17 @@ export default function MarkdownEditor({
         tabs.reconfigure(next.tabs),
         spelling.reconfigure(next.spelling),
         thumbnails.reconfigure(next.thumbnails),
+        diagrams.reconfigure(next.diagrams),
         tableFormatting.reconfigure(next.tableFormatting),
       ],
     });
   }, [settings]);
+
+  // Diagrams drawn in the source follow the app's light or dark look.
+  const theme = useTheme((s) => s.theme);
+  useEffect(() => {
+    if (view.current) refreshDiagrams(view.current);
+  }, [theme]);
 
   return <div ref={parent} data-editor="markdown" className="h-full min-h-0" />;
 }

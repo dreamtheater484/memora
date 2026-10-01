@@ -151,6 +151,11 @@ export function EditingPage() {
           'Image previews in the source',
           'Small pictures under image lines.',
         )}
+        {toggle(
+          'drawDiagrams',
+          'Draw diagrams in the source',
+          'Diagrams are drawn in place of their code until you go into them.',
+        )}
         <Row
           label="Tab size"
           control={(id) => (
