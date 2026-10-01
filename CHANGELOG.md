@@ -4,6 +4,29 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-10-01
+
+### Added
+
+- **A diagram editor:** flowcharts, mind maps, sequence diagrams, timelines, Gantt charts and pie charts, made by pointing and typing. `/diagram` (or **Insert → Diagram** in rich pages) opens a gallery of templates; the editor shows the real drawing with a panel for what is selected, and **Done** puts the diagram in the page. Underneath, a diagram is Mermaid code, so other Mermaid tools still draw it.
+  - **Flowcharts:** click a box to select it, `Enter` to rename it, **+** (or `Tab`) for a connected box, drag one box onto another to connect them. Shapes, colours, arrow labels and lines, groups, and the direction of the whole chart are in the panel.
+  - **Mind maps** are edited as an outline, and laid out around their centre with each branch in its own colour.
+  - **Sequence diagrams:** participants, then messages, notes, loops and alternatives in order.
+  - **Timelines, Gantt charts and pie charts** are edited as lists.
+  - Undo and redo, zoom and pan, and the keys in the shortcuts sheet (`?`).
+- **Diagrams in rich pages** are selected like an image: resize them, align them, give them a caption, or copy them as a picture.
+- **Diagrams in the Markdown source:** each ` ```mermaid ` block is drawn in place of its code, with **Edit diagram** and **Show code**, until you put the cursor in it. **Settings → Editing → Draw diagrams in the source** turns this off. The preview has an **Edit** button on each diagram.
+- Word, PDF and HTML exports draw diagrams (as a picture in Word), and the history shows them drawn.
+
+### Changed
+
+- **Diagrams look like Memora:** its section colours, its font, rounded boxes with a soft shadow, light and dark. Mind maps are laid out as a tidy tree either side of their centre rather than scattered.
+- A diagram too wide for the page scrolls sideways once shrinking it further would make its words too small to read.
+
+### Fixed
+
+- With the system set to reduce motion, diagrams could come out cut off.
+
 ## [0.9.5] - 2026-10-01
 
 ### Changed
@@ -152,7 +175,8 @@ The first release: a public beta. Everything planned for 1.0 is in; what's left 
 - Setup guides for Synology, Linux and Windows, with three ways to get HTTPS.
 - `memora-admin` inside the container for lost passwords, lost phones, backups and restores.
 
-[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.9.5...HEAD
+[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.9.6...HEAD
+[0.9.6]: https://github.com/dreamtheater484/memora/compare/v0.9.5...v0.9.6
 [0.9.5]: https://github.com/dreamtheater484/memora/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/dreamtheater484/memora/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/dreamtheater484/memora/compare/v0.9.2...v0.9.3
