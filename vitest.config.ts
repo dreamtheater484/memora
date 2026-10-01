@@ -12,6 +12,9 @@ export default defineConfig({
             'scripts/**/*.test.mjs',
           ],
           environment: 'node',
+          // Most server tests start a whole app (database, migrations, password hashing),
+          // which can take more than the default 5 s on a busy Windows runner.
+          testTimeout: 15_000,
         },
       },
       // The web app runs its tests in jsdom (apps/web/vitest.config.ts).
