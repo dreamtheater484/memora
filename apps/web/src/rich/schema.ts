@@ -1,9 +1,16 @@
-import { CALLOUT_KINDS, RICH_LINE_SPACINGS, type CalloutKind } from '@memora/shared';
+import {
+  CALLOUT_KINDS,
+  RICH_INDENT_EM,
+  RICH_LINE_SPACINGS,
+  RICH_MAX_INDENT,
+  type CalloutKind,
+} from '@memora/shared';
 import {
   Extension,
   Node,
   mergeAttributes,
   type AnyExtension,
+  type Command,
   type NodeViewRenderer,
 } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
@@ -39,6 +46,12 @@ declare module '@tiptap/core' {
     };
     lineSpacing: {
       setLineSpacing: (spacing: number | null) => ReturnType;
+    };
+    indent: {
+      /** Indents the selected paragraphs and headings one step further (Tab). */
+      indent: () => ReturnType;
+      /** Takes one step of indent away (Shift+Tab). */
+      outdent: () => ReturnType;
     };
     fileBlock: {
       insertFile: (attrs: FileAttrs) => ReturnType;
@@ -270,6 +283,57 @@ export const LineSpacing = Extension.create({
   },
 });
 
+/** Indented paragraphs and headings, in steps (Tab and Shift+Tab, as in a notebook). */
+export const Indent = Extension.create({
+  name: 'indent',
+  addGlobalAttributes() {
+    return [
+      {
+        types: ['paragraph', 'heading'],
+        attributes: {
+          indent: {
+            default: null,
+            parseHTML: (element) => {
+              const value = Number(element.getAttribute('data-indent'));
+              return Number.isInteger(value) && value > 0 && value <= RICH_MAX_INDENT
+                ? value
+                : null;
+            },
+            renderHTML: (attributes) =>
+              attributes.indent
+                ? {
+                    'data-indent': attributes.indent,
+                    style: `margin-left: ${Number(attributes.indent) * RICH_INDENT_EM}em`,
+                  }
+                : {},
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    const change =
+      (step: number): (() => Command) =>
+      () =>
+      ({ state, tr, dispatch }) => {
+        const { from, to } = state.selection;
+        let changed = false;
+        state.doc.nodesBetween(from, to, (node, pos) => {
+          if (node.type.name !== 'paragraph' && node.type.name !== 'heading') return true;
+          const now = Number(node.attrs.indent) || 0;
+          const next = Math.min(RICH_MAX_INDENT, Math.max(0, now + step));
+          if (next !== now) {
+            if (dispatch) tr.setNodeMarkup(pos, undefined, { ...node.attrs, indent: next || null });
+            changed = true;
+          }
+          return false;
+        });
+        return changed;
+      };
+    return { indent: change(1), outdent: change(-1) };
+  },
+});
+
 /** Table cells with a background colour. */
 const cellColour = {
   backgroundColor: {
@@ -335,6 +399,7 @@ export function richExtensions(options: RichSchemaOptions = {}): AnyExtension[] 
     Highlight.configure({ multicolor: true }),
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
     LineSpacing,
+    Indent,
     Subscript,
     Superscript,
     TaskList,

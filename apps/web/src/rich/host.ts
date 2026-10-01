@@ -16,4 +16,6 @@ export interface RichHost {
   editMath(target: { pos: number | null; latex: string; inline: boolean }): void;
   /** Follows a link (a page, a file or a website). */
   openLink(href: string): void;
+  /** Opens the list of the computer's own fonts, for the selection. */
+  pickFont(): void;
 }

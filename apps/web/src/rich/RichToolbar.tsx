@@ -5,6 +5,7 @@ import {
   RICH_FONT_SIZES,
   RICH_LINE_SPACINGS,
   RICH_TEXT_COLORS,
+  richFontLabel,
   type CalloutKind,
 } from '@memora/shared';
 import type { Editor } from '@tiptap/core';
@@ -31,6 +32,7 @@ import {
   Italic,
   Link2,
   List,
+  ListChevronsUpDown,
   ListOrdered,
   Merge,
   Minus,
@@ -126,6 +128,18 @@ function setStyle(editor: Editor, id: StyleId) {
   else chain.setHeading({ level: Number(id.slice(1)) as 1 | 2 | 3 | 4 }).run();
 }
 
+/** The kind of list item the cursor is in, if any. */
+const listItemType = (editor: Editor) =>
+  editor.isActive('taskItem') ? 'taskItem' : editor.isActive('listItem') ? 'listItem' : null;
+
+/** Indents (or outdents) as Tab does: a list item a level, else paragraphs a step. */
+function indent(editor: Editor, forward: boolean) {
+  const list = listItemType(editor);
+  const chain = editor.chain().focus();
+  if (list) (forward ? chain.sinkListItem(list) : chain.liftListItem(list)).run();
+  else (forward ? chain.indent() : chain.outdent()).run();
+}
+
 /** What the toolbar shows as on, read from the editor on each change. */
 function useToolbarState(editor: Editor | null) {
   return useEditorState({
@@ -162,8 +176,9 @@ function useToolbarState(editor: Editor | null) {
         canRedo: e.can().redo(),
         canMerge: e.can().mergeCells(),
         canSplit: e.can().splitCell(),
-        canSink: e.can().sinkListItem('listItem') || e.can().sinkListItem('taskItem'),
-        canLift: e.can().liftListItem('listItem') || e.can().liftListItem('taskItem'),
+        // Indent moves a list item a level, or a paragraph or heading a step (as Tab does).
+        canSink: listItemType(e) ? e.can().sinkListItem(listItemType(e)!) : e.can().indent(),
+        canLift: listItemType(e) ? e.can().liftListItem(listItemType(e)!) : e.can().outdent(),
       };
     },
   });
@@ -328,12 +343,15 @@ function ColourTool({
 function Dropdown({
   label,
   value,
+  icon,
   width,
   show,
   children,
 }: {
   label: string;
-  value: string;
+  value?: string;
+  /** Shown instead of a value. */
+  icon?: ReactNode;
   width: string;
   show?: number;
   children: ReactNode;
@@ -350,7 +368,13 @@ function Dropdown({
             width,
           )}
         >
-          <span className="truncate">{value}</span>
+          {icon ? (
+            <span aria-hidden className="inline-flex text-fg-2 [&_svg]:size-4">
+              {icon}
+            </span>
+          ) : (
+            <span className="truncate">{value}</span>
+          )}
           <ChevronDown aria-hidden className="size-3.5 shrink-0 text-fg-3" />
         </button>
       </MenuTrigger>
@@ -362,17 +386,38 @@ function Dropdown({
   return show ? <span className={WIDTH[show]}>{menu}</span> : menu;
 }
 
-const fontLabel = (value: string | null) =>
-  RICH_FONTS.find((f) => f.value === value)?.label ?? 'Default font';
+/** The font of text without one: the page's default (Settings → Editing), or Memora's. */
+const fontLabel = (value: string | null, defaults: RichDefaults) =>
+  richFontLabel(value ?? defaults.font) || 'Figtree';
+
+/** Text without a font or size of its own has these (Settings → Editing). */
+export interface RichDefaults {
+  /** A CSS font family, or '' for Memora's own. */
+  font: string;
+  /** In points. */
+  size: number;
+}
+
+/** The browser can list the computer's own fonts (Chromium, and the desktop app). */
+const canListFonts = () => typeof window !== 'undefined' && 'queryLocalFonts' in window;
 
 export interface RichToolbarProps {
   editor: Editor | null;
   host: RichHost;
+  defaults: RichDefaults;
+  /** Two rows rather than tools in "More" (not while a phone's keyboard is open). */
+  wrap?: boolean;
   /** On the right: the page view and the outline. */
   end?: ReactNode;
 }
 
-export const RichToolbar = memo(function RichToolbar({ editor, host, end }: RichToolbarProps) {
+export const RichToolbar = memo(function RichToolbar({
+  editor,
+  host,
+  defaults,
+  wrap = true,
+  end,
+}: RichToolbarProps) {
   const state = useToolbarState(editor);
   const [tab, setTab] = useState<Tab>('home');
   const [tableOpen, setTableOpen] = useState(false);
@@ -385,195 +430,216 @@ export const RichToolbar = memo(function RichToolbar({ editor, host, end }: Rich
   const pick = (images: boolean) => () =>
     void host.pickFiles(images).then((files) => insertFiles(editor, files, host));
   const shown = narrow || (tab === 'table' && !state.inTable) ? 'home' : tab;
+  // On one row (a phone's keyboard is open), tools move into "More" as the row narrows. Else
+  // the toolbar wraps onto a second row, and only the less used tools move.
+  const at = (single: number, wrapped?: number) => (wrap ? wrapped : single);
+  // Tools that belong together wrap together.
+  const group = wrap ? 'flex items-center gap-0.5' : 'contents';
 
   const home = (
     <>
-      <Tool
-        label="Undo"
-        icon={<Undo2 />}
-        keys="Mod Z"
-        onRun={() => chain().undo().run()}
-        disabled={!state.canUndo}
-        show={42}
-      />
-      <Tool
-        label="Redo"
-        icon={<Redo2 />}
-        keys="Mod Shift Z"
-        onRun={() => chain().redo().run()}
-        disabled={!state.canRedo}
-        show={42}
-      />
-      <Divider show={42} />
-      <Dropdown
-        label="Text style"
-        value={STYLES.find((s) => s.id === state.style)!.label}
-        width="w-[7.5rem]"
-        show={30}
-      >
-        <MenuRadioGroup value={state.style} onValueChange={(v) => setStyle(editor, v as StyleId)}>
-          {STYLES.map((s) => (
-            <MenuRadioItem key={s.id} value={s.id}>
-              {s.label}
-            </MenuRadioItem>
+      <span className={group}>
+        <Tool
+          label="Undo"
+          icon={<Undo2 />}
+          keys="Mod Z"
+          onRun={() => chain().undo().run()}
+          disabled={!state.canUndo}
+          show={at(42, 36)}
+        />
+        <Tool
+          label="Redo"
+          icon={<Redo2 />}
+          keys="Mod Shift Z"
+          onRun={() => chain().redo().run()}
+          disabled={!state.canRedo}
+          show={at(42, 36)}
+        />
+        <Divider show={at(42, 36)} />
+      </span>
+      <span className={group}>
+        <Dropdown
+          label="Text style"
+          value={STYLES.find((s) => s.id === state.style)!.label}
+          width="w-[7.5rem]"
+          show={at(30)}
+        >
+          <MenuRadioGroup value={state.style} onValueChange={(v) => setStyle(editor, v as StyleId)}>
+            {STYLES.map((s) => (
+              <MenuRadioItem key={s.id} value={s.id}>
+                {s.label}
+              </MenuRadioItem>
+            ))}
+          </MenuRadioGroup>
+        </Dropdown>
+        <Dropdown
+          label="Font"
+          value={fontLabel(state.font, defaults)}
+          width="w-[7rem]"
+          show={at(60)}
+        >
+          <FontItems editor={editor} value={state.font} host={host} />
+        </Dropdown>
+        <Dropdown
+          label="Font size"
+          value={state.size ? state.size.replace('pt', '') : String(defaults.size)}
+          width="w-[3.5rem]"
+          show={at(60)}
+        >
+          <SizeItems editor={editor} value={state.size} defaultSize={defaults.size} />
+        </Dropdown>
+        <Divider show={at(30)} />
+      </span>
+      <span className={group}>
+        <Tool
+          label="Bold"
+          icon={<Bold />}
+          keys="Mod B"
+          active={state.bold}
+          onRun={() => chain().toggleBold().run()}
+        />
+        <Tool
+          label="Italic"
+          icon={<Italic />}
+          keys="Mod I"
+          active={state.italic}
+          onRun={() => chain().toggleItalic().run()}
+        />
+        <Tool
+          label="Underline"
+          icon={<Underline />}
+          keys="Mod U"
+          active={state.underline}
+          onRun={() => chain().toggleUnderline().run()}
+        />
+        <Tool
+          label="Strikethrough"
+          icon={<Strikethrough />}
+          keys="Mod Shift S"
+          active={state.strike}
+          onRun={() => chain().toggleStrike().run()}
+          show={at(36)}
+        />
+        <Tool
+          label="Subscript"
+          icon={<Subscript />}
+          keys="Mod ,"
+          active={state.subscript}
+          onRun={() => chain().toggleSubscript().run()}
+          show={at(66, 48)}
+        />
+        <Tool
+          label="Superscript"
+          icon={<Superscript />}
+          keys="Mod ."
+          active={state.superscript}
+          onRun={() => chain().toggleSuperscript().run()}
+          show={at(66, 48)}
+        />
+        <ColourTool
+          label="Text colour"
+          icon={<Baseline />}
+          colors={RICH_TEXT_COLORS}
+          value={state.color}
+          none="Automatic"
+          onPick={(c) => (c ? chain().setColor(c).run() : chain().unsetColor().run())}
+          show={at(42)}
+        />
+        <ColourTool
+          label="Highlight"
+          icon={<Highlighter />}
+          colors={RICH_FILL_COLORS}
+          value={state.highlight}
+          none="No highlight"
+          onPick={(c) =>
+            c ? chain().setHighlight({ color: c }).run() : chain().unsetHighlight().run()
+          }
+          show={at(42)}
+        />
+        <Tool
+          label="Clear formatting"
+          icon={<RemoveFormatting />}
+          keys="Ctrl Space"
+          onRun={() => chain().unsetAllMarks().run()}
+          show={at(66, 42)}
+        />
+        <Divider show={at(36)} />
+      </span>
+      <span className={group}>
+        <Dropdown
+          label="Alignment"
+          icon={ALIGNS.find((a) => a.value === state.align)!.icon}
+          width="w-12 px-1.5!"
+          show={at(48)}
+        >
+          {ALIGNS.map((a) => (
+            <MenuItem
+              key={a.value}
+              icon={a.icon}
+              shortcut={keysLabel(a.keys)}
+              onSelect={() => chain().setTextAlign(a.value).run()}
+            >
+              {a.label}
+            </MenuItem>
           ))}
-        </MenuRadioGroup>
-      </Dropdown>
-      <Dropdown label="Font" value={fontLabel(state.font)} width="w-[7rem]" show={60}>
-        <FontItems editor={editor} value={state.font} />
-      </Dropdown>
-      <Dropdown
-        label="Font size"
-        value={state.size ? state.size.replace('pt', '') : '12'}
-        width="w-[3.5rem]"
-        show={60}
-      >
-        <SizeItems editor={editor} value={state.size} />
-      </Dropdown>
-      <Divider show={30} />
-      <Tool
-        label="Bold"
-        icon={<Bold />}
-        keys="Mod B"
-        active={state.bold}
-        onRun={() => chain().toggleBold().run()}
-      />
-      <Tool
-        label="Italic"
-        icon={<Italic />}
-        keys="Mod I"
-        active={state.italic}
-        onRun={() => chain().toggleItalic().run()}
-      />
-      <Tool
-        label="Underline"
-        icon={<Underline />}
-        keys="Mod U"
-        active={state.underline}
-        onRun={() => chain().toggleUnderline().run()}
-      />
-      <Tool
-        label="Strikethrough"
-        icon={<Strikethrough />}
-        keys="Mod Shift S"
-        active={state.strike}
-        onRun={() => chain().toggleStrike().run()}
-        show={36}
-      />
-      <Tool
-        label="Subscript"
-        icon={<Subscript />}
-        keys="Mod ,"
-        active={state.subscript}
-        onRun={() => chain().toggleSubscript().run()}
-        show={66}
-      />
-      <Tool
-        label="Superscript"
-        icon={<Superscript />}
-        keys="Mod ."
-        active={state.superscript}
-        onRun={() => chain().toggleSuperscript().run()}
-        show={66}
-      />
-      <ColourTool
-        label="Text colour"
-        icon={<Baseline />}
-        colors={RICH_TEXT_COLORS}
-        value={state.color}
-        none="Automatic"
-        onPick={(c) => (c ? chain().setColor(c).run() : chain().unsetColor().run())}
-        show={42}
-      />
-      <ColourTool
-        label="Highlight"
-        icon={<Highlighter />}
-        colors={RICH_FILL_COLORS}
-        value={state.highlight}
-        none="No highlight"
-        onPick={(c) =>
-          c ? chain().setHighlight({ color: c }).run() : chain().unsetHighlight().run()
-        }
-        show={42}
-      />
-      <Tool
-        label="Clear formatting"
-        icon={<RemoveFormatting />}
-        onRun={() => chain().unsetAllMarks().run()}
-        show={66}
-      />
-      <Divider show={36} />
-      <Dropdown label="Alignment" value="" width="w-9 px-1.5!" show={48}>
-        {ALIGNS.map((a) => (
-          <MenuItem
-            key={a.value}
-            icon={a.icon}
-            shortcut={keysLabel(a.keys)}
-            onSelect={() => chain().setTextAlign(a.value).run()}
-          >
-            {a.label}
-          </MenuItem>
-        ))}
-      </Dropdown>
-      <Dropdown label="Line spacing" value="" width="w-9 px-1.5!" show={66}>
-        <SpacingItems editor={editor} value={state.spacing} />
-      </Dropdown>
-      <Tool
-        label="Bullet list"
-        icon={<List />}
-        keys="Mod Shift 8"
-        active={state.bullet}
-        onRun={() => chain().toggleBulletList().run()}
-        show={24}
-      />
-      <Tool
-        label="Numbered list"
-        icon={<ListOrdered />}
-        keys="Mod Shift 7"
-        active={state.ordered}
-        onRun={() => chain().toggleOrderedList().run()}
-        show={30}
-      />
-      <Tool
-        label="Task list"
-        icon={<CheckSquare />}
-        keys="Mod Shift 9"
-        active={state.task}
-        onRun={() => chain().toggleTaskList().run()}
-        show={36}
-      />
-      <Tool
-        label="Decrease indent"
-        icon={<IndentDecrease />}
-        keys="Shift Tab"
-        disabled={!state.canLift}
-        onRun={() =>
-          chain()
-            .liftListItem(state.task ? 'taskItem' : 'listItem')
-            .run()
-        }
-        show={60}
-      />
-      <Tool
-        label="Increase indent"
-        icon={<IndentIncrease />}
-        keys="Tab"
-        disabled={!state.canSink}
-        onRun={() =>
-          chain()
-            .sinkListItem(state.task ? 'taskItem' : 'listItem')
-            .run()
-        }
-        show={60}
-      />
-      <Tool
-        label="Link"
-        icon={<Link2 />}
-        keys="Mod K"
-        active={state.link}
-        onRun={() => host.editLink()}
-        show={24}
-      />
+        </Dropdown>
+        <Dropdown
+          label="Line spacing"
+          icon={<ListChevronsUpDown />}
+          width="w-12 px-1.5!"
+          show={at(66, 48)}
+        >
+          <SpacingItems editor={editor} value={state.spacing} />
+        </Dropdown>
+        <Tool
+          label="Bullet list"
+          icon={<List />}
+          keys="Mod Shift 8"
+          active={state.bullet}
+          onRun={() => chain().toggleBulletList().run()}
+          show={at(24)}
+        />
+        <Tool
+          label="Numbered list"
+          icon={<ListOrdered />}
+          keys="Mod Shift 7"
+          active={state.ordered}
+          onRun={() => chain().toggleOrderedList().run()}
+          show={at(30)}
+        />
+        <Tool
+          label="Task list"
+          icon={<CheckSquare />}
+          keys="Mod Shift 9"
+          active={state.task}
+          onRun={() => chain().toggleTaskList().run()}
+          show={at(36)}
+        />
+        <Tool
+          label="Decrease indent"
+          icon={<IndentDecrease />}
+          keys="Shift Tab"
+          disabled={!state.canLift}
+          onRun={() => indent(editor, false)}
+          show={at(60)}
+        />
+        <Tool
+          label="Increase indent"
+          icon={<IndentIncrease />}
+          keys="Tab"
+          disabled={!state.canSink}
+          onRun={() => indent(editor, true)}
+          show={at(60)}
+        />
+        <Tool
+          label="Link"
+          icon={<Link2 />}
+          keys="Mod K"
+          active={state.link}
+          onRun={() => host.editLink()}
+          show={at(24)}
+        />
+      </span>
     </>
   );
 
@@ -601,40 +667,40 @@ export const RichToolbar = memo(function RichToolbar({ editor, host, end }: Rich
         </PopoverContent>
       </Popover>
       <Tool label="Image" icon={<ImagePlus />} onRun={pick(true)} />
-      <Tool label="File" icon={<FileUp />} onRun={pick(false)} show={24} />
+      <Tool label="File" icon={<FileUp />} onRun={pick(false)} show={at(24)} />
       <Tool label="Link" icon={<Link2 />} keys="Mod K" onRun={() => host.editLink()} />
-      <Divider show={30} />
+      <Divider show={at(30)} />
       <Tool
         label="Note box"
         icon={<Info />}
         onRun={() => chain().setCallout('note').run()}
-        show={30}
+        show={at(30)}
       />
       <Tool
         label="Code block"
         icon={<Code2 />}
         keys="Mod Alt C"
         onRun={() => chain().toggleCodeBlock().run()}
-        show={30}
+        show={at(30)}
       />
       <Tool
         label="Formula"
         icon={<Sigma />}
         onRun={() => host.editMath({ pos: null, latex: '', inline: false })}
-        show={36}
+        show={at(36)}
       />
       <Tool
         label="Divider"
         icon={<Minus />}
         onRun={() => chain().setHorizontalRule().run()}
-        show={36}
+        show={at(36)}
       />
       <Tool
         label="Line break"
         icon={<WrapText />}
         keys="Shift Enter"
         onRun={() => chain().setHardBreak().run()}
-        show={42}
+        show={at(42)}
       />
       <Tool
         label="Today’s date"
@@ -650,7 +716,7 @@ export const RichToolbar = memo(function RichToolbar({ editor, host, end }: Rich
             )
             .run()
         }
-        show={42}
+        show={at(42)}
       />
     </>
   );
@@ -663,34 +729,34 @@ export const RichToolbar = memo(function RichToolbar({ editor, host, end }: Rich
         label="Column on the left"
         icon={<Columns3 />}
         onRun={() => chain().addColumnBefore().run()}
-        show={24}
+        show={at(24)}
       />
       <Tool
         label="Column on the right"
         icon={<Columns3 />}
         onRun={() => chain().addColumnAfter().run()}
-        show={24}
+        show={at(24)}
       />
-      <Divider show={30} />
+      <Divider show={at(30)} />
       <Tool
         label="Merge cells"
         icon={<Merge />}
         disabled={!state.canMerge}
         onRun={() => chain().mergeCells().run()}
-        show={30}
+        show={at(30)}
       />
       <Tool
         label="Split cell"
         icon={<Split />}
         disabled={!state.canSplit}
         onRun={() => chain().splitCell().run()}
-        show={30}
+        show={at(30)}
       />
       <Tool
         label="Header row"
         icon={<TableProperties />}
         onRun={() => chain().toggleHeaderRow().run()}
-        show={36}
+        show={at(36)}
       />
       <ColourTool
         label="Cell colour"
@@ -699,26 +765,26 @@ export const RichToolbar = memo(function RichToolbar({ editor, host, end }: Rich
         value={null}
         none="No colour"
         onPick={(c) => chain().setCellAttribute('backgroundColor', c).run()}
-        show={36}
+        show={at(36)}
       />
-      <Divider show={42} />
+      <Divider show={at(42)} />
       <Tool
         label="Delete row"
         icon={<Trash2 />}
         onRun={() => chain().deleteRow().run()}
-        show={42}
+        show={at(42)}
       />
       <Tool
         label="Delete column"
         icon={<Trash2 />}
         onRun={() => chain().deleteColumn().run()}
-        show={48}
+        show={at(48)}
       />
       <Tool
         label="Delete table"
         icon={<Trash2 />}
         onRun={() => chain().deleteTable().run()}
-        show={54}
+        show={at(54)}
       />
     </>
   );
@@ -730,8 +796,14 @@ export const RichToolbar = memo(function RichToolbar({ editor, host, end }: Rich
   ];
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-1">
-      <div ref={setBox} className="@container flex min-w-0 flex-1 items-center gap-1">
+    <div className={cn('flex min-w-0 flex-1 gap-1', wrap ? 'items-start' : 'items-center')}>
+      <div
+        ref={setBox}
+        className={cn(
+          '@container flex min-w-0 flex-1 gap-1',
+          wrap ? 'items-start' : 'items-center',
+        )}
+      >
         {!narrow && (
           <div
             role="tablist"
@@ -760,10 +832,13 @@ export const RichToolbar = memo(function RichToolbar({ editor, host, end }: Rich
         <div
           role="toolbar"
           aria-label="Formatting"
-          className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden"
+          className={cn(
+            'flex min-w-0 flex-1 items-center gap-0.5',
+            wrap ? 'flex-wrap gap-y-1' : 'overflow-hidden',
+          )}
         >
           {shown === 'home' ? home : shown === 'insert' ? insert : table}
-          <MoreMenu editor={editor} state={state} host={host} onPick={pick} />
+          <MoreMenu editor={editor} state={state} host={host} defaults={defaults} onPick={pick} />
         </div>
       </div>
       {end}
@@ -771,32 +846,64 @@ export const RichToolbar = memo(function RichToolbar({ editor, host, end }: Rich
   );
 });
 
-function FontItems({ editor, value }: { editor: Editor; value: string | null }) {
+function FontItems({
+  editor,
+  value,
+  host,
+}: {
+  editor: Editor;
+  value: string | null;
+  host: RichHost;
+}) {
+  // A font of the computer's own, set from its list: shown as the current one.
+  const own = value && !RICH_FONTS.some((f) => f.value === value) ? value : null;
   return (
-    <MenuRadioGroup
-      value={value ?? ''}
-      onValueChange={(v) =>
-        v
-          ? editor.chain().focus().setFontFamily(v).run()
-          : editor.chain().focus().unsetFontFamily().run()
-      }
-    >
-      <MenuRadioItem value="">Default font</MenuRadioItem>
-      {RICH_FONTS.map((f) => (
-        <MenuRadioItem key={f.value} value={f.value}>
-          <span style={{ fontFamily: f.value }}>{f.label}</span>
-        </MenuRadioItem>
-      ))}
-    </MenuRadioGroup>
+    <>
+      <MenuRadioGroup
+        value={value ?? ''}
+        onValueChange={(v) =>
+          v
+            ? editor.chain().focus().setFontFamily(v).run()
+            : editor.chain().focus().unsetFontFamily().run()
+        }
+      >
+        <MenuRadioItem value="">Default font</MenuRadioItem>
+        {RICH_FONTS.map((f) => (
+          <MenuRadioItem key={f.value} value={f.value}>
+            <span style={{ fontFamily: f.value }}>{f.label}</span>
+          </MenuRadioItem>
+        ))}
+        {own && (
+          <MenuRadioItem value={own}>
+            <span style={{ fontFamily: own }}>{richFontLabel(own)}</span>
+          </MenuRadioItem>
+        )}
+      </MenuRadioGroup>
+      {canListFonts() && (
+        <>
+          <MenuSeparator />
+          <MenuItem onSelect={() => host.pickFont()}>This computer’s fonts…</MenuItem>
+        </>
+      )}
+    </>
   );
 }
 
-function SizeItems({ editor, value }: { editor: Editor; value: string | null }) {
+function SizeItems({
+  editor,
+  value,
+  defaultSize,
+}: {
+  editor: Editor;
+  value: string | null;
+  defaultSize: number;
+}) {
+  const unset = `${defaultSize}pt`;
   return (
     <MenuRadioGroup
-      value={value ?? '12pt'}
+      value={value ?? unset}
       onValueChange={(v) =>
-        v === '12pt'
+        v === unset
           ? editor.chain().focus().unsetFontSize().run()
           : editor.chain().focus().setFontSize(v).run()
       }
@@ -837,11 +944,13 @@ function MoreMenu({
   editor,
   state,
   host,
+  defaults,
   onPick,
 }: {
   editor: Editor;
   state: State;
   host: RichHost;
+  defaults: RichDefaults;
   onPick: (images: boolean) => () => void;
 }) {
   const chain = () => editor.chain().focus();
@@ -870,13 +979,13 @@ function MoreMenu({
         <MenuSub>
           <MenuSubTrigger>Font</MenuSubTrigger>
           <MenuSubContent>
-            <FontItems editor={editor} value={state.font} />
+            <FontItems editor={editor} value={state.font} host={host} />
           </MenuSubContent>
         </MenuSub>
         <MenuSub>
           <MenuSubTrigger>Font size</MenuSubTrigger>
           <MenuSubContent className="max-h-72 overflow-y-auto">
-            <SizeItems editor={editor} value={state.size} />
+            <SizeItems editor={editor} value={state.size} defaultSize={defaults.size} />
           </MenuSubContent>
         </MenuSub>
         <MenuCheckboxItem
@@ -942,7 +1051,7 @@ function MoreMenu({
           </MenuSubContent>
         </MenuSub>
         <MenuSub>
-          <MenuSubTrigger>Line spacing</MenuSubTrigger>
+          <MenuSubTrigger icon={<ListChevronsUpDown />}>Line spacing</MenuSubTrigger>
           <MenuSubContent>
             <SpacingItems editor={editor} value={state.spacing} />
           </MenuSubContent>

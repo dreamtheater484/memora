@@ -1,4 +1,4 @@
-import { RICH_FONTS, RICH_FONT_SIZES } from '@memora/shared';
+import { RICH_FONT_SIZES, richFont } from '@memora/shared';
 import DOMPurify from 'dompurify';
 
 /*
@@ -63,13 +63,16 @@ function parseColour(value: string): { r: number; g: number; b: number; a: numbe
   return null;
 }
 
-/** A pasted font, mapped onto the curated set by its kind; others use the page's font. */
+/**
+ * A pasted font, by its kind: monospace, serif or Memora's display font. Others (the body
+ * font of the page it came from) go, so pasted text looks like the text around it.
+ */
 function fontFamily(value: string): string | null {
   const v = value.toLowerCase();
-  if (/mono|courier|consolas|menlo|monaco/.test(v)) return RICH_FONTS[1].value;
-  if (/bricolage/.test(v)) return RICH_FONTS[2].value;
+  if (/mono|courier|consolas|menlo|monaco/.test(v)) return richFont('Monospace');
+  if (/bricolage/.test(v)) return richFont('Display');
   if (/(^|[^-])\bserif\b|georgia|times|cambria|garamond|palatino|book antiqua/.test(v)) {
-    return RICH_FONTS[0].value;
+    return richFont('Serif');
   }
   return null;
 }

@@ -110,9 +110,11 @@ function guard(contents: WebContents, server: () => RunningServer): void {
   };
   contents.on('did-navigate', (_event, url) => signInAgain(url));
   contents.on('did-navigate-in-page', (_event, url) => signInAgain(url));
-  // Copying to the clipboard and full screen; no camera, microphone, location or notifications.
+  // Copying to the clipboard, full screen and the computer's fonts (for text in rich pages);
+  // no camera, microphone, location or notifications.
+  const allowed = new Set(['clipboard-sanitized-write', 'fullscreen', 'local-fonts']);
   contents.session.setPermissionRequestHandler((_contents, permission, callback) => {
-    callback(permission === 'clipboard-sanitized-write' || permission === 'fullscreen');
+    callback(allowed.has(permission));
   });
   contents.on('context-menu', (_event, params) => textMenu(contents, params));
 }
