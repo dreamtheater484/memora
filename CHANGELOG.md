@@ -4,6 +4,29 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-10-01
+
+### Changed
+
+- **Rich text pages read like a notebook page:** the text starts at the top left, under the title, and fills the pane, rather than sitting in a centred column. Drag the text's right edge to make it narrower; each page keeps its own width. Double-click the edge, or choose **Fit the text to the pane** in the page's menu, to fill the pane again. A4 and Letter sheets work as before.
+- **Compact spacing:** lines and paragraphs sit closer together, and headings have no line under them. **Settings → Editing → Rich text pages** switches between **Compact** (the default) and **Comfortable**, and sets the font and size of text that has none of its own.
+- **More fonts:** Arial, Calibri, Cambria, Courier New, Georgia, Times New Roman and Verdana join the font list. In the desktop app and in Chrome or Edge, **This computer's fonts…** offers every font installed on the computer.
+- **The toolbar takes two rows** when one is too narrow, instead of moving lists, indents, colours and fonts into **More**. Related tools stay together, and alignment and line spacing show their icons.
+- `Tab` and `Shift+Tab` indent and outdent any text in a rich page, not only list items, and never move the cursor out of the page by accident: `Esc`, then `Tab`, does that. Indents are kept in Word, HTML and PDF exports.
+- The keyboard shortcuts sheet (`?`) lists the rich text editor's keys.
+
+### Added
+
+- **To-dos from the keyboard:** `Ctrl/Cmd+1` makes a line a to-do, and ticks it when it already is one; `Ctrl/Cmd+Enter` ticks or unticks it.
+- `Ctrl+Space` clears the formatting of the selected text.
+- `Enter` in a page's title goes on to the page's text.
+- Clicking beside or below a rich page's text puts the cursor on the nearest line.
+
+### Fixed
+
+- **To-do lists in rich pages:** the box sat on a line of its own, and the text went beneath it. The box is now on the line of its text and bigger to click, done items are struck through, and nested to-dos are indented.
+- Typing straight after clicking a page's title could lose the first letter.
+
 ## [0.9.4] - 2026-09-30
 
 ### Fixed
@@ -129,7 +152,8 @@ The first release: a public beta. Everything planned for 1.0 is in; what's left 
 - Setup guides for Synology, Linux and Windows, with three ways to get HTTPS.
 - `memora-admin` inside the container for lost passwords, lost phones, backups and restores.
 
-[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.9.4...HEAD
+[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.9.5...HEAD
+[0.9.5]: https://github.com/dreamtheater484/memora/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/dreamtheater484/memora/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/dreamtheater484/memora/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/dreamtheater484/memora/compare/v0.9.1...v0.9.2
