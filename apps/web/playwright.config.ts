@@ -35,17 +35,17 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: ['perf.spec.ts'] },
-    // Not losing a keystroke (§13.1) and pasting screenshots (§9.5) are proven in every
-    // engine; the rest runs in Chromium.
+    // Not losing a keystroke (§13.1), pasting screenshots (§9.5) and drawing diagrams
+    // (§9.4) are proven in every engine; the rest runs in Chromium.
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      testMatch: ['resilience.spec.ts', 'paste.spec.ts'],
+      testMatch: ['resilience.spec.ts', 'paste.spec.ts', 'diagram-engines.spec.ts'],
     },
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
-      testMatch: ['resilience.spec.ts', 'paste.spec.ts'],
+      testMatch: ['resilience.spec.ts', 'paste.spec.ts', 'diagram-engines.spec.ts'],
     },
     // Speed is measured alone, after everything else, so no other test takes its CPU.
     {

@@ -299,7 +299,9 @@ test.describe('content security policy', () => {
 
     const body = page.locator('[data-preview] .markdown-body');
     await expect(body.locator('.katex-display')).toBeVisible();
-    await expect(body.locator('.mermaid-diagram svg')).toBeVisible({ timeout: 15_000 });
+    await expect(body.locator('.mermaid-diagram .diagram-drawing > svg')).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(body.locator('.shiki span[style*="--shiki"]').first()).toBeAttached();
 
     // Inline script can't run, even if some ever got into the page.

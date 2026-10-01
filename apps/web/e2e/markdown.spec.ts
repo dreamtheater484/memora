@@ -126,7 +126,9 @@ test('the preview shows the whole dialect', async ({ page }) => {
   await expect(body.locator('.task-box')).toHaveCount(2);
   await expect(body.locator('.katex-display')).toBeVisible();
   await expect(body.locator('.shiki span[style*="--shiki"]').first()).toBeAttached();
-  await expect(body.locator('.mermaid-diagram svg')).toBeVisible({ timeout: 15_000 });
+  await expect(body.locator('.mermaid-diagram .diagram-drawing > svg')).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(body.locator('details summary')).toHaveText('More');
   await expect(body.locator('.footnotes')).toContainText('The note.');
   expect(await page.evaluate(() => (window as { hacked?: boolean }).hacked)).toBeUndefined();
