@@ -503,6 +503,38 @@ describe('settings', () => {
     );
   });
 
+  it('keep each rich page’s text width, merging changes and forgetting a reset one', async () => {
+    const a = uuidv7();
+    const b = uuidv7();
+    await ok('PATCH', '/api/v1/settings', { ui: { pageWidths: { [a]: 600 } } });
+    let res = await ok<{ ui: { pageWidths?: unknown } }>('PATCH', '/api/v1/settings', {
+      ui: { pageWidths: { [b]: 720 } },
+    });
+    expect(res.ui.pageWidths).toEqual({ [a]: 600, [b]: 720 });
+    // null: the page's text fits the pane again.
+    res = await ok<typeof res>('PATCH', '/api/v1/settings', { ui: { pageWidths: { [a]: null } } });
+    expect(res.ui.pageWidths).toEqual({ [b]: 720 });
+    for (const width of [100, 5000, 600.5]) {
+      expect(
+        (await refused('PATCH', '/api/v1/settings', { ui: { pageWidths: { [a]: width } } })).code,
+      ).toBe('invalid_request');
+    }
+  });
+
+  it('keep the look of rich text pages', async () => {
+    const res = await ok<{ editor: unknown }>('PATCH', '/api/v1/settings', {
+      editor: { richSpacing: 'comfortable', richFont: 'Georgia, serif', richFontSize: 12 },
+    });
+    expect(res.editor).toEqual({
+      richSpacing: 'comfortable',
+      richFont: 'Georgia, serif',
+      richFontSize: 12,
+    });
+    for (const editor of [{ richSpacing: 'airy' }, { richFontSize: 7 }, { richFontSize: 73 }]) {
+      expect((await refused('PATCH', '/api/v1/settings', { editor })).code).toBe('invalid_request');
+    }
+  });
+
   it('keep editor preferences apart from UI state', async () => {
     await ok('PATCH', '/api/v1/settings', { ui: { pageListSide: 'left' } });
     await ok('PATCH', '/api/v1/settings', { editor: { lineNumbers: true, viewMode: 'source' } });

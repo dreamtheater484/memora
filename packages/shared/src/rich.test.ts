@@ -230,4 +230,12 @@ describe('richToMarkdown', () => {
     ]);
     expect(lost).toEqual(['colour', 'fontSize', 'align', 'mergedCells', 'imageLayout']);
   });
+
+  it('reports indented paragraphs, which Markdown has no way to keep', () => {
+    const { markdown, lost } = richToMarkdown(
+      doc({ ...p(text('Further in')), attrs: { indent: 2 } }, p(text('Not indented'))),
+    );
+    expect(markdown).toBe('Further in\n\nNot indented');
+    expect(lost).toEqual(['indent']);
+  });
 });

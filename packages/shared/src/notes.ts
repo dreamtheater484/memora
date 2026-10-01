@@ -354,6 +354,13 @@ export const workspaceLayoutSchema = z.object({
 });
 export type WorkspaceLayout = z.infer<typeof workspaceLayoutSchema>;
 
+/** How close together lines and paragraphs are in a rich page. */
+export const RICH_SPACINGS = ['compact', 'comfortable'] as const;
+export type RichSpacing = (typeof RICH_SPACINGS)[number];
+
+/** The narrowest a rich page's text can be made, in pixels. */
+export const RICH_MIN_WIDTH = 280;
+
 export const uiStateSchema = z
   .object({
     lastSectionId: idSchema.nullable(),
@@ -372,6 +379,13 @@ export const uiStateSchema = z
       .refine((v) => Object.keys(v).length <= 1000),
     /** Pages shown at the full width of their pane instead of a readable width (§9.12). */
     fullWidth: z.array(idSchema).max(1000),
+    /**
+     * The width of a rich page's text in pixels, by page, as its edge was dragged; without
+     * one the text fills the pane. null removes a page's.
+     */
+    pageWidths: z
+      .record(idSchema, z.number().int().min(RICH_MIN_WIDTH).max(4000).nullable())
+      .refine((v) => Object.keys(v).length <= 1000),
     /** Named workspace layouts ("Writing", "Planning"). */
     layouts: z.array(workspaceLayoutSchema).max(MAX_LAYOUTS),
   })
@@ -407,8 +421,14 @@ export const editorSettingsSchema = z
     downscaleImages: z.boolean(),
     /** The longest side, in pixels, of a downscaled image. */
     maxImageEdge: z.number().int().min(640).max(8192),
-    /** Text stops at this many characters a line, unless a page is full width (§9.12). */
+    /** Markdown text stops at this many characters a line, unless full width (§9.12). */
     lineLength: z.number().int().min(60).max(120),
+    /** Rich pages: lines and paragraphs close together as in a notebook, or roomier. */
+    richSpacing: z.enum(RICH_SPACINGS),
+    /** Rich pages: the font of text without one ('' is Memora's own). */
+    richFont: z.string().max(200),
+    /** Rich pages: the size, in points, of text without one. */
+    richFontSize: z.number().int().min(8).max(72),
   })
   .partial();
 export type EditorSettings = z.infer<typeof editorSettingsSchema>;
@@ -428,6 +448,9 @@ export const DEFAULT_EDITOR_SETTINGS: Required<EditorSettings> = {
   downscaleImages: false,
   maxImageEdge: 2560,
   lineLength: 80,
+  richSpacing: 'compact',
+  richFont: '',
+  richFontSize: 11,
 };
 
 export interface Settings {

@@ -1,5 +1,5 @@
 import { ASSET_SCHEME } from './assets';
-import type { RichMark, RichNode } from './rich';
+import { RICH_INDENT_EM, RICH_MAX_INDENT, type RichMark, type RichNode } from './rich';
 
 /*
  * A rich page as plain HTML (§8.4), without a browser: the readable copy in `.memora`
@@ -33,6 +33,10 @@ function styleOf(attrs: Record<string, unknown> | undefined): string {
     align !== 'left'
   ) {
     styles.push(`text-align: ${align}`);
+  }
+  const indent = Number(attrs?.indent);
+  if (Number.isInteger(indent) && indent > 0 && indent <= RICH_MAX_INDENT) {
+    styles.push(`margin-left: ${indent * RICH_INDENT_EM}em`);
   }
   return styles.length ? ` style="${styles.join('; ')}"` : '';
 }
