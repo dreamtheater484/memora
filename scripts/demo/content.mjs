@@ -189,6 +189,33 @@ Next time: the [[Website relaunch plan]] timeline.
 `,
   },
   {
+    section: 'Q4 planning',
+    title: 'Relaunch ideas',
+    tags: ['planning', 'web'],
+    content: `# Relaunch ideas
+
+\`\`\`mermaid
+mindmap
+  root((Relaunch))
+    Content
+      Move old articles
+      New guides
+      Newsletter
+    Design
+      Dark theme
+      Faster pages
+    People
+      Priya
+      Sam
+    Launch
+      Load test
+      Announcement
+\`\`\`
+
+Sorted out in [[Team sync]]; the plan is in [[Website relaunch plan]].
+`,
+  },
+  {
     section: 'Research',
     title: 'Static site generators',
     tags: ['web', 'idea'],

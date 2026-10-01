@@ -1,0 +1,80 @@
+/*
+ * Diagrams in pages (§9.3, §9.4): drawn at their natural size, never wider than the text,
+ * with a quiet placeholder while they draw and a plain message when the code has a mistake.
+ * A wide diagram shrinks to the text's width, but to no less than 70 % of its size
+ * (`--diagram-min`, from render.ts): smaller, its words would be too small to read, so it
+ * scrolls sideways instead.
+ */
+
+.diagram-drawing {
+  display: flex;
+  justify-content: safe center;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.diagram-drawing > svg {
+  flex: none;
+  max-width: 100%;
+  min-width: var(--diagram-min, 0);
+  height: auto;
+}
+.diagram-drawing[data-state='waiting'] {
+  min-height: 8rem;
+  align-items: center;
+}
+.diagram-waiting {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  animation: diagram-spin 0.9s linear infinite;
+}
+@keyframes diagram-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.diagram-error {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  color: var(--danger);
+}
+
+/* The Edit button on a drawn diagram: shown on hover and keyboard focus. */
+.mermaid-diagram {
+  position: relative;
+}
+.diagram-edit {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--raised);
+  color: var(--fg);
+  font-size: 0.8rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-card);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.diagram-edit svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+.mermaid-diagram:hover .diagram-edit,
+.diagram-edit:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .diagram-edit {
+    opacity: 1;
+  }
+}

@@ -11,13 +11,14 @@ import { DestinationPicker } from './DestinationPicker';
 import { destinations } from './destinations';
 import { useGo } from './location';
 import { NOTEBOOK_ICON } from './icons';
-import { EDITOR_KEYS, LIST_KEYS, RICH_KEYS, SHORTCUTS, keysLabel } from './shortcuts';
+import { DIAGRAM_KEYS, EDITOR_KEYS, LIST_KEYS, RICH_KEYS, SHORTCUTS, keysLabel } from './shortcuts';
 import { useShell } from './store';
 
 const close = () => useShell.getState().closeDialog();
 
 // The history is opened now and then: loaded when it is.
 const HistoryDialog = lazy(() => import('../history/HistoryDialog'));
+const DiagramEditorDialog = lazy(() => import('../diagrams/editor/DiagramEditor'));
 const SaveVersionDialog = lazy(() =>
   import('../history/HistoryDialog').then((m) => ({ default: m.SaveVersionDialog })),
 );
@@ -427,6 +428,14 @@ function ShortcutsDialog() {
           </h3>
           <div className="divide-y divide-line">{RICH_KEYS.map((k) => row(k.keys, k.label))}</div>
         </section>
+        <section>
+          <h3 className="mb-1 text-2xs font-semibold tracking-wider text-fg-3 uppercase">
+            Diagram editor
+          </h3>
+          <div className="divide-y divide-line">
+            {DIAGRAM_KEYS.map((k) => row(k.keys, k.label))}
+          </div>
+        </section>
       </div>
       <p className="mt-4 text-sm text-fg-2">
         The editors’ own keys and more tips are in the{' '}
@@ -462,6 +471,9 @@ export function ShellDialogs() {
         )}
         {dialog?.kind === 'export' && <ExportDialog scope={dialog.scope} id={dialog.id} />}
         {dialog?.kind === 'print' && <PrintDialog scope={dialog.scope} id={dialog.id} />}
+        {dialog?.kind === 'diagram' && (
+          <DiagramEditorDialog code={dialog.code} page={dialog.page} onDone={dialog.onDone} />
+        )}
         {dialog?.kind === 'new-project' && <NewProjectDialog />}
         {dialog?.kind === 'project' && <ProjectDialog projectId={dialog.projectId} />}
         {dialog?.kind === 'new-board' && <NewBoardDialog projectId={dialog.projectId} />}

@@ -1,7 +1,14 @@
-import { ASSET_SCHEME, assetPath, parseRich, type PageType } from '@memora/shared';
+import {
+  ASSET_SCHEME,
+  DIAGRAM_LANGUAGE,
+  assetPath,
+  parseRich,
+  type PageType,
+} from '@memora/shared';
 import { generateHTML, type JSONContent } from '@tiptap/core';
 import DOMPurify from 'dompurify';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, type RefObject } from 'react';
+import { useDiagramTheme } from '../diagrams/useDiagramTheme';
 import { cn } from '../lib/cn';
 import { Preview } from '../markdown/Preview';
 import { richExtensions } from '../rich/schema';
@@ -44,14 +51,50 @@ function richHtml(content: string): string | null {
   return box.innerHTML;
 }
 
+/** Draws the diagrams (code blocks in Mermaid) of a version shown as HTML. */
+function useDrawnDiagrams(box: RefObject<HTMLDivElement | null>, html: string | null) {
+  const theme = useDiagramTheme();
+  useEffect(() => {
+    const root = box.current;
+    if (!root || !html) return;
+    let live = true;
+    const blocks = [
+      ...root.querySelectorAll<HTMLElement>(`pre > code.language-${DIAGRAM_LANGUAGE}`),
+    ];
+    for (const code of blocks) {
+      const pre = code.parentElement!;
+      void import('../diagrams/render')
+        .then(({ renderDiagram }) => renderDiagram(code.textContent ?? '', theme))
+        .then(
+          (drawing) => {
+            if (!live || !pre.isConnected) return;
+            const figure = document.createElement('div');
+            figure.className = 'diagram-drawing';
+            figure.dataset.state = 'drawn';
+            // Sanitised by Mermaid's strict mode and again in render.ts.
+            figure.innerHTML = drawing.svg;
+            pre.replaceWith(figure);
+          },
+          () => undefined,
+        );
+    }
+    return () => {
+      live = false;
+    };
+  }, [box, html, theme]);
+}
+
 export function VersionView({ type, content }: { type: PageType; content: string }) {
   const html = useMemo(() => (type === 'rich' ? richHtml(content) : null), [type, content]);
+  const box = useRef<HTMLDivElement>(null);
+  useDrawnDiagrams(box, html);
   if (type === 'markdown') return <Preview text={content} className="version-view" />;
   if (html === null) {
     return <p className="text-sm text-fg-3">This version can’t be shown.</p>;
   }
   return (
     <div
+      ref={box}
       className="markdown-body rich-content version-view"
       // Sanitised above.
       dangerouslySetInnerHTML={{ __html: html }}

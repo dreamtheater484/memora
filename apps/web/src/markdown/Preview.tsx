@@ -1,7 +1,7 @@
 import { ASSET_SCHEME } from '@memora/shared';
 import type { Element, ElementContent, Root, RootContent } from 'hast';
 import { toJsxRuntime, type Components } from 'hast-util-to-jsx-runtime';
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, PenLine } from 'lucide-react';
 import {
   createContext,
   memo,
@@ -13,8 +13,8 @@ import {
   type ReactNode,
 } from 'react';
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
+import { DrawnDiagram } from '../diagrams/DrawnDiagram';
 import { cn } from '../lib/cn';
-import { resolvedTheme, useTheme } from '../theme/theme';
 import { useFileSrc, usePreviewHost } from './context';
 import { ImageViewer } from './ImageViewer';
 import { PageHoverCard } from './PageCard';
@@ -34,6 +34,8 @@ const renderer = () => (shared ??= createRenderer());
 
 /** Clicking a task box: toggles the box on that source line. */
 const TaskContext = createContext<((line: number) => void) | undefined>(undefined);
+/** Editing a diagram: opens the diagram editor for the block on that source line. */
+const DiagramContext = createContext<((line: number) => void) | undefined>(undefined);
 
 /** Waits a little after typing; longer for pages that take longer to render. */
 function useRendered(text: string): { hast: Root | null; source: string } {
@@ -69,6 +71,8 @@ export interface PreviewProps {
   text: string;
   /** Makes task boxes clickable: called with the line of the box. */
   onToggleTask?: (line: number) => void;
+  /** Gives diagrams an Edit button: called with the line of the diagram's fence. */
+  onEditDiagram?: (line: number) => void;
   className?: string;
   /** Receives the element whose descendants carry `data-line` (for scroll sync). */
   bodyRef?: (element: HTMLDivElement | null) => void;
@@ -77,6 +81,7 @@ export interface PreviewProps {
 export const Preview = memo(function Preview({
   text,
   onToggleTask,
+  onEditDiagram,
   className,
   bodyRef,
 }: PreviewProps) {
@@ -85,27 +90,29 @@ export const Preview = memo(function Preview({
   const seen = new Map<string, number>();
   return (
     <TaskContext.Provider value={onToggleTask}>
-      <div
-        ref={bodyRef}
-        className={cn('markdown-body', className)}
-        data-rendered={hast ? 'true' : undefined}
-      >
-        {blocks.map((node) => {
-          if (node.type === 'text' && !node.value.trim()) return null;
-          const slice = sourceOf(node, source);
-          // Same text, same key: an unchanged block keeps its element.
-          const count = seen.get(slice) ?? 0;
-          seen.set(slice, count + 1);
-          return (
-            <Block
-              key={`${slice}\u0000${count}`}
-              node={node}
-              slice={slice}
-              line={node.position?.start.line ?? 0}
-            />
-          );
-        })}
-      </div>
+      <DiagramContext.Provider value={onEditDiagram}>
+        <div
+          ref={bodyRef}
+          className={cn('markdown-body', className)}
+          data-rendered={hast ? 'true' : undefined}
+        >
+          {blocks.map((node) => {
+            if (node.type === 'text' && !node.value.trim()) return null;
+            const slice = sourceOf(node, source);
+            // Same text, same key: an unchanged block keeps its element.
+            const count = seen.get(slice) ?? 0;
+            seen.set(slice, count + 1);
+            return (
+              <Block
+                key={`${slice}\u0000${count}`}
+                node={node}
+                slice={slice}
+                line={node.position?.start.line ?? 0}
+              />
+            );
+          })}
+        </div>
+      </DiagramContext.Provider>
     </TaskContext.Provider>
   );
 });
@@ -244,41 +251,25 @@ function MathView({
 }
 
 function Mermaid({ code, line }: { code: string; line?: number }) {
-  const theme = resolvedTheme(useTheme((s) => s.theme));
-  const [svg, setSvg] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    import('./mermaid')
-      .then(({ renderDiagram }) => renderDiagram(code, theme))
-      .then(
-        (result) => {
-          if (!live) return;
-          setSvg(result);
-          setError(null);
-        },
-        (e: unknown) => live && setError(e instanceof Error ? e.message : 'Invalid diagram'),
-      );
-    return () => {
-      live = false;
-    };
-  }, [code, theme]);
-  if (svg) {
-    return (
-      <div
-        className="mermaid-diagram"
-        data-line={line}
-        // Rendered with Mermaid's strict security level, which sanitises the SVG.
-        dangerouslySetInnerHTML={{ __html: svg }}
-      />
-    );
-  }
+  const edit = useContext(DiagramContext);
   return (
-    <div className="code-block" data-line={line}>
-      {error && <p className="mermaid-error">Diagram: {error}</p>}
-      <pre>
-        <code>{code}</code>
-      </pre>
+    <div className="mermaid-diagram" data-line={line}>
+      <DrawnDiagram
+        code={code}
+        failed={(message) => (
+          <div className="code-block">
+            <p className="mermaid-error">Diagram: {message}</p>
+            <pre>
+              <code>{code}</code>
+            </pre>
+          </div>
+        )}
+      />
+      {edit && line !== undefined && (
+        <button type="button" className="diagram-edit" onClick={() => edit(line)}>
+          <PenLine aria-hidden /> Edit diagram
+        </button>
+      )}
     </div>
   );
 }

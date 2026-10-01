@@ -1,0 +1,9 @@
+/*
+ * Mermaid measures what it draws as it draws it (in its scratch element, `d` + the drawing's
+ * id). Under reduced motion, base.css gives every element a 1 ms transition, so shapes would
+ * still be on their way when measured and the drawing would come out cut off. None here.
+ */
+[id^='dmemora-diagram-'] *,
+svg[id^='memora-diagram-'] * {
+  transition: none !important;
+}

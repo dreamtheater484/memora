@@ -296,14 +296,9 @@
   overflow-y: hidden;
   text-align: center;
 }
+/* Diagrams are drawn by diagrams/DrawnDiagram.tsx, with their own styles. */
 .markdown-body .mermaid-diagram {
-  display: flex;
-  justify-content: center;
-  overflow-x: auto;
-}
-.markdown-body .mermaid-diagram svg {
-  max-width: 100%;
-  height: auto;
+  display: block;
 }
 .markdown-body .mermaid-error {
   margin: 0;

@@ -33,6 +33,8 @@ h1 { font-size: 20pt; } h2 { font-size: 16pt; } h3 { font-size: 13pt; }
 p, li { orphans: 2; widows: 2; }
 img { max-width: 100%; height: auto; }
 figure { margin: 1em 0; break-inside: avoid; } figcaption { font-size: 9pt; color: #59636e; }
+figure.diagram { display: flex; flex-direction: column; align-items: center; } figure.diagram[data-align="left"] { align-items: flex-start; } figure.diagram[data-align="right"] { align-items: flex-end; }
+.diagram-svg { max-width: 100%; } .diagram-svg svg { display: block; width: 100%; max-width: 100%; height: auto; }
 pre, table, blockquote, .callout, .math { break-inside: avoid; }
 pre { background: #f6f8fa; padding: 0.7em 0.9em; border-radius: 4px; white-space: pre-wrap; font-size: 9.5pt; }
 code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }

@@ -12,12 +12,12 @@ import {
   insertCodeBlock,
   insertDate,
   insertMath,
-  insertMermaid,
   insertRule,
   setHeading,
   toggleList,
   toggleQuote,
 } from './commands';
+import { newDiagram } from './diagrams';
 import { insertTable } from './tables';
 
 /*
@@ -44,10 +44,16 @@ function slashCommands(host: CompletionHost): SlashCommand[] {
     { name: 'table', detail: 'A 3 × 2 table', run: (v) => insertTable(v, 3, 2) },
     { name: 'code', detail: 'Code block', run: (v) => void insertCodeBlock()(v) },
     {
+      name: 'diagram',
+      detail: 'Diagram',
+      keywords: 'mermaid chart flowchart mind map sequence timeline gantt pie',
+      run: (v) => void newDiagram(v),
+    },
+    {
       name: 'mermaid',
       detail: 'Diagram',
       keywords: 'chart flowchart',
-      run: (v) => void insertMermaid(v),
+      run: (v) => void newDiagram(v),
     },
     {
       name: 'math',

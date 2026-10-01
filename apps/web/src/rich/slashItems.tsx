@@ -22,6 +22,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { contentFor, pickTemplate } from '../templates/templates';
+import { newDiagram } from './diagramActions';
 import { insertFiles } from './files';
 import type { RichHost } from './host';
 import type { MenuItem } from './suggestions';
@@ -115,19 +116,9 @@ export function slashItems(host: RichHost): MenuItem[] {
     },
     {
       title: 'Diagram',
-      keywords: 'mermaid flowchart',
+      keywords: 'mermaid flowchart mind map sequence timeline gantt pie chart',
       icon: <Network />,
-      run: run((e) =>
-        e
-          .chain()
-          .focus()
-          .insertContent({
-            type: 'codeBlock',
-            attrs: { language: 'mermaid' },
-            content: [{ type: 'text', text: 'flowchart LR\n  A --> B' }],
-          })
-          .run(),
-      ),
+      run: run(newDiagram),
     },
     {
       title: 'Formula',

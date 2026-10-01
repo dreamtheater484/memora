@@ -185,6 +185,38 @@ export const editorTheme = EditorView.theme({
   '.cm-completionIcon': { display: 'none' },
   // Image thumbnails under their lines.
   '.cm-image-thumb': { display: 'block', padding: '0.25rem 0 0.5rem' },
+  // A diagram drawn in place of its code, with its two buttons (diagrams.ts).
+  '.cm-diagram': {
+    position: 'relative',
+    margin: '0.25rem 0',
+    padding: '0.75rem',
+    border: '1px solid var(--line)',
+    borderRadius: '0.5rem',
+    background: 'var(--surface)',
+    fontFamily: 'var(--font-sans)',
+    cursor: 'default',
+  },
+  '.cm-diagram-tools': {
+    position: 'absolute',
+    top: '0.4rem',
+    right: '0.4rem',
+    display: 'flex',
+    gap: '0.25rem',
+    opacity: '0',
+    transition: 'opacity 120ms ease',
+  },
+  '.cm-diagram:hover .cm-diagram-tools, .cm-diagram-tools:focus-within': { opacity: '1' },
+  '.cm-diagram-tools button': {
+    padding: '0.2rem 0.6rem',
+    borderRadius: '999px',
+    border: '1px solid var(--line-strong)',
+    background: 'var(--raised)',
+    color: 'var(--fg)',
+    fontSize: '0.78rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+  },
+  '@media (hover: none)': { '.cm-diagram-tools': { opacity: '1' } },
   '.cm-image-thumb img': {
     maxHeight: '8rem',
     maxWidth: 'min(100%, 20rem)',

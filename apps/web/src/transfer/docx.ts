@@ -1,4 +1,11 @@
-import { ASSET_SCHEME, RICH_MAX_INDENT, type RichMark, type RichNode } from '@memora/shared';
+import {
+  ASSET_SCHEME,
+  DIAGRAM_LANGUAGE,
+  RICH_MAX_INDENT,
+  diagramSummary,
+  type RichMark,
+  type RichNode,
+} from '@memora/shared';
 import {
   AlignmentType,
   BorderStyle,
@@ -98,7 +105,11 @@ const textOf = (node: RichNode): string =>
 class Writer {
   private lists = 0;
 
-  constructor(private readonly pictures: Map<string, Picture>) {}
+  constructor(
+    private readonly pictures: Map<string, Picture>,
+    /** Diagrams as pictures, by their code. */
+    private readonly diagrams: Map<string, Picture> = new Map(),
+  ) {}
 
   private runs(nodes: RichNode[] | undefined, base: IRunOptions = {}): ParagraphChild[] {
     const out: ParagraphChild[] = [];
@@ -226,6 +237,44 @@ class Writer {
     return out;
   }
 
+  /** A diagram as its picture, sized and aligned as in the page, with its caption. */
+  private diagram(node: RichNode, found: Picture, options: IParagraphOptions): Paragraph[] {
+    const wanted = Number(node.attrs?.width) > 0 ? Number(node.attrs?.width) : found.width;
+    const width = Math.min(wanted, MAX_WIDTH);
+    const height = Math.round((found.height / Math.max(found.width, 1)) * width);
+    const caption = typeof node.attrs?.caption === 'string' ? node.attrs.caption : '';
+    const align =
+      node.attrs?.align === 'left'
+        ? undefined
+        : node.attrs?.align === 'right'
+          ? AlignmentType.RIGHT
+          : AlignmentType.CENTER;
+    const out: Paragraph[] = [
+      new Paragraph({
+        ...options,
+        ...(align ? { alignment: align } : {}),
+        children: [
+          new ImageRun({
+            type: found.type,
+            data: found.data,
+            transformation: { width, height },
+            altText: { name: 'Diagram', title: caption, description: diagramSummary(textOf(node)) },
+          }),
+        ],
+      }),
+    ];
+    if (caption) {
+      out.push(
+        new Paragraph({
+          style: 'Caption',
+          ...(align ? { alignment: align } : {}),
+          children: [new TextRun(caption)],
+        }),
+      );
+    }
+    return out;
+  }
+
   private table(node: RichNode): Table {
     const rows = (node.content ?? []).map(
       (row, r) =>
@@ -326,6 +375,12 @@ class Writer {
           break;
         }
         case 'codeBlock': {
+          const picture =
+            node.attrs?.language === DIAGRAM_LANGUAGE ? this.diagrams.get(textOf(node)) : undefined;
+          if (picture) {
+            out.push(...this.diagram(node, picture, options));
+            break;
+          }
           const lines = textOf(node).split('\n');
           out.push(
             new Paragraph({
@@ -385,7 +440,25 @@ export async function docxFile(document: ExportDocument): Promise<Blob> {
     const found = blob && blob.type.startsWith('image/') ? await picture(blob) : null;
     if (found) pictures.set(id, found);
   }
-  const writer = new Writer(pictures);
+  // Diagrams become sharp PNGs (drawn at twice their size), measured at their own size.
+  const diagrams = new Map<string, Picture>();
+  if (document.diagrams?.size) {
+    const { svgToPng } = await import('../diagrams/render');
+    for (const [code, drawing] of document.diagrams) {
+      try {
+        const png = await svgToPng(drawing, 2);
+        diagrams.set(code, {
+          type: 'png',
+          data: await png.arrayBuffer(),
+          width: drawing.width,
+          height: drawing.height,
+        });
+      } catch {
+        // Written as its code.
+      }
+    }
+  }
+  const writer = new Writer(pictures, diagrams);
   const single = document.pages.length === 1;
   const children: (Paragraph | Table)[] = [
     new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun(document.title)] }),

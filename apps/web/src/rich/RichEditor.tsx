@@ -17,6 +17,8 @@ import { slashItems } from './slashItems';
 import { pageLinks, slashCommands } from './suggestions';
 import { Find } from './find';
 import { RichKeys } from './keys';
+import { editDiagramAt } from './diagramActions';
+import { codeBlockView } from './diagramView';
 import { FileView, ImageView } from './views';
 import { WikiLinks } from './wikiLinks';
 import { CardKeys } from './cardKeys';
@@ -98,7 +100,12 @@ class Bridge implements RichHost {
 function editorExtensions(bridge: Bridge, extra?: AnyExtension): AnyExtension[] {
   return [
     ...richExtensions({
-      views: { image: ReactNodeViewRenderer(ImageView), file: ReactNodeViewRenderer(FileView) },
+      views: {
+        image: ReactNodeViewRenderer(ImageView),
+        file: ReactNodeViewRenderer(FileView),
+        codeBlock: codeBlockView,
+      },
+      onDiagramEdit: editDiagramAt,
       onMathClick: (node, pos) =>
         bridge.editMath({
           pos,

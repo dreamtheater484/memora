@@ -63,6 +63,8 @@ export async function watchUpdates(
   } catch {
     return;
   }
+  // Where service workers are blocked (as in the end-to-end tests), there is none.
+  if (!(registration as ServiceWorkerRegistration | undefined)) return;
   // A version already waiting from an earlier visit.
   if (registration.waiting && container.controller) offer(registration.waiting);
   registration.addEventListener('updatefound', () => {
