@@ -1,4 +1,12 @@
-import type { EditorSettings, PageType, PageView, ViewMode } from '@memora/shared';
+import {
+  RICH_FONTS,
+  RICH_FONT_SIZES,
+  type EditorSettings,
+  type PageType,
+  type PageView,
+  type RichSpacing,
+  type ViewMode,
+} from '@memora/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, type ReactNode } from 'react';
 import { SegmentedControl, Select, Switch, toast } from '../components/ui';
@@ -7,7 +15,8 @@ import { saveEditorSettings, useEditorSettings } from '../notes/queries';
 import { SettingsSection } from './SettingsLayout';
 
 /*
- * Editing preferences (§9.16): how the Markdown editor looks and behaves, on every device.
+ * Editing preferences (§9.16): how the Markdown and rich text editors look and behave, on
+ * every device.
  */
 
 function Row({
@@ -43,6 +52,23 @@ const PAGE_VIEWS: { value: PageView; label: string }[] = [
   { value: 'a4', label: 'A4 page' },
   { value: 'letter', label: 'Letter page' },
 ];
+
+const SPACINGS: { value: RichSpacing; label: string }[] = [
+  { value: 'compact', label: 'Compact' },
+  { value: 'comfortable', label: 'Comfortable' },
+];
+
+/** Memora's own font is stored as '' (a select item can't be empty). */
+const OWN_FONT = 'memora';
+const FONTS = [
+  { value: OWN_FONT, label: 'Memora (Figtree)' },
+  ...RICH_FONTS.map((f) => ({ value: f.value, label: f.label })),
+];
+
+const SIZES = RICH_FONT_SIZES.filter((size) => size >= 9 && size <= 20).map((size) => ({
+  value: String(size),
+  label: `${size} pt`,
+}));
 
 const LINE_LENGTHS = [
   { value: '70', label: 'Narrow (70 characters)' },
@@ -140,7 +166,7 @@ export function EditingPage() {
       </SettingsSection>
       <SettingsSection
         title="Line length"
-        description="Text stops at a readable width, so lines don't run across a wide screen. A page can be shown at full width from its menu."
+        description="Markdown text stops at a readable width, so lines don't run across a wide screen. A page can be shown at full width from its menu. (Rich text fills the pane: drag its right edge to narrow it.)"
       >
         <Row
           label="Longest line"
@@ -155,7 +181,47 @@ export function EditingPage() {
           )}
         />
       </SettingsSection>
-      <SettingsSection title="Rich text pages" description="How rich text pages are laid out.">
+      <SettingsSection title="Rich text pages" description="How rich text pages look.">
+        <Row
+          label="Spacing"
+          description="Compact keeps lines and paragraphs close together, as in a notebook."
+          control={() => (
+            <SegmentedControl
+              label="Spacing"
+              value={settings.richSpacing}
+              onValueChange={(richSpacing) => save({ richSpacing })}
+              segments={SPACINGS}
+            />
+          )}
+        />
+        <Row
+          label="Font"
+          description="For text without a font of its own."
+          control={(id) => (
+            <Select
+              id={id}
+              aria-label="Font"
+              value={
+                RICH_FONTS.some((f) => f.value === settings.richFont) ? settings.richFont : OWN_FONT
+              }
+              onValueChange={(value) => save({ richFont: value === OWN_FONT ? '' : value })}
+              options={FONTS}
+            />
+          )}
+        />
+        <Row
+          label="Font size"
+          description="For text without a size of its own."
+          control={(id) => (
+            <Select
+              id={id}
+              aria-label="Font size"
+              value={String(settings.richFontSize)}
+              onValueChange={(value) => save({ richFontSize: Number(value) })}
+              options={SIZES}
+            />
+          )}
+        />
         <Row
           label="Show pages as"
           description="A sheet of paper shows how a page will print or export."
