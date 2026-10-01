@@ -74,7 +74,11 @@ describe('secrets at rest', () => {
     expect(sealed).not.toContain('JBSWY3DPEHPK3PXP');
     expect(openSecret(key, sealed)).toBe('JBSWY3DPEHPK3PXP');
     expect(openSecret(randomBytes(32), sealed)).toBeNull();
-    expect(openSecret(key, `${sealed.slice(0, -2)}xx`)).toBeNull();
+    // Damaged: the data's first character always encodes six bits of its first byte (the last
+    // ones may only pad, and changing them can leave the bytes as they were).
+    const at = sealed.lastIndexOf(':') + 1;
+    const damaged = `${sealed.slice(0, at)}${sealed[at] === 'A' ? 'B' : 'A'}${sealed.slice(at + 1)}`;
+    expect(openSecret(key, damaged)).toBeNull();
     expect(openSecret(key, 'plain')).toBeNull();
   });
 });
