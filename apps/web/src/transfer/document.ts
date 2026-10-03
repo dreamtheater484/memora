@@ -1,8 +1,8 @@
 import {
   ASSET_SCHEME,
-  DIAGRAM_LANGUAGE,
   assetPath,
   htmlDocument,
+  isDiagramLanguage,
   parseRich,
   richToHtml,
   type Page,
@@ -81,7 +81,7 @@ export async function loadDocument(
 export function diagramsIn(pages: DocumentPage[]): string[] {
   const codes = new Set<string>();
   const walk = (node: RichNode) => {
-    if (node.type === 'codeBlock' && node.attrs?.language === DIAGRAM_LANGUAGE) {
+    if (node.type === 'codeBlock' && isDiagramLanguage(node.attrs?.language)) {
       const code = (node.content ?? []).map((c) => c.text ?? '').join('');
       if (code.trim()) codes.add(code);
     }

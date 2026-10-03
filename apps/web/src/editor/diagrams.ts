@@ -1,9 +1,19 @@
-import { DIAGRAM_LANGUAGE } from '@memora/shared';
+import { markdownLanguage } from '@codemirror/lang-markdown';
+import { DocInput, ensureSyntaxTree, syntaxTree } from '@codemirror/language';
+import {
+  DIAGRAM_LANGUAGE,
+  columnsOf,
+  fencePrefix,
+  isDiagramLanguage,
+  prefixFenceLines,
+  stripFencePrefix,
+} from '@memora/shared';
 import {
   EditorSelection,
   Prec,
   StateField,
   Transaction,
+  type ChangeDesc,
   type EditorState,
   type Extension,
   type Range,
@@ -15,64 +25,91 @@ import { resolvedTheme, useTheme } from '../theme/theme';
 import { insertBlock } from './commands';
 
 /*
- * Diagrams in the Markdown source view (§9.3): each ```mermaid block is drawn in place of its
- * code while the cursor is elsewhere, with "Edit diagram" (the visual editor) and "Show code".
- * The arrow keys go into a block, which shows its code; leaving it draws it again. The
- * diagram editor's result replaces the code between the fences in one change, undone at once.
+ * Diagrams in the Markdown source view (§9.3): each ```mermaid block (in any case) is drawn
+ * in place of its code while the cursor is elsewhere, with "Edit diagram" (the visual editor)
+ * and "Show code". The arrow keys go into a block, which shows its code; leaving it draws it
+ * again. The diagram editor's result replaces the code in one change, undone at once.
+ *
+ * Fences are found in the Markdown syntax tree, so blocks in list items and quotes (callouts
+ * too) count, at any depth, as in the preview. Their lines start with the containers' markers
+ * and indentation: the code is read without them and written back with them (fences.ts in
+ * @memora/shared), so the page's structure stays as it was.
  */
+
+type Tree = ReturnType<typeof syntaxTree>;
+type SyntaxNode = Tree['topNode'];
 
 export interface Fence {
   /** Start of the opening fence line. */
   from: number;
-  /** End of the closing fence line (or of the document, for an unclosed fence). */
+  /** End of the closing fence line (or of the last line of code, for an unclosed fence). */
   to: number;
-  /** The code between the fences. */
+  /** The lines of code, prefixes and all: the start of the first and the end of the last. */
+  bodyFrom: number;
+  bodyTo: number;
+  /** How many lines of code there are; with none, bodyFrom and bodyTo are the opening's end. */
+  lines: number;
+  /** Where the code starts, after the first line's prefix. */
   codeFrom: number;
-  codeTo: number;
+  /** The code, without the lines' prefixes. */
   code: string;
   closed: boolean;
+  /** What each line of code starts with: the containers' markers and indentation. */
+  prefix: string;
 }
 
-const OPEN = /^( {0,3})(`{3,}|~{3,})(.*)$/;
+/** The blocks a fence can be in. */
+const CONTAINERS = new Set(['Document', 'Blockquote', 'BulletList', 'OrderedList', 'ListItem']);
 
-/** The diagram fences in a document; other fenced code is skipped, with what it holds. */
-export function diagramFences(doc: Text): Fence[] {
-  const fences: Fence[] = [];
-  let n = 1;
-  while (n <= doc.lines) {
-    const line = doc.line(n);
-    const open = OPEN.exec(line.text);
-    if (!open) {
-      n += 1;
-      continue;
-    }
-    const marker = open[2]!;
-    const info = open[3]!.trim();
-    // A backtick fence's info can't contain backticks; such a line isn't a fence.
-    if (marker[0] === '`' && info.includes('`')) {
-      n += 1;
-      continue;
-    }
-    const closing = new RegExp(`^ {0,3}${marker[0] === '`' ? '`' : '~'}{${marker.length},}\\s*$`);
-    let end = n + 1;
-    while (end <= doc.lines && !closing.test(doc.line(end).text)) end += 1;
-    const closed = end <= doc.lines;
-    if (info.split(/\s+/)[0] === DIAGRAM_LANGUAGE) {
-      const first = n + 1;
-      const last = closed ? end - 1 : doc.lines;
-      const codeFrom = first <= doc.lines ? doc.line(first).from : line.to;
-      const codeTo = last >= first ? doc.line(last).to : codeFrom;
-      fences.push({
-        from: line.from,
-        to: closed ? doc.line(end).to : doc.length,
-        codeFrom,
-        codeTo,
-        code: doc.sliceString(codeFrom, codeTo),
-        closed,
-      });
-    }
-    n = end + 1;
+function readFence(doc: Text, node: SyntaxNode): Fence | null {
+  const info = node.getChild('CodeInfo');
+  const language = info ? doc.sliceString(info.from, info.to).trim().split(/\s+/)[0] : '';
+  if (!isDiagramLanguage(language)) return null;
+  const open = doc.lineAt(node.from);
+  const marks = node.getChildren('CodeMark');
+  const closing = marks.length > 1 ? marks[marks.length - 1]! : null;
+  const closed = !!closing && closing.from > open.to;
+  const last = closed ? doc.lineAt(closing.from) : doc.lineAt(Math.max(node.to, open.to));
+  const lastCode = closed ? last.number - 1 : last.number;
+  const prefix = fencePrefix(doc.sliceString(open.from, node.from));
+  const code: string[] = [];
+  for (let n = open.number + 1; n <= lastCode; n++) {
+    code.push(stripFencePrefix(doc.line(n).text, prefix));
   }
+  const first = code.length ? doc.line(open.number + 1) : null;
+  return {
+    from: open.from,
+    to: closed ? last.to : first ? doc.line(lastCode).to : open.to,
+    bodyFrom: first ? first.from : open.to,
+    bodyTo: first ? doc.line(lastCode).to : open.to,
+    lines: code.length,
+    codeFrom: first ? Math.max(first.from, first.to - code[0]!.length) : open.to,
+    code: code.join('\n'),
+    closed,
+    prefix,
+  };
+}
+
+/** The whole document's syntax tree, parsed here (outside an editor). */
+const parse = (doc: Text): Tree => markdownLanguage.parser.parse(new DocInput(doc));
+
+/**
+ * The diagram fences in a document, from its Markdown syntax tree (the editor's, which may
+ * not reach the end yet, or else one parsed here). Other fenced code is skipped.
+ */
+export function diagramFences(doc: Text, tree: Tree = parse(doc)): Fence[] {
+  const fences: Fence[] = [];
+  tree.iterate({
+    enter: (node) => {
+      if (node.name === 'FencedCode') {
+        const fence = readFence(doc, node.node);
+        if (fence) fences.push(fence);
+        return false;
+      }
+      // Only blocks that can hold one are looked into.
+      return CONTAINERS.has(node.name);
+    },
+  });
   return fences;
 }
 
@@ -84,8 +121,11 @@ export function fenceAtLine(doc: Text, line: number): Fence | null {
 }
 
 /** A fence found again after the page changed: at the same place, or by its code. */
-export function locateFence(doc: Text, fence: Fence): Fence | null {
-  const fences = diagramFences(doc);
+export function locateFence(
+  doc: Text,
+  fence: Fence,
+  fences: Fence[] = diagramFences(doc),
+): Fence | null {
   return (
     fences.find((f) => f.from === fence.from && f.code === fence.code) ??
     fences.find((f) => f.code === fence.code) ??
@@ -93,19 +133,34 @@ export function locateFence(doc: Text, fence: Fence): Fence | null {
   );
 }
 
-/** Opens the diagram editor for a fence, putting the result back between its fences. */
+/**
+ * The change that puts `code` in a fence: its lines replaced, each with the fence's prefix,
+ * so a fence in a list item or a quote stays in it.
+ */
+export function fenceChange(
+  fence: Fence,
+  code: string,
+): { from: number; to: number; insert: string } {
+  const text = prefixFenceLines(code, fence.prefix);
+  return fence.lines
+    ? { from: fence.bodyFrom, to: fence.bodyTo, insert: text }
+    : { from: fence.bodyFrom, to: fence.bodyFrom, insert: `\n${text}` };
+}
+
+/** The fences the editor knows of (those drawn), or else the document's. */
+const fencesOf = (state: EditorState): Fence[] =>
+  state.field(field, false)?.fences ?? diagramFences(state.doc);
+
+/** Opens the diagram editor for a fence, putting the result back in its place. */
 export function editFence(view: EditorView, fence: Fence) {
   openDiagramEditor({
     code: fence.code,
     page: 'markdown',
     onDone: (code) => {
       if (code === fence.code) return;
-      const target = locateFence(view.state.doc, fence);
+      const target = locateFence(view.state.doc, fence, fencesOf(view.state));
       if (!target) return;
-      view.dispatch({
-        changes: { from: target.codeFrom, to: target.codeTo, insert: code },
-        userEvent: 'input.diagram',
-      });
+      view.dispatch({ changes: fenceChange(target, code), userEvent: 'input.diagram' });
       view.focus();
     },
   });
@@ -141,12 +196,19 @@ class DiagramWidget extends WidgetType {
   }
 
   override eq(other: DiagramWidget) {
-    return other.fence.code === this.fence.code && other.theme === this.theme;
+    return (
+      other.fence.code === this.fence.code &&
+      other.fence.prefix === this.fence.prefix &&
+      other.theme === this.theme
+    );
   }
 
   toDOM(view: EditorView) {
     const wrap = document.createElement('div');
     wrap.className = 'cm-diagram';
+    // Indented like the code it stands for, in a list item or a quote.
+    const indent = columnsOf(this.fence.prefix);
+    if (indent) wrap.style.setProperty('--cm-diagram-indent', String(indent));
     const drawing = document.createElement('div');
     drawing.className = 'diagram-drawing';
     drawing.dataset.state = 'waiting';
@@ -194,7 +256,7 @@ class DiagramWidget extends WidgetType {
     // The fence as it is now: text above it may have moved it since it was drawn.
     const current = () => {
       const at = view.posAtDOM(wrap);
-      return diagramFences(view.state.doc).find((f) => f.from === at) ?? this.fence;
+      return fencesOf(view.state).find((f) => f.from === at) ?? this.fence;
     };
     tools.append(
       button('Edit diagram', () => editFence(view, current())),
@@ -223,10 +285,40 @@ class DiagramWidget extends WidgetType {
 
 interface DiagramState {
   fences: Fence[];
+  /** The syntax tree they were found in. */
+  tree: Tree;
   theme: 'light' | 'dark';
   /** Whether the cursor was put somewhere (typing, clicking, keys) since the page opened. */
   placed: boolean;
   decorations: DecorationSet;
+}
+
+function moved(fence: Fence, changes: ChangeDesc): Fence {
+  const map = (pos: number) => changes.mapPos(pos);
+  return {
+    ...fence,
+    from: map(fence.from),
+    to: map(fence.to),
+    bodyFrom: map(fence.bodyFrom),
+    bodyTo: map(fence.bodyTo),
+    codeFrom: map(fence.codeFrom),
+  };
+}
+
+/**
+ * The fences in the editor's syntax tree. On a long page the tree may not reach the end yet
+ * (just opened, or just changed): further down, the fences stay as they were until it does.
+ */
+export function fencesIn(doc: Text, tree: Tree, before: Fence[], changes: ChangeDesc): Fence[] {
+  const found = diagramFences(doc, tree);
+  if (tree.length >= doc.length) return found;
+  const parsed = found.filter((f) => f.to < tree.length);
+  const after = parsed.at(-1)?.to ?? -1;
+  const rest = before
+    .filter((f) => !changes.touchesRange(f.from, f.to))
+    .map((f) => moved(f, changes))
+    .filter((f) => f.from > after && f.to >= tree.length);
+  return [...parsed, ...rest];
 }
 
 /**
@@ -255,21 +347,43 @@ function decorate(
   return Decoration.set(ranges);
 }
 
+/** How long opening a page may spend parsing it, so its diagrams are drawn from the start. */
+const OPEN_PARSE_MS = 50;
+
 const field = StateField.define<DiagramState>({
   create(state) {
-    const fences = diagramFences(state.doc);
+    const tree = ensureSyntaxTree(state, state.doc.length, OPEN_PARSE_MS) ?? syntaxTree(state);
+    const fences = diagramFences(state.doc, tree);
     const theme = themeNow();
-    return { fences, theme, placed: false, decorations: decorate(state, fences, theme, false) };
+    return {
+      fences,
+      tree,
+      theme,
+      placed: false,
+      decorations: decorate(state, fences, theme, false),
+    };
   },
   update(value, tr) {
     const theme = themeNow();
-    if (!tr.docChanged && !tr.selection && theme === value.theme) return value;
-    const fences = tr.docChanged ? diagramFences(tr.state.doc) : value.fences;
+    // The tree also changes as the parser gets further down a long page.
+    const tree = syntaxTree(tr.state);
+    const reparsed = tree !== value.tree && tree !== syntaxTree(tr.startState);
+    if (!tr.docChanged && !tr.selection && theme === value.theme && !reparsed) return value;
+    const fences =
+      tr.docChanged || reparsed
+        ? fencesIn(tr.state.doc, tree, value.fences, tr.changes)
+        : value.fences;
     // Typing, clicking and keys; not the page's text arriving (from the server, another tab).
     const placed =
       value.placed ||
       ((tr.docChanged || !!tr.selection) && tr.annotation(Transaction.userEvent) !== undefined);
-    return { fences, theme, placed, decorations: decorate(tr.state, fences, theme, placed) };
+    return {
+      fences,
+      tree: tr.docChanged || reparsed ? tree : value.tree,
+      theme,
+      placed,
+      decorations: decorate(tr.state, fences, theme, placed),
+    };
   },
   provide: (f) => EditorView.decorations.from(f, (v) => v.decorations),
 });

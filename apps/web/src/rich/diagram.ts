@@ -1,21 +1,44 @@
-import { DIAGRAM_LANGUAGE } from '@memora/shared';
+import {
+  DIAGRAM_FIT,
+  DIAGRAM_LANGUAGE,
+  diagramWidth,
+  isDiagramLanguage,
+  type DiagramWidth,
+} from '@memora/shared';
 import { Extension, type Editor } from '@tiptap/core';
 import { Fragment, type Node as PMNode } from '@tiptap/pm/model';
 import { NodeSelection, Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import type { NodeViewConstructor } from '@tiptap/pm/view';
 
 /*
- * Diagrams in rich pages (§9.4): a code block in Mermaid, drawn instead of shown, with a
- * width, an alignment and a caption. Reusing the code block keeps diagrams safe in older
- * versions of Memora, which show the code rather than dropping a node they don't know. The
- * cursor never goes inside the hidden code: the diagram is selected whole, like an image.
+ * Diagrams in rich pages (§9.4): a code block in Mermaid (in any case), drawn instead of
+ * shown, with a width (pixels, or "fit" for the text's width), an alignment and a caption.
+ * Reusing the code block keeps diagrams safe in older versions of Memora, which show the code
+ * rather than dropping a node they don't know. The cursor never goes inside the hidden code:
+ * the diagram is selected whole, like an image.
  */
 
 export type DiagramAlign = 'left' | 'center' | 'right';
 export const DIAGRAM_ALIGNS: readonly DiagramAlign[] = ['left', 'center', 'right'];
 
+/** The sizes on offer (§9.4). Fit fills the text's width, whatever that is, and follows it. */
+export const DIAGRAM_SIZES: { value: string; label: string; width: DiagramWidth }[] = [
+  { value: 'natural', label: 'Natural size', width: null },
+  { value: '320', label: 'Small', width: 320 },
+  { value: '480', label: 'Medium', width: 480 },
+  { value: '720', label: 'Large', width: 720 },
+  { value: DIAGRAM_FIT, label: 'Fit', width: DIAGRAM_FIT },
+];
+
+/** The diagram's frame for a stored width: fixed, the text's (Fit), or the drawing's own. */
+export function frameStyle(value: unknown): { width: string } | undefined {
+  const width = diagramWidth(value);
+  if (width === DIAGRAM_FIT) return { width: '100%' };
+  return width ? { width: `${width}px` } : undefined;
+}
+
 export const isDiagram = (node: PMNode | null | undefined): node is PMNode =>
-  !!node && node.type.name === 'codeBlock' && node.attrs.language === DIAGRAM_LANGUAGE;
+  !!node && node.type.name === 'codeBlock' && isDiagramLanguage(node.attrs.language);
 
 /** The diagram at `pos`, or else the one with `code` (the page may have changed meanwhile). */
 export function findDiagram(doc: PMNode, pos: number | null, code: string): number | null {
@@ -41,11 +64,6 @@ declare module '@tiptap/core' {
   }
 }
 
-const positive = (value: string | undefined) => {
-  const n = Number.parseInt(value ?? '', 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
-};
-
 export interface DiagramBlocksOptions {
   /** The diagram's view in the editor; none when only reading or writing HTML. */
   view: ((editor: Editor) => NodeViewConstructor) | null;
@@ -67,7 +85,7 @@ export const DiagramBlocks = Extension.create<DiagramBlocksOptions>({
         attributes: {
           width: {
             default: null,
-            parseHTML: (element) => positive(element.dataset.width),
+            parseHTML: (element) => diagramWidth(element.dataset.width),
             renderHTML: (attributes) =>
               attributes.width ? { 'data-width': String(attributes.width) } : {},
           },

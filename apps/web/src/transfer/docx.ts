@@ -1,8 +1,10 @@
 import {
   ASSET_SCHEME,
-  DIAGRAM_LANGUAGE,
+  DIAGRAM_FIT,
   RICH_MAX_INDENT,
   diagramSummary,
+  diagramWidth,
+  isDiagramLanguage,
   type RichMark,
   type RichNode,
 } from '@memora/shared';
@@ -97,6 +99,20 @@ async function picture(blob: Blob): Promise<Picture | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * A diagram's size in Word, in pixels: as in the page, never wider than the text. Fit is the
+ * text's width, which here is the page's.
+ */
+export function diagramSize(
+  value: unknown,
+  natural: { width: number; height: number },
+): { width: number; height: number } {
+  const size = diagramWidth(value);
+  const wanted = size === DIAGRAM_FIT ? MAX_WIDTH : (size ?? natural.width);
+  const width = Math.min(wanted, MAX_WIDTH);
+  return { width, height: Math.round((natural.height / Math.max(natural.width, 1)) * width) };
 }
 
 const textOf = (node: RichNode): string =>
@@ -239,9 +255,7 @@ class Writer {
 
   /** A diagram as its picture, sized and aligned as in the page, with its caption. */
   private diagram(node: RichNode, found: Picture, options: IParagraphOptions): Paragraph[] {
-    const wanted = Number(node.attrs?.width) > 0 ? Number(node.attrs?.width) : found.width;
-    const width = Math.min(wanted, MAX_WIDTH);
-    const height = Math.round((found.height / Math.max(found.width, 1)) * width);
+    const { width, height } = diagramSize(node.attrs?.width, found);
     const caption = typeof node.attrs?.caption === 'string' ? node.attrs.caption : '';
     const align =
       node.attrs?.align === 'left'
@@ -375,8 +389,9 @@ class Writer {
           break;
         }
         case 'codeBlock': {
-          const picture =
-            node.attrs?.language === DIAGRAM_LANGUAGE ? this.diagrams.get(textOf(node)) : undefined;
+          const picture = isDiagramLanguage(node.attrs?.language)
+            ? this.diagrams.get(textOf(node))
+            : undefined;
           if (picture) {
             out.push(...this.diagram(node, picture, options));
             break;

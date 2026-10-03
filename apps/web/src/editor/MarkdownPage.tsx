@@ -23,7 +23,7 @@ import { useGo } from '../shell/location';
 import type { DocEditor, PageDoc } from '../sync/doc';
 import { currentSync } from '../sync/engine';
 import { textChange } from '../sync/merge';
-import { fenceAtLine, locateFence } from './diagrams';
+import { fenceAtLine, fenceChange, locateFence } from './diagrams';
 import { GridEditor } from './GridEditor';
 import { registerFocus, registerJump } from './jumps';
 import MarkdownEditor, { type EditorHost } from './MarkdownEditor';
@@ -172,13 +172,12 @@ export default memo(function MarkdownPage({ page, doc, compact, autoFocus }: Mar
           const current = doc.content();
           const target = locateFence(Text.of(current.split('\n')), fence);
           if (!target) return;
+          // In a list item or a quote, each line keeps the container's prefix.
+          const change = fenceChange(target, code);
           if (view) {
-            view.dispatch({
-              changes: { from: target.codeFrom, to: target.codeTo, insert: code },
-              userEvent: 'input.diagram',
-            });
+            view.dispatch({ changes: change, userEvent: 'input.diagram' });
           } else {
-            const next = current.slice(0, target.codeFrom) + code + current.slice(target.codeTo);
+            const next = current.slice(0, change.from) + change.insert + current.slice(change.to);
             previewEditor.set(next);
             doc.edited(() => next, previewEditor);
           }

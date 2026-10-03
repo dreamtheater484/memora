@@ -1,4 +1,5 @@
 import { diagramText } from './diagrams';
+import { fencePrefix, stripFencePrefix } from './fences';
 import { SNIPPET_LENGTH, bySortKey, keysBetween } from './notes';
 
 /*
@@ -98,9 +99,20 @@ export function isWithin<T>(
   return false;
 }
 
-/** A ```mermaid block: its code is the third group. */
+/**
+ * A ```mermaid block (any case), also in a list item or a quote: what comes before the fence
+ * (list markers, `>`, indentation), the fence, and the code with each line's prefix.
+ */
 const DIAGRAM_FENCE =
-  /^( {0,3})(`{3,}|~{3,})[ \t]*mermaid\b[^\n]*\n([\s\S]*?)\n {0,3}\2[`~]*[ \t]*$/gm;
+  /^((?:[ \t]*(?:>|[-+*](?=[ \t])|\d{1,9}[.)](?=[ \t])))*[ \t]*)(`{3,}|~{3,})[ \t]*mermaid(?=\s)[^\n]*\n([\s\S]*?)\n[ \t>]*\2[`~]*[ \t]*$/gim;
+
+const diagramCode = (opening: string, code: string) => {
+  const prefix = fencePrefix(opening);
+  return code
+    .split('\n')
+    .map((line) => stripFencePrefix(line, prefix))
+    .join('\n');
+};
 
 /**
  * Plain text of a Markdown page, for snippets and search: formatting marks, link targets and
@@ -112,8 +124,8 @@ export function markdownToText(markdown: string): string {
   return (
     markdown
       // A diagram's words, not its code.
-      .replace(DIAGRAM_FENCE, (_, _indent: string, _fence: string, code: string) =>
-        diagramText(code),
+      .replace(DIAGRAM_FENCE, (_, opening: string, _fence: string, code: string) =>
+        diagramText(diagramCode(opening, code)),
       )
       .replace(
         /\\([\\`*_{}[\]()#+\-.!|~$<>])/g,

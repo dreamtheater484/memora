@@ -1,8 +1,8 @@
 import type { RichNode } from '@memora/shared';
 import mammoth from 'mammoth';
 import { describe, expect, it } from 'vitest';
-import { bodyHtml, type ExportDocument } from './document';
-import { docxFile } from './docx';
+import { bodyHtml, diagramsIn, type ExportDocument } from './document';
+import { diagramSize, docxFile } from './docx';
 import { convertFile } from './importFiles';
 import { printHtml } from './print';
 
@@ -98,6 +98,46 @@ describe('Word export', () => {
     expect(value).toMatch(/<table>.*Name.*Value.*x.*1.*<\/table>/);
     // An image that couldn't be loaded is named instead.
     expect(value).toContain('[Chart]');
+  });
+});
+
+describe('diagrams in exports', () => {
+  const diagram = (language: string, width?: unknown): RichNode => ({
+    type: 'codeBlock',
+    attrs: { language, width },
+    content: [text(`pie title ${language}`)],
+  });
+  const page = (...content: RichNode[]): ExportDocument['pages'][number] => ({
+    id: 'd',
+    title: 'Charts',
+    depth: 1,
+    doc: { type: 'doc', content },
+  });
+
+  it('finds them in any case of Mermaid', () => {
+    expect(diagramsIn([page(diagram('Mermaid'), diagram('MERMAID'), diagram('js'))])).toEqual([
+      'pie title Mermaid',
+      'pie title MERMAID',
+    ]);
+  });
+
+  it('sizes them as in the page: Fit is the text’s width', () => {
+    const document: ExportDocument = {
+      title: 'Charts',
+      pages: [page(diagram('Mermaid', 'fit'), diagram('mermaid', 320))],
+      diagrams: new Map([
+        ['pie title Mermaid', { svg: '<svg></svg>', width: 300, height: 150 }],
+        ['pie title mermaid', { svg: '<svg></svg>', width: 300, height: 150 }],
+      ]),
+    };
+    const html = bodyHtml(document, () => null);
+    expect(html).toContain('<div class="diagram-svg" style="width: 100%"><svg></svg></div>');
+    expect(html).toContain('<div class="diagram-svg" style="width: 320px"><svg></svg></div>');
+    // Word: the page's text is 600 pixels wide.
+    expect(diagramSize('fit', { width: 300, height: 150 })).toEqual({ width: 600, height: 300 });
+    expect(diagramSize(320, { width: 800, height: 400 })).toEqual({ width: 320, height: 160 });
+    expect(diagramSize(null, { width: 900, height: 300 })).toEqual({ width: 600, height: 200 });
+    expect(diagramSize('wide', { width: 200, height: 100 })).toEqual({ width: 200, height: 100 });
   });
 });
 

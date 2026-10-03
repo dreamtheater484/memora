@@ -1,7 +1,7 @@
 import {
   ASSET_SCHEME,
-  DIAGRAM_LANGUAGE,
   assetPath,
+  isDiagramLanguage,
   parseRich,
   type PageType,
 } from '@memora/shared';
@@ -58,9 +58,10 @@ function useDrawnDiagrams(box: RefObject<HTMLDivElement | null>, html: string | 
     const root = box.current;
     if (!root || !html) return;
     let live = true;
-    const blocks = [
-      ...root.querySelectorAll<HTMLElement>(`pre > code.language-${DIAGRAM_LANGUAGE}`),
-    ];
+    const blocks = [...root.querySelectorAll<HTMLElement>('pre > code[class*="language-"]')].filter(
+      (code) =>
+        [...code.classList].some((c) => c.startsWith('language-') && isDiagramLanguage(c.slice(9))),
+    );
     for (const code of blocks) {
       const pre = code.parentElement!;
       void import('../diagrams/render')

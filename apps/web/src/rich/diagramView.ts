@@ -1,4 +1,3 @@
-import { DIAGRAM_LANGUAGE } from '@memora/shared';
 import type { Editor } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import type { EditorView, NodeView, NodeViewConstructor } from '@tiptap/pm/view';
@@ -89,6 +88,4 @@ function plainCodeBlock(node: PMNode): NodeView {
 export const codeBlockView =
   (editor: Editor): NodeViewConstructor =>
   (node: PMNode, _view: EditorView, getPos: () => number | undefined) =>
-    node.attrs.language === DIAGRAM_LANGUAGE
-      ? new DiagramNodeView(node, editor, getPos)
-      : plainCodeBlock(node);
+    isDiagram(node) ? new DiagramNodeView(node, editor, getPos) : plainCodeBlock(node);
