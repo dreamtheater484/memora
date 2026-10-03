@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   colourDefinition,
   detectDiagram,
+  diagramMeaning,
+  diagramName,
   diagramSummary,
   diagramText,
   parseDiagram,
@@ -16,7 +18,6 @@ import {
   printGantt,
   printMindmap,
   printPie,
-  printSequence,
   printTimeline,
   type DiagramModel,
 } from './index';
@@ -26,12 +27,20 @@ const model = <T>(result: { ok: true; model: T } | { ok: false; reason: string }
   return result.model;
 };
 
+/** A model's data without where it came from (`source` and `origin`). */
+const bare = <T>(value: T): T =>
+  JSON.parse(
+    JSON.stringify(value, (key, v: unknown) =>
+      key === 'origin' || key === 'source' ? undefined : v,
+    ),
+  );
+
 /** Printing then reading again gives the same model. */
 function roundTrips(code: string) {
   const first = model(parseDiagram(code));
   const printed = printDiagram(first);
   const again = model(parseDiagram(printed));
-  expect(again).toEqual(first);
+  expect(diagramMeaning(again)).toEqual(diagramMeaning(first));
   return { first, printed };
 }
 
@@ -100,7 +109,7 @@ describe('flowcharts', () => {
     expect(edge('M', 'N')).toMatchObject({ line: 'thick', end: 'none' });
   });
 
-  it('keeps groups, directions, colours and other statements', () => {
+  it('keeps groups, directions, colours and other statements, where they were', () => {
     const code = `---
 title: Shop
 ---
@@ -123,7 +132,7 @@ graph TD
     const chart = model(parseFlowchart(code));
     expect(chart.head).toEqual(['---', 'title: Shop', '---']);
     expect(chart.keyword).toBe('graph');
-    expect(chart.groups).toEqual([
+    expect(bare(chart.groups)).toEqual([
       { id: 'shop', label: 'Shop floor', parent: null, direction: 'LR' },
       { id: 'inner', label: 'inner', parent: 'shop', direction: null },
     ]);
@@ -139,13 +148,16 @@ graph TD
       'style E fill:#f9f',
       'click A "https://example.com"',
     ]);
+    // Unchanged, it is written back as it was.
     const { printed } = roundTrips(code);
-    expect(printed).toBe(`---
+    expect(printed).toBe(code);
+    // Without a source, it is written afresh in the tidy layout.
+    expect(printFlowchart(bare(chart))).toBe(`---
 title: Shop
 ---
 graph TD
     A
-    subgraph shop ["Shop floor"]
+    subgraph shop [Shop floor]
         direction LR
         B
         C
@@ -166,11 +178,20 @@ graph TD
     click A "https://example.com"`);
   });
 
+  it('puts a box in the innermost group that names it, as Mermaid does', () => {
+    const chart = model(
+      parseFlowchart('flowchart LR\n subgraph p\n  A --> B\n  subgraph g\n   A\n  end\n end'),
+    );
+    expect(chart.nodes.find((n) => n.id === 'A')!.group).toBe('g');
+    expect(chart.nodes.find((n) => n.id === 'B')!.group).toBe('p');
+  });
+
   it('quotes labels that need it, and reads them back', () => {
     const chart = model(
       parseFlowchart('flowchart LR\n  A["Total (net) #quot;x#quot;"] -->|"a|b"| B'),
     );
     expect(chart.nodes[0]!.label).toBe('Total (net) "x"');
+    expect(chart.edges[0]!.label).toBe('a|b');
     chart.nodes[0]!.label = 'Line one\nline two; with "quotes" & more';
     const printed = printFlowchart(chart);
     expect(printed).toContain('A["Line one<br>line two; with #quot;quotes#quot; & more"]');
@@ -185,6 +206,10 @@ graph TD
     );
     expect(chart.edges.map((e) => `${e.from}>${e.to}`)).toEqual(['A>B', 'B>C', 'A>G']);
     expect(chart.nodes.map((n) => n.id)).toEqual(['A', 'B', 'C']);
+    // A semicolon in a label, or in an entity code, doesn't end a statement.
+    const labels = model(parseFlowchart('flowchart LR\n A[a;b] --> B>x#59;y] -->|c;d| C'));
+    expect(labels.nodes.map((n) => n.label)).toEqual(['a;b', 'x;y', 'C']);
+    expect(labels.edges[1]!.label).toBe('c;d');
   });
 
   it('refuses what it can’t read faithfully, saying where', () => {
@@ -205,7 +230,7 @@ describe('sequence diagrams', () => {
     autonumber
     actor U as User
     participant S as Server
-    U->>+S: Sign in; please
+    U->>+S: Sign in#59; please
     S-->>-U: Token #35;1
     Note over U,S: Session starts
     loop Every minute
@@ -224,12 +249,12 @@ describe('sequence diagrams', () => {
     const diagram = model(parseSequence(code));
     expect(diagram.title).toBe('Signing in');
     expect(diagram.autonumber).toBe(true);
-    expect(diagram.participants).toEqual([
+    expect(bare(diagram.participants)).toEqual([
       { id: 'U', label: 'User', kind: 'actor' },
       { id: 'S', label: 'Server', kind: 'participant' },
       { id: 'DB', label: 'DB', kind: 'participant' },
     ]);
-    expect(diagram.steps[0]).toEqual({
+    expect(bare(diagram.steps[0])).toEqual({
       kind: 'message',
       from: 'U',
       to: 'S',
@@ -238,7 +263,7 @@ describe('sequence diagrams', () => {
       activation: '+',
     });
     expect(diagram.steps[1]).toMatchObject({ text: 'Token #1', activation: '-', arrow: '-->>' });
-    expect(diagram.steps[2]).toEqual({
+    expect(bare(diagram.steps[2])).toEqual({
       kind: 'note',
       side: 'over',
       of: ['U', 'S'],
@@ -251,18 +276,28 @@ describe('sequence diagrams', () => {
       block: 'alt',
       branches: [{ text: 'Fresh' }, { text: 'Stale' }],
     });
-    expect(diagram.steps.slice(4)).toEqual([
+    expect(bare(diagram.steps.slice(4))).toEqual([
       { kind: 'raw', text: 'activate U' },
       { kind: 'note', side: 'right of', of: ['DB'], text: 'implicit' },
       { kind: 'raw', text: '%% kept' },
     ]);
   });
 
-  it('writes it back as it reads', () => {
-    const { printed } = roundTrips(code);
-    expect(printed).toContain('U->>+S: Sign in#59; please');
-    expect(printed).toContain('    else Stale');
-    expect(printSequence(model(parseSequence(printed)))).toBe(printed);
+  it('writes it back as it reads; changed text gets its entities', () => {
+    const { printed, first } = roundTrips(code);
+    expect(printed).toBe(code);
+    const step = first.type === 'sequence' ? first.steps[1]! : null;
+    if (step?.kind !== 'message') throw new Error();
+    step.text = 'Token; #2';
+    expect(printDiagram(first)).toContain('    S-->>-U: Token#59; #35;2\n');
+  });
+
+  it('reads `participant A as` (with nothing after) as an empty name', () => {
+    const diagram = model(parseSequence('sequenceDiagram\n participant A as\n participant as'));
+    expect(diagram.participants.map((p) => [p.id, p.label])).toEqual([
+      ['A', ''],
+      ['as', 'as'],
+    ]);
   });
 
   it('refuses stray branches and unclosed blocks', () => {
@@ -302,7 +337,7 @@ describe('mind maps', () => {
     ]);
   });
 
-  it('quotes labels in shapes; a plain topic with brackets gets the rounded shape', () => {
+  it('keeps brackets and quotes as typed: entities in plain topics, quotes in shapes', () => {
     const map = model(parseMindmap('mindmap\n  root\n    Plain\n    t1[Old]'));
     map.root.children[0]!.label = 'Fast (v2) #1';
     map.root.children.push({
@@ -314,13 +349,18 @@ describe('mind maps', () => {
     });
     const printed = printMindmap(map);
     expect(printed).toBe(
-      'mindmap\n  root\n    t2("Fast (v2) #1")\n    t1["Old"]\n    t3{{"Say \u201dhi\u201d<br>there"}}',
+      'mindmap\n  root\n    Fast #40;v2#41; #1\n    t1[Old]\n    {{"Say #quot;hi#quot;<br>there"}}',
     );
     expect(model(parseMindmap(printed)).root.children.map((c) => [c.label, c.shape])).toEqual([
-      ['Fast (v2) #1', 'rounded'],
+      ['Fast (v2) #1', 'default'],
       ['Old', 'square'],
-      ['Say \u201dhi\u201d\nthere', 'hexagon'],
+      ['Say "hi"\nthere', 'hexagon'],
     ]);
+  });
+
+  it('reads a plain topic as written, quotes and all', () => {
+    const map = model(parseMindmap('mindmap\n  root\n    "quoted"\n    a #quot;b#quot;'));
+    expect(map.root.children.map((c) => c.label)).toEqual(['"quoted"', 'a "b"']);
   });
 
   it('has one central topic', () => {
@@ -337,26 +377,33 @@ describe('timelines, Gantt charts and pie charts', () => {
     section Q1
       Jan : Plan : Hire
           : Budget
-      Feb : Build
+      Feb : Build at 10:30
     section Q2
       Apr : Ship`),
     );
     expect(timeline.title).toBe('Launch');
-    expect(timeline.sections).toEqual([
+    expect(bare(timeline.sections)).toEqual([
       { label: null, periods: [{ label: '2025', events: ['Idea'] }] },
       {
         label: 'Q1',
         periods: [
           { label: 'Jan', events: ['Plan', 'Hire', 'Budget'] },
-          { label: 'Feb', events: ['Build'] },
+          { label: 'Feb', events: ['Build at 10:30'] },
         ],
       },
       { label: 'Q2', periods: [{ label: 'Apr', events: ['Ship'] }] },
     ]);
     timeline.sections[2]!.periods[0]!.events.push('Party: at 8');
     const printed = printTimeline(timeline);
-    expect(printed).toContain('Apr : Ship : Party#58; at 8');
-    expect(model(parseTimeline(printed))).toEqual(timeline);
+    expect(printed).toContain('      Apr : Ship : Party#58; at 8');
+    expect(diagramMeaning(model(parseTimeline(printed)))).toEqual(diagramMeaning(timeline));
+  });
+
+  it('keeps a direction on the first line', () => {
+    const timeline = model(parseTimeline('timeline TD\n  2020 : a'));
+    expect(timeline.extras).toEqual([]);
+    timeline.sections[0]!.periods[0]!.label = '2021';
+    expect(printTimeline(timeline)).toBe('timeline TD\n  2021 : a');
   });
 
   it('reads and writes a Gantt chart, giving a task with an id a start', () => {
@@ -379,7 +426,7 @@ describe('timelines, Gantt charts and pie charts', () => {
       excludesWeekends: true,
       extras: ['axisFormat %d %b'],
     });
-    expect(gantt.sections[0]!.tasks[1]).toEqual({
+    expect(bare(gantt.sections[0]!.tasks[1])).toEqual({
       name: 'Code',
       tags: ['active', 'crit'],
       id: 'c1',
@@ -392,12 +439,20 @@ describe('timelines, Gantt charts and pie charts', () => {
       end: { kind: 'duration', value: '3d' },
     });
     expect(gantt.sections[1]!.tasks[0]!.end).toEqual({ kind: 'until', ids: ['c1'] });
-    expect(model(parseGantt(printGantt(gantt)))).toEqual(gantt);
+    expect(diagramMeaning(model(parseGantt(printGantt(gantt))))).toEqual(diagramMeaning(gantt));
     // An id needs a start: the task above gets one to start after.
     gantt.sections[0]!.tasks[2]!.id = 't';
     expect(printGantt(gantt)).toContain(
       'Code :active, crit, c1, after d1, 10d\n    Test :t, after c1, 3d',
     );
+  });
+
+  it('reads settings whatever they hold, and keeps them', () => {
+    const gantt = model(
+      parseGantt('gantt\n  dateFormat HH:mm\n  axisFormat %H:%M\n  Task : 17:49, 2m'),
+    );
+    expect(gantt.extras).toEqual(['axisFormat %H:%M']);
+    expect(gantt.sections[0]!.tasks.map((t) => t.name)).toEqual(['Task']);
   });
 
   it('reads and writes a pie chart', () => {
@@ -412,7 +467,7 @@ describe('timelines, Gantt charts and pie charts', () => {
     });
     pie.showData = true;
     expect(printPie(pie)).toBe(
-      'pie showData\n    title Budget\n    "Rent" : 40\n    "Food #quot;in#quot;" : 25.5',
+      'pie showData title Budget\n  "Rent" : 40\n  "Food #quot;in#quot;" : 25.5',
     );
     expect(parsePie('pie\n  Rent : 40')).toMatchObject({ ok: false, line: 2 });
   });
@@ -435,6 +490,46 @@ describe('diagramText', () => {
     expect(diagramSummary('flowchart LR\n A[Start] --> B[End]')).toBe('Flowchart: Start, End');
     expect(diagramSummary('gantt')).toBe('Gantt chart');
   });
+
+  it('names every kind of diagram, with its words', () => {
+    const cases: [string, string][] = [
+      ['classDiagram\n    class Animal\n    Animal <|-- Dog', 'Class diagram: Animal, Dog'],
+      ['classDiagram-v2\n    A --> B', 'Class diagram: A, B'],
+      [
+        'stateDiagram-v2\n    [*] --> Draft\n    Draft --> Review : submit\n    Review --> [*]',
+        'State diagram: Draft, Review, submit',
+      ],
+      [
+        'erDiagram\n    CUSTOMER ||--o{ ORDER : places\n    PRODUCT ||--o{ LINE : "is in"',
+        'Entity relationship diagram: CUSTOMER, ORDER, places, PRODUCT, LINE, is in',
+      ],
+      [
+        'journey\n    title Making tea\n    section Kitchen\n      Boil water: 5: Me',
+        'User journey: Making tea, Kitchen, Boil water, Me',
+      ],
+      [
+        'quadrantChart\n    title Ideas\n    x-axis Low --> High\n    Newsletter: [0.3, 0.6]',
+        'Quadrant chart: Ideas, Low, High, Newsletter',
+      ],
+      ['gitGraph\n    commit\n    branch feature\n    commit', 'Git graph: feature'],
+      ['xychart-beta\n    title "Sales"\n    bar [1, 2]', 'XY chart: Sales'],
+      ['sankey-beta\n    A,B,10', 'Sankey diagram'],
+      ['block-beta\n    a b', 'Block diagram'],
+      ['architecture-beta\n    service db(database)[Database]', 'Architecture diagram: Database'],
+      ['packet-beta\n    0-15: "Source Port"', 'Packet diagram: Source Port'],
+      [
+        'requirementDiagram\n    requirement test_req {\n    id: 1\n    }',
+        'Requirement diagram: test_req',
+      ],
+      ['C4Context\n    Person(customer, "Customer")', 'C4 context diagram: Customer'],
+      ['C4Container\n    title Shop', 'C4 container diagram'],
+      ['kanban\n  Todo', 'Kanban board'],
+      ['somethingNew\n  x', 'Diagram'],
+    ];
+    for (const [code, summary] of cases) expect(diagramSummary(code), code).toBe(summary);
+    expect(diagramName('timeline\n  2020 : a')).toBe('Timeline');
+    expect(diagramName('stateDiagram\n  A --> B')).toBe('State diagram');
+  });
 });
 
 it('prints every model type it reads', () => {
@@ -448,6 +543,7 @@ it('prints every model type it reads', () => {
   ];
   for (const sample of samples) {
     const parsed: DiagramModel = model(parseDiagram(sample));
+    expect(printDiagram(parsed)).toBe(sample);
     expect(model(parseDiagram(printDiagram(parsed)))).toEqual(parsed);
   }
 });

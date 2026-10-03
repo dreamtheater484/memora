@@ -1,4 +1,15 @@
-import { INDENT, decodeEntities, refuse, splitSource, withHead, type ParseResult } from './common';
+import {
+  INDENT,
+  keepEnds,
+  readText,
+  refuse,
+  splitSource,
+  writeBreaks,
+  type FromOrigin,
+  type FromSource,
+  type ParseResult,
+} from './common';
+import { indentOf, modelOf, remembered, type Reading } from './source';
 
 /*
  * Sequence diagrams (§9.4): participants, and the steps between them (messages, notes and
@@ -8,7 +19,7 @@ import { INDENT, decodeEntities, refuse, splitSource, withHead, type ParseResult
 
 export type ParticipantKind = 'participant' | 'actor';
 
-export interface Participant {
+export interface Participant extends FromOrigin {
   id: string;
   label: string;
   kind: ParticipantKind;
@@ -29,7 +40,7 @@ export const SEQUENCE_ARROWS = [
 ] as const;
 export type SequenceArrow = (typeof SEQUENCE_ARROWS)[number];
 
-export interface SequenceMessage {
+export interface SequenceMessage extends FromOrigin {
   kind: 'message';
   from: string;
   to: string;
@@ -39,7 +50,7 @@ export interface SequenceMessage {
   activation: '+' | '-' | null;
 }
 
-export interface SequenceNote {
+export interface SequenceNote extends FromOrigin {
   kind: 'note';
   side: 'left of' | 'right of' | 'over';
   /** One participant, or two for a note over both. */
@@ -57,22 +68,27 @@ export const BRANCH_WORD: Partial<Record<SequenceBlockKind, string>> = {
   critical: 'option',
 };
 
-export interface SequenceBlock {
+export interface SequenceBranch extends FromOrigin {
+  text: string;
+  steps: SequenceStep[];
+}
+
+export interface SequenceBlock extends FromOrigin {
   kind: 'block';
   block: SequenceBlockKind;
   /** The first branch's text, then one per `else`/`and`/`option`. */
-  branches: { text: string; steps: SequenceStep[] }[];
+  branches: SequenceBranch[];
 }
 
 /** A statement kept as written, in its place. */
-export interface SequenceRaw {
+export interface SequenceRaw extends FromOrigin {
   kind: 'raw';
   text: string;
 }
 
 export type SequenceStep = SequenceMessage | SequenceNote | SequenceBlock | SequenceRaw;
 
-export interface SequenceDiagram {
+export interface SequenceDiagram extends FromSource {
   type: 'sequence';
   head: string[];
   /** Statements before the participants: a title, accessibility text, `box`es are raw steps. */
@@ -87,16 +103,66 @@ const ARROW_PATTERN = SEQUENCE_ARROWS.slice()
   .map((a) => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
   .join('|');
 const ID = '[^\\s:,;+\\-<>()]+(?:-[^\\s:,;+\\-<>()]+)*';
-const MESSAGE = new RegExp(`^(${ID})\\s*(${ARROW_PATTERN})\\s*([+-])?\\s*(${ID})\\s*:(.*)$`);
-const NOTE = /^note\s+(left of|right of|over)\s+([^:]+?)\s*:(.*)$/i;
-const PARTICIPANT = /^(participant|actor)\s+(.+?)(?:\s+as\s+(.+))?$/;
+/** A message in pieces: indentation, `from->>to:`, the spaces after it, its text. */
+const MESSAGE = new RegExp(
+  `^(\\s*)((${ID})\\s*(${ARROW_PATTERN})\\s*([+-])?\\s*(${ID})\\s*:)(\\s*)(.*)$`,
+);
+const NOTE = /^(\s*)(note\s+(left of|right of|over)\s+([^:]+?)\s*:)(\s*)(.*)$/i;
+const PARTICIPANT = /^(participant|actor)\s+(.+?)(\s+as(?:\s+(.*))?)?$/;
 
-/** Message and note text as written: `;` and `#` are entities. */
-const writeText = (text: string) => text.replace(/[#;]/g, (c) => (c === '#' ? '#35;' : '#59;'));
-const readText = (text: string) => decodeEntities(text.trim().replace(/<br\s*\/?>/gi, '\n'));
+/*
+ * Sequence text. `#` starts a comment and `;` ends a statement anywhere in a line, so both are
+ * entities; so are spaces at either end, and a `wrap:` Mermaid would take for a setting.
+ * Mermaid writes nothing for an empty text, title or `as`, so neither does Memora.
+ */
+const textOf = (text: string) =>
+  keepEnds(
+    writeBreaks(
+      text
+        .replace(/[#;]/g, (c) => (c === '#' ? '#35;' : '#59;'))
+        .replace(/<(?=br\s*\/?>)/gi, '#lt;')
+        .replace(/^((?:no)?wrap):/i, '$1#58;'),
+    ),
+  );
+const titleOf = (text: string) => textOf(text).replace(/^:/, '#58;');
 
-/** Reads a sequence diagram from Mermaid code. */
-export function parseSequence(code: string): ParseResult<SequenceDiagram> {
+const readSequenceText = (raw: string) => readText(raw);
+
+/** How a line of a list is written. */
+export type ListEntry =
+  | { kind: 'line'; text: string; role: 'other' | 'title' | 'autonumber' }
+  | { kind: 'participant'; text: string; participant: number }
+  | { kind: 'step'; step: number };
+
+export interface StepList {
+  entries: ListEntry[];
+}
+
+type StepLayout =
+  /** A message's or note's line in pieces. */
+  | { kind: 'said'; text: string; indent: string; head: string; gap: string }
+  | { kind: 'raw'; text: string }
+  | {
+      kind: 'block';
+      text: string;
+      /** Each branch's line (null for the first, which is the block's), and its steps. */
+      branches: { text: string | null; list: StepList }[];
+      end: string;
+    };
+
+export interface SequenceLayout {
+  was: SequenceDiagram;
+  eol: string;
+  firstLine: string;
+  tail: string[];
+  top: StepList;
+  /** By step origin (numbered depth first). */
+  steps: StepLayout[];
+  /** The usual step of indentation into a block. */
+  step: string;
+}
+
+const readSequenceCode = remembered((code: string): Reading<SequenceDiagram, SequenceLayout> => {
   const source = splitSource(code);
   if (!source) return refuse('The diagram is empty');
   if (!/^sequenceDiagram\b/.test(source.first)) {
@@ -109,33 +175,64 @@ export function parseSequence(code: string): ParseResult<SequenceDiagram> {
     autonumber: false,
     participants: [],
     steps: [],
+    source: code,
+  };
+  const layout: SequenceLayout = {
+    was: diagram,
+    eol: source.eol,
+    firstLine: source.firstLine,
+    tail: source.tail,
+    top: { entries: [] },
+    steps: [],
+    step: INDENT,
   };
   const known = (id: string) => {
     if (!diagram.participants.some((p) => p.id === id)) {
-      diagram.participants.push({ id, label: id, kind: 'participant' });
+      diagram.participants.push({
+        id,
+        label: id,
+        kind: 'participant',
+        origin: diagram.participants.length,
+      });
     }
   };
   // The open blocks, innermost last; steps go into the last branch of the innermost.
-  const open: SequenceBlock[] = [];
-  const add = (step: SequenceStep) => {
-    const block = open.at(-1);
+  const open: {
+    block: SequenceBlock;
+    layout: Extract<StepLayout, { kind: 'block' }>;
+    indent: string;
+  }[] = [];
+  const list = () => open.at(-1)?.layout.branches.at(-1)!.list ?? layout.top;
+  const add = (step: SequenceStep, how: StepLayout) => {
+    step.origin = layout.steps.length;
+    layout.steps.push(how);
+    const block = open.at(-1)?.block;
     (block ? block.branches.at(-1)!.steps : diagram.steps).push(step);
+    list().entries.push({ kind: 'step', step: step.origin });
   };
+  let anySteps = false;
+  const steps: string[] = [];
 
   for (const { text: raw, number } of source.body) {
     const line = raw.trim();
-    if (line === '') continue;
+    if (line === '') {
+      list().entries.push({ kind: 'line', text: raw, role: 'other' });
+      continue;
+    }
     if (line.startsWith('%%')) {
-      add({ kind: 'raw', text: line });
+      add({ kind: 'raw', text: line }, { kind: 'raw', text: raw });
+      anySteps = true;
       continue;
     }
     if (line === 'autonumber') {
       diagram.autonumber = true;
+      list().entries.push({ kind: 'line', text: raw, role: 'autonumber' });
       continue;
     }
     const title = /^title\s*:?\s*(.*)$/.exec(line);
-    if (title && !diagram.steps.length && diagram.title === null) {
-      diagram.title = title[1]!.trim();
+    if (title && !anySteps && diagram.title === null) {
+      diagram.title = readSequenceText(title[1]!);
+      list().entries.push({ kind: 'line', text: raw, role: 'title' });
       continue;
     }
     const participant = PARTICIPANT.exec(line);
@@ -143,41 +240,56 @@ export function parseSequence(code: string): ParseResult<SequenceDiagram> {
       const id = participant[2]!.trim();
       if (id.includes('@'))
         return refuse('The `@{ … }` participant syntax isn’t supported yet', number);
-      const label = participant[3] ? readText(participant[3]) : id;
-      const existing = diagram.participants.find((p) => p.id === id);
+      // `participant A as` (with nothing after) is Mermaid's own empty name.
+      const label = participant[3] !== undefined ? readSequenceText(participant[4] ?? '') : id;
+      const kind = participant[1] as ParticipantKind;
+      let existing = diagram.participants.find((p) => p.id === id);
       if (existing) {
         existing.label = label;
-        existing.kind = participant[1] as ParticipantKind;
-      } else diagram.participants.push({ id, label, kind: participant[1] as ParticipantKind });
+        existing.kind = kind;
+      } else {
+        existing = { id, label, kind, origin: diagram.participants.length };
+        diagram.participants.push(existing);
+      }
+      list().entries.push({ kind: 'participant', text: raw, participant: existing.origin! });
       continue;
     }
-    const message = MESSAGE.exec(line);
+    const message = MESSAGE.exec(raw);
     if (message) {
-      const [, from, arrow, activation, to, text] = message;
+      const [, indent, head, from, arrow, activation, to, gap, text] = message;
       known(from!);
       known(to!);
-      add({
-        kind: 'message',
-        from: from!,
-        to: to!,
-        arrow: arrow as SequenceArrow,
-        text: readText(text!),
-        activation: (activation as '+' | '-' | undefined) ?? null,
-      });
+      add(
+        {
+          kind: 'message',
+          from: from!,
+          to: to!,
+          arrow: arrow as SequenceArrow,
+          text: readSequenceText(text!),
+          activation: (activation as '+' | '-' | undefined) ?? null,
+        },
+        { kind: 'said', text: raw, indent: indent!, head: head!, gap: gap! },
+      );
+      anySteps = true;
       continue;
     }
-    const note = NOTE.exec(line);
+    const note = NOTE.exec(raw);
     if (note) {
-      const of = note[2]!.split(',').map((p) => p.trim());
+      const [, indent, head, side, who, gap, text] = note;
+      const of = who!.split(',').map((p) => p.trim());
       if (of.length > 2 || of.some((p) => !p))
         return refuse('A note names its participants oddly', number);
       of.forEach(known);
-      add({
-        kind: 'note',
-        side: note[1]!.toLowerCase() as SequenceNote['side'],
-        of,
-        text: readText(note[3]!),
-      });
+      add(
+        {
+          kind: 'note',
+          side: side!.toLowerCase() as SequenceNote['side'],
+          of,
+          text: readSequenceText(text!),
+        },
+        { kind: 'said', text: raw, indent: indent!, head: head!, gap: gap! },
+      );
+      anySteps = true;
       continue;
     }
     const word = /^(\w+)\b\s*(.*)$/.exec(line);
@@ -186,24 +298,37 @@ export function parseSequence(code: string): ParseResult<SequenceDiagram> {
       const block: SequenceBlock = {
         kind: 'block',
         block: keyword as SequenceBlockKind,
-        branches: [{ text: word[2]!.trim(), steps: [] }],
+        branches: [{ text: readSequenceText(word[2]!), steps: [], origin: 0 }],
       };
-      add(block);
-      open.push(block);
+      const how: Extract<StepLayout, { kind: 'block' }> = {
+        kind: 'block',
+        text: raw,
+        branches: [{ text: null, list: { entries: [] } }],
+        end: '',
+      };
+      add(block, how);
+      open.push({ block, layout: how, indent: indentOf(raw) });
+      anySteps = true;
       continue;
     }
     if (keyword && ['else', 'and', 'option'].includes(keyword)) {
-      const block = open.at(-1);
-      if (!block || BRANCH_WORD[block.block] !== keyword) {
+      const inner = open.at(-1);
+      if (!inner || BRANCH_WORD[inner.block.block] !== keyword) {
         return refuse(`“${keyword}” isn’t inside a block it belongs to`, number);
       }
-      block.branches.push({ text: word[2]!.trim(), steps: [] });
+      inner.block.branches.push({
+        text: readSequenceText(word![2]!),
+        steps: [],
+        origin: inner.block.branches.length,
+      });
+      inner.layout.branches.push({ text: raw, list: { entries: [] } });
       continue;
     }
     if (line === 'end') {
       // `box … end` is kept as raw lines; its `end` closes it as written.
-      if (open.length) open.pop();
-      else add({ kind: 'raw', text: line });
+      const inner = open.pop();
+      if (inner) inner.layout.end = raw;
+      else add({ kind: 'raw', text: line }, { kind: 'raw', text: raw });
       continue;
     }
     if (
@@ -221,54 +346,34 @@ export function parseSequence(code: string): ParseResult<SequenceDiagram> {
         'title',
       ].includes(keyword)
     ) {
-      add({ kind: 'raw', text: line });
+      add({ kind: 'raw', text: line }, { kind: 'raw', text: raw });
+      anySteps = true;
       continue;
     }
     return refuse(`Couldn’t read “${line.slice(0, 40)}”`, number);
   }
   if (open.length) return refuse('A block isn’t closed with “end”');
-  return { ok: true, model: diagram };
-}
-
-const participantLine = (p: Participant) =>
-  p.label === p.id
-    ? `${p.kind} ${p.id}`
-    : `${p.kind} ${p.id} as ${writeText(p.label).replace(/\n/g, '<br>')}`;
-
-/** Writes a sequence diagram as Mermaid code. */
-export function printSequence(diagram: SequenceDiagram): string {
-  const out = ['sequenceDiagram'];
-  const write = (depth: number, text: string) => out.push(INDENT.repeat(depth) + text);
-  if (diagram.title) write(1, `title ${diagram.title}`);
-  if (diagram.autonumber) write(1, 'autonumber');
-  for (const p of diagram.participants) write(1, participantLine(p));
-  const text = (t: string) => writeText(t).replace(/\n/g, '<br>');
-  const steps = (list: SequenceStep[], depth: number) => {
-    for (const step of list) {
-      switch (step.kind) {
-        case 'message':
-          write(
-            depth,
-            `${step.from}${step.arrow}${step.activation ?? ''}${step.to}: ${text(step.text)}`,
-          );
-          break;
-        case 'note':
-          write(depth, `Note ${step.side} ${step.of.join(',')}: ${text(step.text)}`);
-          break;
-        case 'block':
-          step.branches.forEach((branch, i) => {
-            const word = i === 0 ? step.block : BRANCH_WORD[step.block]!;
-            write(depth, branch.text ? `${word} ${branch.text}` : word);
-            steps(branch.steps, depth + 1);
-          });
-          write(depth, 'end');
-          break;
-        case 'raw':
-          write(depth, step.text);
-          break;
-      }
+  // The usual step into a block, from the first block with a step in it.
+  for (const how of layout.steps) {
+    if (how.kind !== 'block') continue;
+    const child = how.branches.flatMap((b) => b.list.entries).find((e) => e.kind === 'step');
+    if (child?.kind !== 'step') continue;
+    const inner = layout.steps[child.step]!;
+    const own = indentOf(how.text);
+    const theirs = indentOf(inner.text);
+    if (theirs.length > own.length && theirs.startsWith(own)) {
+      steps.push(theirs.slice(own.length));
+      break;
     }
-  };
-  steps(diagram.steps, 1);
-  return withHead(diagram.head, out);
+  }
+  if (steps[0]) layout.step = steps[0];
+  return { ok: true, model: diagram, layout };
+});
+
+/** Reads a sequence diagram from Mermaid code. */
+export function parseSequence(code: string): ParseResult<SequenceDiagram> {
+  return modelOf(readSequenceCode(code));
 }
+
+/** What the printer (`sequencePrint.ts`) writes with; not for use elsewhere. */
+export const sequenceSyntax = { readSequenceCode, textOf, titleOf };

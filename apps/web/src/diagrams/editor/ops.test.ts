@@ -156,7 +156,8 @@ describe('sequence diagrams', () => {
     };
     const { diagram, path } = insertStep(SEQ, message, [1, 0, 0]);
     expect(path).toEqual([1, 0, 1]);
-    expect(printSequence(diagram)).toContain('        A->>B: Ping\n        B-->>A: Pong\n    end');
+    // Written as the code around it is: in the block, at its indent.
+    expect(printSequence(diagram)).toContain('    A->>B: Ping\n    B-->>A: Pong\n  end');
     const moved = moveStep(diagram, [1, 0, 1], -1);
     expect(moved.path).toEqual([1, 0, 0]);
     expect(stepAt(moved.diagram, [1, 0, 0])).toMatchObject({ text: 'Pong' });
