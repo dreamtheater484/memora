@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { CONTENT_SECURITY_POLICY, SECURITY_HEADERS } from '../../packages/shared/src/security';
 import { HEADER, packageDirOf, section } from '../../scripts/licenses.mjs';
 import { serviceWorker } from './sw/plugin';
@@ -11,18 +11,27 @@ import { serviceWorker } from './sw/plugin';
 /**
  * The Markdown parser runs in a worker, where there is no `document`; this one dependency
  * uses it in its browser build, so it gets its plain one (the same code the worker condition
- * picks) everywhere.
+ * picks) everywhere. An alias, so that it also holds for the dependencies Vite bundles ahead
+ * in development, which plugins don't see. Found from the package that brings it in (Node's
+ * own resolution picks the plain build).
  */
-function withoutDocument(): Plugin {
-  return {
-    name: 'memora-without-document',
-    enforce: 'pre',
-    async resolveId(id, importer, options) {
-      if (id !== 'decode-named-character-reference') return null;
-      const resolved = await this.resolve(id, importer, { ...options, skipSelf: true });
-      return resolved && { ...resolved, id: resolved.id.replace(/index\.dom\.js$/, 'index.js') };
-    },
-  };
+function withoutDocument() {
+  const from = (name: string, base: string) => createRequire(base).resolve(name);
+  const remark = from('remark-parse', import.meta.url);
+  const plain = from('decode-named-character-reference', from('mdast-util-from-markdown', remark));
+  return { find: /^decode-named-character-reference$/, replacement: plain };
+}
+
+/**
+ * Where the dev server sends `/api`: the API that `pnpm dev` starts, on the same `PORT` as it
+ * (3000 when unset), or any other one in MEMORA_DEV_API (from the environment or `.env`).
+ */
+function devApi(mode: string): string {
+  const root = fileURLToPath(new URL('../..', import.meta.url));
+  // The environment's value comes first.
+  const target = loadEnv(mode, root, 'MEMORA_DEV_API').MEMORA_DEV_API?.trim();
+  if (target) return target.replace(/\/+$/, '');
+  return `http://127.0.0.1:${process.env.PORT?.trim() || 3000}`;
 }
 
 /**
@@ -127,21 +136,14 @@ export default defineConfig(({ mode }) => {
   const gallery = mode === 'gallery';
   const notices = licenses();
   return {
-    plugins: [
-      withoutDocument(),
-      zodWithoutEval(),
-      react(),
-      tailwindcss(),
-      serviceWorker(),
-      notices.main,
-    ],
-    resolve: { alias: pagedPolyfill },
-    worker: { plugins: () => [withoutDocument(), zodWithoutEval(), notices.worker] },
+    plugins: [zodWithoutEval(), react(), tailwindcss(), serviceWorker(), notices.main],
+    resolve: { alias: [withoutDocument(), ...pagedPolyfill] },
+    worker: { plugins: () => [zodWithoutEval(), notices.worker] },
     server: {
       port: 5173,
       // During development the API runs separately (`pnpm dev` starts both).
       proxy: {
-        '/api': { target: 'http://127.0.0.1:3000', ws: true },
+        '/api': { target: devApi(mode), ws: true },
       },
       // Test runs write and delete a lot here; the app doesn't use any of it.
       watch: {
