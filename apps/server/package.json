@@ -1,6 +1,6 @@
 {
   "name": "@memora/server",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "private": true,
   "description": "Memora API server. Bundled with esbuild: `dependencies` lists only what stays external at runtime.",
   "type": "module",

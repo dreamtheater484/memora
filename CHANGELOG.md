@@ -4,6 +4,8 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.9.7] - 2026-10-03
+
 ### Added
 
 - **Edit words where they are, in every diagram:** double-click a box, arrow, group, topic, participant, message, note, block, period, event, task, slice or value on the drawing (or select it and press `F2`, or just start typing) and type. `Enter` keeps the words, `Shift+Enter` breaks a line, `Tab` keeps them and goes on (a connected box, a topic under it, the reply to a message), `Esc` leaves them as they were. Clicking the drawing selects the panel's row, and working in a row marks its item on the drawing.
@@ -214,7 +216,8 @@ The first release: a public beta. Everything planned for 1.0 is in; what's left 
 - Setup guides for Synology, Linux and Windows, with three ways to get HTTPS.
 - `memora-admin` inside the container for lost passwords, lost phones, backups and restores.
 
-[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.9.6...HEAD
+[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.9.7...HEAD
+[0.9.7]: https://github.com/dreamtheater484/memora/compare/v0.9.6...v0.9.7
 [0.9.6]: https://github.com/dreamtheater484/memora/compare/v0.9.5...v0.9.6
 [0.9.5]: https://github.com/dreamtheater484/memora/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/dreamtheater484/memora/compare/v0.9.3...v0.9.4
