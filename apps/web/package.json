@@ -1,6 +1,6 @@
 {
   "name": "@memora/web",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "private": true,
   "description": "Memora web app (React + Vite).",
   "type": "module",
