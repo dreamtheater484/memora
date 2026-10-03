@@ -1,0 +1,114 @@
+diff --git a/dist/chunks/mermaid.core/chunk-MBY4JIJT.mjs b/dist/chunks/mermaid.core/chunk-MBY4JIJT.mjs
+index c814333fe740265a8c3e5ab62f7afa9433aed39e..62d76c2b6d130d13943f0bd2d12de65a53e5cbb8 100644
+--- a/dist/chunks/mermaid.core/chunk-MBY4JIJT.mjs
++++ b/dist/chunks/mermaid.core/chunk-MBY4JIJT.mjs
+@@ -754,17 +754,28 @@ function createFormattedText(width, g, structuredText, addBackground = false, ce
+ }
+ __name(createFormattedText, "createFormattedText");
+ function decodeHTMLEntities(text) {
+-  const regex = /&(amp|lt|gt);/g;
++  // Patched for Memora: SVG text shows an entity as written, so every entity Mermaid's own
++  // escaping can leave (&quot;, &#35;, &#39;...) is read here, in one pass, not only &amp; &lt; &gt;.
++  const regex = /&(amp|lt|gt|quot|apos|nbsp|#\d+|#x[\da-f]+);/gi;
+   return text.replace(regex, (match, entity) => {
+-    switch (entity) {
++    switch (entity.toLowerCase()) {
+       case "amp":
+         return "&";
+       case "lt":
+         return "<";
+       case "gt":
+         return ">";
+-      default:
+-        return match;
++      case "quot":
++        return '"';
++      case "apos":
++        return "'";
++      case "nbsp":
++        return "\u00a0";
++      default: {
++        const hex = entity[1] === "x" || entity[1] === "X";
++        const code = Number.parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10);
++        return code > 0 && code < 0x110000 ? String.fromCodePoint(code) : match;
++      }
+     }
+   });
+ }
+diff --git a/dist/chunks/mermaid.esm/chunk-EBKONHZ7.mjs b/dist/chunks/mermaid.esm/chunk-EBKONHZ7.mjs
+index 185b51ae719191ae00dcbb4c01a59efd29441f5c..7f9a6868f1910262b511e4b8c4adb94674320697 100644
+--- a/dist/chunks/mermaid.esm/chunk-EBKONHZ7.mjs
++++ b/dist/chunks/mermaid.esm/chunk-EBKONHZ7.mjs
+@@ -1961,17 +1961,28 @@ function createFormattedText(width, g, structuredText, addBackground = false, ce
+ }
+ __name(createFormattedText, "createFormattedText");
+ function decodeHTMLEntities(text) {
+-  const regex = /&(amp|lt|gt);/g;
++  // Patched for Memora: SVG text shows an entity as written, so every entity Mermaid's own
++  // escaping can leave (&quot;, &#35;, &#39;...) is read here, in one pass, not only &amp; &lt; &gt;.
++  const regex = /&(amp|lt|gt|quot|apos|nbsp|#\d+|#x[\da-f]+);/gi;
+   return text.replace(regex, (match, entity) => {
+-    switch (entity) {
++    switch (entity.toLowerCase()) {
+       case "amp":
+         return "&";
+       case "lt":
+         return "<";
+       case "gt":
+         return ">";
+-      default:
+-        return match;
++      case "quot":
++        return '"';
++      case "apos":
++        return "'";
++      case "nbsp":
++        return "\u00a0";
++      default: {
++        const hex = entity[1] === "x" || entity[1] === "X";
++        const code = Number.parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10);
++        return code > 0 && code < 0x110000 ? String.fromCodePoint(code) : match;
++      }
+     }
+   });
+ }
+diff --git a/dist/mermaid.js b/dist/mermaid.js
+index 4ec954928e4c8edee47ec150387fc31c93fd723f..0231b9b00b6ed2a4de3d38ecafdd5542b7fd4008 100644
+--- a/dist/mermaid.js
++++ b/dist/mermaid.js
+@@ -37645,18 +37645,29 @@ Please report this to https://github.com/markedjs/marked.`, e3) {
+       return textElement.node();
+     }
+   }
+-  function decodeHTMLEntities(text4) {
+-    const regex2 = /&(amp|lt|gt);/g;
+-    return text4.replace(regex2, (match3, entity) => {
+-      switch (entity) {
++  function decodeHTMLEntities(text) {
++    // Patched for Memora: SVG text shows an entity as written, so every entity Mermaid's own
++    // escaping can leave (&quot;, &#35;, &#39;...) is read here, in one pass, not only &amp; &lt; &gt;.
++    const regex = /&(amp|lt|gt|quot|apos|nbsp|#\d+|#x[\da-f]+);/gi;
++    return text.replace(regex, (match, entity) => {
++      switch (entity.toLowerCase()) {
+         case "amp":
+           return "&";
+         case "lt":
+           return "<";
+         case "gt":
+           return ">";
+-        default:
+-          return match3;
++        case "quot":
++          return '"';
++        case "apos":
++          return "'";
++        case "nbsp":
++          return "\u00a0";
++        default: {
++          const hex = entity[1] === "x" || entity[1] === "X";
++          const code = Number.parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10);
++          return code > 0 && code < 0x110000 ? String.fromCodePoint(code) : match;
++        }
+       }
+     });
+   }

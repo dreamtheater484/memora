@@ -20,6 +20,8 @@ RUN corepack enable
 
 # Manifests first, so the dependency layer is cached until they change.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# Fixes to dependencies, applied as they are installed (pnpm-workspace.yaml).
+COPY patches/ patches/
 COPY scripts/install-hooks.mjs scripts/run-bin.mjs scripts/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
