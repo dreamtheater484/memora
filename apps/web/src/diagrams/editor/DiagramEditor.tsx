@@ -11,34 +11,55 @@ import {
   type SequenceDiagram,
   type Timeline,
 } from '@memora/shared';
-import { Code2, LayoutTemplate, Redo2, Shapes, Undo2 } from 'lucide-react';
+import { Code2, Keyboard, LayoutTemplate, Redo2, Shapes, Undo2 } from 'lucide-react';
 import { Dialog as D } from 'radix-ui';
-import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { Button, IconButton, SegmentedControl } from '../../components/ui';
 import { overlayClass } from '../../components/ui/Dialog';
 import { keysLabel } from '../../shell/shortcuts';
 import { useShell } from '../../shell/store';
-import { Canvas, type CanvasView } from './Canvas';
+import { Canvas, type CanvasControls, type CanvasView } from './Canvas';
 import { GanttPanel, PiePanel, TimelinePanel } from './charts';
 import { CodePane } from './CodePane';
-import { FlowchartOverlay, FlowchartPanel } from './flowchart';
-import {
-  flowchartKeys,
-  nodeCentres,
-  type FlowEditorProps,
-  type FlowSelection,
-} from './flowchartDom';
+import { EditEpoch } from './epoch';
+import { FlowchartExtras, FlowchartPanel } from './flowchart';
 import { Gallery } from './Gallery';
-import { MindmapOverlay, MindmapPanel } from './mindmap';
-import { SequenceOverlay, SequencePanel, type SeqSelection } from './sequence';
+import { boxesWithin, hitMap } from './hits';
+import type { EditEnd } from './InlineEditor';
+import { KeySheet } from './KeySheet';
+import { afterEdit, keyAction, stillThere, type EditStart, type Outcome } from './keys';
+import { textOf, withText } from './labels';
+import { MindmapPanel } from './mindmap';
+import { EditorOverlay } from './Overlay';
+import type { ChangeOptions, PanelProps } from './panel';
+import {
+  itemKey,
+  itemsOf,
+  toSelection,
+  type Item,
+  type Selectable,
+  type Selection,
+} from './selection';
+import { SequencePanel } from './sequence';
 import './editor.css';
 
 /*
  * The diagram editor (§9.3, §9.4): full screen, the diagram in the middle and its details
  * beside it (below it on a phone). Flowcharts, mind maps, sequence diagrams, timelines,
- * Gantt charts and pie charts are edited visually; other diagrams, and any code the visual
- * editor can't take, as Mermaid code with a live drawing. Markdown pages can switch to the
- * code too. Its own undo; Done puts the result in the page as one change.
+ * Gantt charts and pie charts are edited visually: on the drawing (select, edit words in
+ * place, keys after MindManager's) and in the panel, which always agree; other diagrams, and
+ * any code the visual editor can't take, as Mermaid code with a live drawing. Markdown pages
+ * can switch to the code too. One undo history for all of it, with what was selected; Done
+ * puts the result in the page as one change.
  */
 
 interface Props {
@@ -47,19 +68,37 @@ interface Props {
   onDone: (code: string) => void;
 }
 
+interface Snapshot {
+  code: string;
+  selection: Selection;
+}
+
 interface History {
-  past: string[];
+  past: Snapshot[];
   present: string;
-  future: string[];
+  future: Snapshot[];
+  selection: Selection;
   /** What the last change was (typing in one field is one step), and when. */
   merge: string | null;
   at: number;
+  /** Goes up with every change but typing in a field: the panel's fields read it again. */
+  epoch: number;
 }
 
 const HISTORY = 200;
+const ZOOM_KEYS: Record<string, 'in' | 'out' | 'fit'> = {
+  Equal: 'in',
+  NumpadAdd: 'in',
+  Minus: 'out',
+  NumpadSubtract: 'out',
+  Digit0: 'fit',
+  Numpad0: 'fit',
+};
 
 const isTyping = (target: EventTarget | null) =>
-  !!(target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"]');
+  !!(target as HTMLElement | null)?.closest?.(
+    'input, textarea, select, [contenteditable="true"], [role="listbox"], [role="menu"]',
+  );
 
 export default function DiagramEditorDialog({ code, page, onDone }: Props) {
   const initial = code ?? '';
@@ -67,169 +106,260 @@ export default function DiagramEditorDialog({ code, page, onDone }: Props) {
     past: [],
     present: initial,
     future: [],
+    selection: null,
     merge: null,
     at: 0,
+    epoch: 0,
   });
   const [phase, setPhase] = useState<'gallery' | 'edit'>(code === null ? 'gallery' : 'edit');
   const [view, setView] = useState<'visual' | 'code'>('visual');
   const [confirming, setConfirming] = useState<'close' | 'template' | null>(null);
+  const [keySheet, setKeySheet] = useState(false);
+  const [editing, setEditing] = useState<EditStart | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const announce = useCallback((message: string) => setAnnouncement(message), []);
 
   const present = history.present;
+  const presentNow = useRef(present);
+  useLayoutEffect(() => {
+    presentNow.current = present;
+  });
   const parsed = useMemo(() => parseDiagram(present), [present]);
   const type = detectDiagram(present) ?? 'other';
   const dirty = present !== initial;
   const visual = parsed.ok && view === 'visual';
+  const model = visual && parsed.ok ? parsed.model : null;
+  // What was selected may be gone (an undo, the code changed): only what is still there.
+  const selection = useMemo(
+    () => (model ? stillThere(model, history.selection) : null),
+    [model, history.selection],
+  );
 
-  const setCode = useCallback((next: string, merge?: string) => {
+  /** A new version of the code: one step of the history, or part of the last (`merge`). */
+  const commit = useCallback(
+    (next: string, options: { merge?: string; select?: Selectable } = {}) => {
+      setHistory((h) => {
+        const selection = 'select' in options ? toSelection(options.select ?? null) : h.selection;
+        if (next === h.present) return { ...h, selection };
+        const now = Date.now();
+        const epoch = options.merge ? h.epoch : h.epoch + 1;
+        if (options.merge && options.merge === h.merge && now - h.at < 1500) {
+          return { ...h, present: next, selection, future: [], at: now, epoch };
+        }
+        return {
+          past: [...h.past, { code: h.present, selection: h.selection }].slice(-HISTORY),
+          present: next,
+          future: [],
+          selection,
+          merge: options.merge ?? null,
+          at: now,
+          epoch,
+        };
+      });
+    },
+    [],
+  );
+  const undo = useCallback(() => {
+    setEditing(null);
     setHistory((h) => {
-      if (next === h.present) return h;
-      const now = Date.now();
-      if (merge && merge === h.merge && now - h.at < 1500) {
-        return { ...h, present: next, future: [], at: now };
-      }
+      const last = h.past.at(-1);
+      if (!last) return h;
       return {
-        past: [...h.past, h.present].slice(-HISTORY),
-        present: next,
-        future: [],
-        merge: merge ?? null,
-        at: now,
+        past: h.past.slice(0, -1),
+        present: last.code,
+        future: [{ code: h.present, selection: h.selection }, ...h.future],
+        selection: last.selection,
+        merge: null,
+        at: 0,
+        epoch: h.epoch + 1,
       };
     });
   }, []);
-  const change = useCallback(
-    (model: DiagramModel, merge?: string) => setCode(printDiagram(model), merge),
-    [setCode],
-  );
-  const undo = () =>
-    setHistory((h) =>
-      h.past.length
-        ? {
-            past: h.past.slice(0, -1),
-            present: h.past.at(-1)!,
-            future: [h.present, ...h.future],
-            merge: null,
-            at: 0,
-          }
-        : h,
-    );
-  const redo = () =>
-    setHistory((h) =>
-      h.future.length
-        ? {
-            past: [...h.past, h.present],
-            present: h.future[0]!,
-            future: h.future.slice(1),
-            merge: null,
-            at: 0,
-          }
-        : h,
-    );
+  const redo = useCallback(() => {
+    setEditing(null);
+    setHistory((h) => {
+      const next = h.future[0];
+      if (!next) return h;
+      return {
+        past: [...h.past, { code: h.present, selection: h.selection }],
+        present: next.code,
+        future: h.future.slice(1),
+        selection: next.selection,
+        merge: null,
+        at: 0,
+        epoch: h.epoch + 1,
+      };
+    });
+  }, []);
 
-  // What is selected, per kind of diagram.
-  const [flowSelection, setFlowSelection] = useState<FlowSelection>(null);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [mindSelected, setMindSelected] = useState<number | null>(0);
-  const [seqSelection, setSeqSelection] = useState<SeqSelection>(null);
-  const canvas = useRef<CanvasView | null>(null);
+  // The drawing and which of its elements is which item, from the code it was drawn from.
+  const canvasView = useRef<CanvasView | null>(null);
+  const controls = useRef<CanvasControls | null>(null);
+  const panel = useRef<HTMLElement | null>(null);
+  const [drawn, setDrawn] = useState<{ svg: SVGSVGElement; code: string } | null>(null);
+  const onDrawn = useCallback(
+    (svg: SVGSVGElement, drawnCode: string) => setDrawn({ svg, code: drawnCode }),
+    [],
+  );
+  const map = useMemo(() => {
+    if (!drawn) return hitMap(null, null);
+    const result = parseDiagram(drawn.code);
+    return hitMap(drawn.svg, result.ok ? result.model : null);
+  }, [drawn]);
+
+  const focusCanvas = () => canvasView.current?.viewport?.focus({ preventScroll: true });
+
+  // A selection made by keys or in the panel is brought into sight on the drawing (once it
+  // is drawn); one made on the drawing scrolls the panel to its row.
+  const reveal = useRef(false);
+  const select = useCallback((next: Selectable) => {
+    reveal.current = true;
+    setHistory((h) => ({ ...h, selection: toSelection(next) }));
+  }, []);
+  const pick = useCallback((next: Selectable) => {
+    setHistory((h) => ({ ...h, selection: toSelection(next) }));
+  }, []);
+  useEffect(() => {
+    const item = itemsOf(selection).at(-1);
+    if (!item) return;
+    if (reveal.current) {
+      const v = canvasView.current;
+      const hit = map.hitOf(item);
+      if (v && hit?.elements[0]) {
+        reveal.current = false;
+        controls.current?.reveal(v.place(v.spotOf(hit.elements[0])));
+      }
+    }
+    const side = panel.current;
+    if (side && !side.contains(document.activeElement)) {
+      side
+        .querySelector(`[data-item="${CSS.escape(itemKey(item))}"]`)
+        ?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selection, map]);
+
+  /** A change from a panel or the drawing's own controls. */
+  const change = useCallback(
+    (next: DiagramModel, options: ChangeOptions = {}) => {
+      if ('select' in options) reveal.current = true;
+      commit(printDiagram(next), options);
+      if (options.edit) setEditing(options.edit);
+      if (options.announce) announce(options.announce);
+    },
+    [commit, announce],
+  );
+
+  /** What a key on the drawing does. */
+  const apply = (outcome: Outcome) => {
+    const selects = 'select' in outcome;
+    if (selects) reveal.current = true;
+    if (outcome.model)
+      commit(printDiagram(outcome.model), selects ? { select: outcome.select } : {});
+    else if (selects) pick(outcome.select ?? null);
+    if (outcome.edit) setEditing(outcome.edit);
+    if (outcome.announce) announce(outcome.announce);
+  };
+
+  /** Words edited in place are kept: Tab goes on (one step of the history with them). */
+  const commitEdit = (item: Item, text: string, end: EditEnd) => {
+    setEditing(null);
+    if (!model) return;
+    const spec = textOf(model, item);
+    let next: DiagramModel = spec && text !== spec.text ? withText(model, item, text) : model;
+    const outcome = end === 'tab' ? afterEdit(next, item, map) : null;
+    if (outcome?.model) next = outcome.model;
+    const after = outcome && 'select' in outcome ? outcome.select : item;
+    if (next !== model) {
+      reveal.current = true;
+      commit(printDiagram(next), { select: after });
+    } else pick(after ?? null);
+    if (outcome?.edit) setEditing(outcome.edit);
+    else if (end !== 'blur') focusCanvas();
+    if (outcome?.announce) announce(outcome.announce);
+  };
+  const cancelEdit = () => {
+    setEditing(null);
+    focusCanvas();
+  };
 
   const close = () => useShell.getState().closeDialog();
   const finish = () => {
-    if (phase === 'edit' && present.trim()) onDone(present);
+    const now = presentNow.current;
+    if (phase === 'edit' && now.trim()) onDone(now);
     close();
   };
   const cancel = () => (dirty ? setConfirming('close') : close());
-  const pick = (template: string) => {
-    setCode(template);
+  const pickTemplate = (template: string) => {
+    commit(template, { select: null });
     setPhase('edit');
     setView('visual');
-    setFlowSelection(null);
     setEditing(null);
-    setMindSelected(0);
-    setSeqSelection(null);
     announce('Template chosen');
   };
 
-  const flowProps = (chart: Flowchart): FlowEditorProps => ({
-    chart,
-    change: (next, merge) => change(next, merge),
-    selection: flowSelection,
-    select: setFlowSelection,
-    editing,
-    setEditing,
-    announce,
-  });
-
   let overlay: ((v: CanvasView) => ReactNode) | undefined;
-  let panel: ReactNode = null;
-  let canvasKeys: ((e: KeyboardEvent<HTMLDivElement>) => void) | undefined;
-  let clear: (() => void) | undefined;
-  if (visual && parsed.ok) {
-    const model = parsed.model;
+  let side: ReactNode = null;
+  let extend: ((item: Item) => Selection | null) | undefined;
+  let onMarquee: ((rect: DOMRect, add: boolean) => void) | undefined;
+  if (model) {
+    const props = {
+      change,
+      selection,
+      select,
+      startEdit: setEditing,
+      announce,
+    };
     switch (model.type) {
       case 'flowchart': {
-        const props = flowProps(model);
-        overlay = (v) => <FlowchartOverlay view={v} {...props} />;
-        panel = <FlowchartPanel {...props} />;
-        canvasKeys = (e) => {
-          if (flowchartKeys(e, props, () => nodeCentres(canvas.current?.svg ?? null))) {
-            e.preventDefault();
-          }
-        };
-        clear = () => setFlowSelection(null);
-        break;
-      }
-      case 'mindmap': {
-        const props = {
-          map: model as Mindmap,
-          change: (next: Mindmap, merge?: string) => change(next, merge),
-          selected: mindSelected,
-          select: setMindSelected,
-          announce,
-        };
-        overlay = (v) => (
-          <MindmapOverlay view={v} selected={mindSelected} select={setMindSelected} />
+        const chart = model;
+        side = (
+          <FlowchartPanel {...(props as Omit<PanelProps<Flowchart>, 'model'>)} model={chart} />
         );
-        panel = <MindmapPanel {...props} />;
-        canvasKeys = (e) => {
-          if ((e.key === 'Enter' || e.key === 'F2') && mindSelected !== null) {
-            e.preventDefault();
-            document
-              .querySelectorAll<HTMLInputElement>('.diagram-mind-input')
-              [mindSelected]?.focus();
-          }
+        extend = (item) => {
+          if (item.kind !== 'node') return null;
+          const ids = selection?.kind === 'nodes' ? selection.ids : [];
+          const next = ids.includes(item.id)
+            ? ids.filter((id) => id !== item.id)
+            : [...ids, item.id];
+          return next.length ? { kind: 'nodes', ids: next } : null;
         };
-        break;
-      }
-      case 'sequence': {
-        const props = {
-          diagram: model as SequenceDiagram,
-          change: (next: SequenceDiagram, merge?: string) => change(next, merge),
-          selection: seqSelection,
-          select: setSeqSelection,
-          announce,
+        onMarquee = (rect, add) => {
+          const found = boxesWithin(map, rect);
+          const ids =
+            add && selection?.kind === 'nodes' ? [...new Set([...selection.ids, ...found])] : found;
+          pick(ids.length ? { kind: 'nodes', ids } : null);
+          if (found.length)
+            announce(`Selected ${ids.length} ${ids.length === 1 ? 'box' : 'boxes'}`);
         };
         overlay = (v) => (
-          <SequenceOverlay
+          <FlowchartExtras
             view={v}
-            diagram={props.diagram}
-            selection={seqSelection}
-            select={setSeqSelection}
+            chart={chart}
+            map={map}
+            selection={selection}
+            editing={editing}
+            change={change as PanelProps<Flowchart>['change']}
+            announce={announce}
           />
         );
-        panel = <SequencePanel {...props} />;
-        clear = () => setSeqSelection(null);
         break;
       }
+      case 'mindmap':
+        side = <MindmapPanel {...(props as Omit<PanelProps<Mindmap>, 'model'>)} model={model} />;
+        break;
+      case 'sequence':
+        side = (
+          <SequencePanel {...(props as Omit<PanelProps<SequenceDiagram>, 'model'>)} model={model} />
+        );
+        break;
       case 'timeline':
-        panel = <TimelinePanel model={model as Timeline} change={(n, m) => change(n, m)} />;
+        side = <TimelinePanel {...(props as Omit<PanelProps<Timeline>, 'model'>)} model={model} />;
         break;
       case 'gantt':
-        panel = <GanttPanel model={model as Gantt} change={(n, m) => change(n, m)} />;
+        side = <GanttPanel {...(props as Omit<PanelProps<Gantt>, 'model'>)} model={model} />;
         break;
       case 'pie':
-        panel = <PiePanel model={model as Pie} change={(n, m) => change(n, m)} />;
+        side = <PiePanel {...(props as Omit<PanelProps<Pie>, 'model'>)} model={model} />;
         break;
     }
   }
@@ -242,17 +372,41 @@ export default function DiagramEditorDialog({ code, page, onDone }: Props) {
       : `The visual editor can’t take this diagram: ${parsed.reason}${parsed.line ? ` (line ${parsed.line})` : ''}. Edit the code, or start from a template.`
     : null;
 
-  const rootKeys = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (phase !== 'edit' || isTyping(e.target) || (e.target as HTMLElement).closest('.cm-editor'))
-      return;
+  const canvasKeys = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!model) return;
     const mod = e.ctrlKey || e.metaKey;
-    if (mod && e.key.toLowerCase() === 'z') {
+    // The page's text is never what Ctrl+A selects here.
+    if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyA') e.preventDefault();
+    const outcome = keyAction(e, model, selection, map);
+    if (!outcome) return;
+    e.preventDefault();
+    apply(outcome);
+  };
+
+  const rootKeys = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (phase !== 'edit' || e.defaultPrevented) return;
+    const target = e.target as HTMLElement;
+    // Words edited in place have their own keys (Enter, Tab, Esc, the field's own undo).
+    if (target.closest('.diagram-label-input')) return;
+    const inCode = !!target.closest('.cm-editor');
+    const mod = e.ctrlKey || e.metaKey;
+    const key = e.key.toLowerCase();
+    if (mod && !e.altKey && (key === 'z' || key === 'y') && !inCode) {
       e.preventDefault();
-      if (e.shiftKey) redo();
+      if (key === 'y' || e.shiftKey) redo();
       else undo();
-    } else if (mod && e.key.toLowerCase() === 'y') {
+    } else if (mod && !e.altKey && !e.shiftKey && e.key === 'Enter') {
       e.preventDefault();
-      redo();
+      finish();
+    } else if (mod && !e.altKey && ZOOM_KEYS[e.code]) {
+      e.preventDefault();
+      const zoom = ZOOM_KEYS[e.code];
+      if (zoom === 'in') controls.current?.zoomIn();
+      else if (zoom === 'out') controls.current?.zoomOut();
+      else controls.current?.fit();
+    } else if (e.key === '?' && !mod && !isTyping(target) && !inCode) {
+      e.preventDefault();
+      setKeySheet((open) => !open);
     }
   };
 
@@ -265,13 +419,33 @@ export default function DiagramEditorDialog({ code, page, onDone }: Props) {
         aria-describedby={undefined}
         onKeyDown={rootKeys}
         onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => {
-          // Esc first leaves what's being done: renaming, a selection; then asks before
-          // throwing changes away.
-          const active = document.activeElement;
-          if (active?.closest('.diagram-label-input, .diagram-editor-panel input, .cm-editor')) {
+        onOpenAutoFocus={(e) => {
+          // Straight to the drawing, ready for the keys.
+          const canvas = (e.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>(
+            '.diagram-canvas',
+          );
+          if (canvas && visual) {
             e.preventDefault();
-            if (active instanceof HTMLElement) active.blur();
+            canvas.focus({ preventScroll: true });
+          }
+        }}
+        onEscapeKeyDown={(e) => {
+          // Esc first leaves what's being done: the key sheet, a field, words being edited,
+          // a selection; then asks before throwing changes away.
+          if (keySheet) {
+            e.preventDefault();
+            setKeySheet(false);
+            focusCanvas();
+            return;
+          }
+          const active = document.activeElement;
+          if (
+            active instanceof HTMLElement &&
+            active.closest('.diagram-editor-panel, .cm-editor')
+          ) {
+            e.preventDefault();
+            active.blur();
+            if (model) focusCanvas();
             return;
           }
           if (editing) {
@@ -279,10 +453,10 @@ export default function DiagramEditorDialog({ code, page, onDone }: Props) {
             setEditing(null);
             return;
           }
-          if (flowSelection || seqSelection) {
+          if (selection) {
             e.preventDefault();
-            setFlowSelection(null);
-            setSeqSelection(null);
+            pick(null);
+            announce('Nothing selected');
             return;
           }
           if (confirming) {
@@ -308,7 +482,7 @@ export default function DiagramEditorDialog({ code, page, onDone }: Props) {
                   dirty && present.trim() ? setConfirming('template') : setPhase('gallery')
                 }
               >
-                <LayoutTemplate aria-hidden /> Templates
+                <LayoutTemplate aria-hidden /> <span className="diagram-bar-label">Templates</span>
               </Button>
               <IconButton
                 label="Undo"
@@ -326,11 +500,22 @@ export default function DiagramEditorDialog({ code, page, onDone }: Props) {
                 disabled={!history.future.length}
                 onClick={redo}
               />
+              <IconButton
+                label="Keys"
+                icon={<Keyboard />}
+                size="sm"
+                shortcut="?"
+                active={keySheet}
+                onClick={() => setKeySheet((open) => !open)}
+              />
               {codeTab && (
                 <SegmentedControl
                   label="Show"
                   value={view}
-                  onValueChange={setView}
+                  onValueChange={(next) => {
+                    setEditing(null);
+                    setView(next);
+                  }}
                   segments={[
                     { value: 'visual', label: 'Visual', icon: <Shapes /> },
                     { value: 'code', label: 'Code', icon: <Code2 /> },
@@ -376,6 +561,7 @@ export default function DiagramEditorDialog({ code, page, onDone }: Props) {
               <Button
                 variant="primary"
                 size="sm"
+                title={keysLabel('Mod Enter')}
                 onClick={finish}
                 disabled={phase === 'gallery' || !present.trim()}
               >
@@ -385,43 +571,79 @@ export default function DiagramEditorDialog({ code, page, onDone }: Props) {
           )}
         </header>
 
-        {phase === 'gallery' ? (
-          <div className="diagram-editor-scroll">
-            <Gallery onPick={pick} />
-          </div>
-        ) : visual ? (
-          <div className="diagram-editor-body">
-            <div className="diagram-editor-main">
-              <Canvas
-                code={present}
-                label={`${title}: the drawing`}
-                overlay={(v) => {
-                  canvas.current = v;
-                  return overlay?.(v);
-                }}
-                onBackgroundClick={clear}
-                onKeyDown={canvasKeys}
-              />
+        <EditEpoch value={history.epoch}>
+          {phase === 'gallery' ? (
+            <div className="diagram-editor-scroll">
+              <Gallery onPick={pickTemplate} />
             </div>
-            <aside className="diagram-editor-panel" aria-label="Diagram details">
-              {panel}
-            </aside>
-          </div>
-        ) : (
-          <div className="diagram-editor-body is-code">
-            <div className="diagram-editor-code">
-              {notice && <p className="diagram-notice">{notice}</p>}
-              <CodePane
-                code={present}
-                onChange={(next) => setCode(next, 'code')}
-                label="Mermaid code"
-              />
+          ) : model ? (
+            <div className="diagram-editor-body">
+              <div className="diagram-editor-main">
+                <Canvas
+                  code={present}
+                  label={`${title}: the drawing`}
+                  description="Arrow keys select, Enter adds, F2 or typing edits the words, Delete removes; press ? for every key."
+                  controls={controls}
+                  onDrawn={onDrawn}
+                  isItem={(element) => !!map.itemAt(element)}
+                  onMarquee={onMarquee}
+                  overlay={(v) => {
+                    canvasView.current = v;
+                    return (
+                      <EditorOverlay
+                        view={v}
+                        model={model}
+                        map={map}
+                        selection={selection}
+                        select={pick}
+                        extend={extend}
+                        editing={editing}
+                        startEdit={setEditing}
+                        commit={commitEdit}
+                        cancel={cancelEdit}
+                      >
+                        {overlay?.(v)}
+                      </EditorOverlay>
+                    );
+                  }}
+                  onBackgroundClick={() => {
+                    if (selection) pick(null);
+                  }}
+                  onKeyDown={canvasKeys}
+                />
+                {keySheet && (
+                  <KeySheet
+                    type={type}
+                    onClose={() => {
+                      setKeySheet(false);
+                      focusCanvas();
+                    }}
+                  />
+                )}
+              </div>
+              <aside ref={panel} className="diagram-editor-panel" aria-label="Diagram details">
+                {side}
+              </aside>
             </div>
-            <div className="diagram-editor-main">
-              <Canvas code={present} label={`${title}: the drawing`} />
+          ) : (
+            <div className="diagram-editor-body is-code">
+              <div className="diagram-editor-code">
+                {notice && <p className="diagram-notice">{notice}</p>}
+                <CodePane
+                  code={present}
+                  onChange={(next) => commit(next, { merge: 'code' })}
+                  onUndo={undo}
+                  onRedo={redo}
+                  label="Mermaid code"
+                />
+              </div>
+              <div className="diagram-editor-main">
+                <Canvas code={present} label={`${title}: the drawing`} controls={controls} />
+                {keySheet && <KeySheet type={type} onClose={() => setKeySheet(false)} />}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </EditEpoch>
         <div aria-live="polite" className="sr-only">
           {announcement}
         </div>

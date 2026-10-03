@@ -1,4 +1,5 @@
 import { DIAGRAM_LANGUAGE, diagramText } from './diagrams';
+import { isDiagramLanguage } from './diagrams/language';
 import { escapeCell, formatTable, type Align } from './table';
 
 /*
@@ -94,6 +95,21 @@ export const RICH_FILL_COLORS = [
   { label: 'Grey', value: '#8b8d9833' },
 ] as const;
 
+/**
+ * A diagram's `width` (§9.4): pixels, or DIAGRAM_FIT for the width of the text, whatever that
+ * is; null is its natural size. Versions before "Fit" ignore the word and draw the diagram at
+ * its natural size, and keep it when they save the page.
+ */
+export const DIAGRAM_FIT = 'fit';
+export type DiagramWidth = number | typeof DIAGRAM_FIT | null;
+
+/** A diagram's stored width (a number, or a `data-width` string); anything else is null. */
+export function diagramWidth(value: unknown): DiagramWidth {
+  if (value === DIAGRAM_FIT) return DIAGRAM_FIT;
+  const n = typeof value === 'string' ? Number.parseInt(value, 10) : value;
+  return typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+}
+
 /** Line spacing on offer, as in Word (1 is single spacing). */
 export const RICH_LINE_SPACINGS = [1, 1.15, 1.5, 2] as const;
 
@@ -162,7 +178,7 @@ export function richToText(content: string | RichNode): string {
         return;
       case 'codeBlock':
         // A diagram's words, not its code.
-        if (node.attrs?.language === DIAGRAM_LANGUAGE) {
+        if (isDiagramLanguage(node.attrs?.language)) {
           end();
           line = diagramText((node.content ?? []).map((c) => c.text ?? '').join(''));
           end();
@@ -228,6 +244,7 @@ export const RICH_LOSSES = {
   mergedCells: 'Merged table cells (they are split again)',
   columnWidth: 'Table column widths',
   tableBlocks: 'Lists, images and other blocks inside table cells (their text stays)',
+  tableDiagrams: 'Diagrams inside table cells (each moves to just below its table)',
   headerRow: 'Tables without a header row (the first row becomes one)',
   imageLayout: 'Image sizes and alignment',
   diagramLayout: 'Diagram sizes, alignment and captions',
@@ -304,16 +321,8 @@ function block(node: RichNode, ctx: Context): string {
     case 'orderedList':
     case 'taskList':
       return list(node, ctx);
-    case 'codeBlock': {
-      const code = plainText(node);
-      if (node.attrs?.width || node.attrs?.align || node.attrs?.caption) {
-        ctx.lost.add('diagramLayout');
-      }
-      const longest = Math.max(0, ...[...code.matchAll(/`+/g)].map((m) => m[0].length));
-      const fence = '`'.repeat(Math.max(3, longest + 1));
-      const language = typeof node.attrs?.language === 'string' ? node.attrs.language : '';
-      return `${fence}${language}\n${code}\n${fence}`;
-    }
+    case 'codeBlock':
+      return codeBlock(node, ctx);
     case 'blockMath':
       return `$$\n${String(node.attrs?.latex ?? '').trim()}\n$$`;
     case 'horizontalRule':
@@ -330,6 +339,25 @@ function block(node: RichNode, ctx: Context): string {
       // Anything else keeps its content.
       return node.content ? blocks(node.content, ctx) : escapeText(plainText(node), ctx);
   }
+}
+
+const isDiagramBlock = (node: RichNode) =>
+  node.type === 'codeBlock' && isDiagramLanguage(node.attrs?.language);
+
+/** A fenced code block; a diagram's language is always written as Markdown apps expect it. */
+function codeBlock(node: RichNode, ctx: Context): string {
+  const code = plainText(node);
+  if (node.attrs?.width || node.attrs?.align || node.attrs?.caption) {
+    ctx.lost.add('diagramLayout');
+  }
+  const longest = Math.max(0, ...[...code.matchAll(/`+/g)].map((m) => m[0].length));
+  const fence = '`'.repeat(Math.max(3, longest + 1));
+  const language = isDiagramBlock(node)
+    ? DIAGRAM_LANGUAGE
+    : typeof node.attrs?.language === 'string'
+      ? node.attrs.language
+      : '';
+  return `${fence}${language}\n${code}\n${fence}`;
 }
 
 function image(node: RichNode, ctx: Context): string {
@@ -372,8 +400,38 @@ function list(node: RichNode, ctx: Context): string {
     .join(loose ? '\n\n' : '\n');
 }
 
+/**
+ * The diagrams in a table's cells. A cell can't hold a fenced block, so each diagram goes just
+ * below the table, in reading order, and its cell says where it went.
+ */
+interface MovedDiagrams {
+  /** How many the table holds: one is "Diagram", several are numbered. */
+  count: number;
+  /** Their fenced blocks, in order. */
+  blocks: string[];
+}
+
+const countDiagrams = (node: RichNode): number =>
+  isDiagramBlock(node) ? 1 : (node.content ?? []).reduce((n, c) => n + countDiagrams(c), 0);
+
+function moveDiagram(node: RichNode, ctx: Context, moved: MovedDiagrams): string {
+  moved.blocks.push(codeBlock(node, ctx));
+  return `*Diagram${moved.count > 1 ? ` ${moved.blocks.length}` : ''} below the table*`;
+}
+
+/** A copy of `node` with each diagram in it replaced by a numbered marker, `mark`'s answer. */
+function markDiagrams(node: RichNode, mark: (diagram: RichNode) => number): RichNode {
+  if (isDiagramBlock(node)) {
+    return { type: 'paragraph', content: [{ type: 'text', text: `${mark(node)}` }] };
+  }
+  return node.content
+    ? { ...node, content: node.content.map((child) => markDiagrams(child, mark)) }
+    : node;
+}
+
 function table(node: RichNode, ctx: Context): string {
   const rows = node.content ?? [];
+  const moved: MovedDiagrams = { count: countDiagrams(node), blocks: [] };
   const grid: string[][] = [];
   const align: Align[] = [];
   const covered = new Set<string>();
@@ -397,7 +455,7 @@ function table(node: RichNode, ctx: Context): string {
       const cellAlign = cellAlignment(cell);
       if (r === 0) align[c] = cellAlign;
       else if (cellAlign !== 'none' && cellAlign !== align[c]) ctx.lost.add('align');
-      grid[r]![c] = cellText(cell, ctx);
+      grid[r]![c] = cellText(cell, ctx, moved);
       for (let dr = 0; dr < rowspan; dr++) {
         for (let dc = 0; dc < colspan; dc++) {
           if (dr || dc) covered.add(`${r + dr}:${c + dc}`);
@@ -413,7 +471,10 @@ function table(node: RichNode, ctx: Context): string {
   if (!headerRow) ctx.lost.add('headerRow');
   if (!grid.length) return '';
   const [header = [], ...body] = grid;
-  return formatTable({ header, align, rows: body }).join('\n');
+  const markdown = formatTable({ header, align, rows: body }).join('\n');
+  if (!moved.blocks.length) return markdown;
+  ctx.lost.add('tableDiagrams');
+  return [markdown, ...moved.blocks].join('\n\n');
 }
 
 function cellAlignment(cell: RichNode): Align {
@@ -422,7 +483,7 @@ function cellAlignment(cell: RichNode): Align {
   return value === 'left' || value === 'center' || value === 'right' ? value : 'none';
 }
 
-function cellText(cell: RichNode, ctx: Context): string {
+function cellText(cell: RichNode, ctx: Context, moved: MovedDiagrams): string {
   const inner: Context = { lost: ctx.lost, inTable: true };
   const parts = (cell.content ?? []).map((child) => {
     if (child.type === 'paragraph' || child.type === 'heading') {
@@ -430,8 +491,18 @@ function cellText(cell: RichNode, ctx: Context): string {
       if (child.attrs?.indent) ctx.lost.add('indent');
       return inline(child.content ?? [], inner);
     }
+    if (isDiagramBlock(child)) return moveDiagram(child, ctx, moved);
     ctx.lost.add('tableBlocks');
-    return escapeCell(escapeText(richToText(child), inner));
+    // Diagrams further in (in a list in the cell) move too, and their place says so.
+    const notes: string[] = [];
+    const marked = markDiagrams(
+      child,
+      (diagram) => notes.push(moveDiagram(diagram, ctx, moved)) - 1,
+    );
+    return escapeCell(escapeText(richToText(marked), inner)).replace(
+      /(\d+)/g,
+      (_, i: string) => notes[Number(i)] ?? '',
+    );
   });
   return parts.filter(Boolean).join('<br>');
 }

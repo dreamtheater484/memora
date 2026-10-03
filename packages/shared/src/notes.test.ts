@@ -151,6 +151,31 @@ describe('markdownToText', () => {
     );
   });
 
+  it('gives a diagram’s words, in any case of Mermaid and in lists and quotes', () => {
+    const md = [
+      'Plan',
+      '',
+      '```Mermaid',
+      'flowchart LR',
+      '  A[Start] --> B[End]',
+      '```',
+      '',
+      '10. Step',
+      '    ```mermaid',
+      '    mindmap',
+      '      root((Goals))',
+      '        Ship',
+      '    ```',
+      '',
+      '> [!NOTE]',
+      '> - ```MERMAID',
+      '>   pie title Spend',
+      '>     "Rent" : 1',
+      '>   ```',
+    ].join('\n');
+    expect(snippetOf(markdownToText(md))).toBe('Plan Start · End Step Goals · Ship Spend · Rent');
+  });
+
   it('cuts snippets to one short line', () => {
     expect(snippetOf(`  a\n\n b ${'x'.repeat(500)}`)).toHaveLength(140);
   });

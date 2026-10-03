@@ -50,6 +50,18 @@ pnpm dev
 
 In development the server stores its data in `apps/server/data/`. That folder is gitignored.
 
+**Port 3000 taken?** Give `pnpm dev` another `PORT`: the API listens there, and the web app's dev server sends `/api` to it.
+
+```bash
+PORT=3001 pnpm dev        # PowerShell: $env:PORT=3001; pnpm dev
+```
+
+To work against an API that already runs elsewhere (on another port, or in a Docker container), set `MEMORA_DEV_API` to its address, in the environment or in a `.env` file in the repository root, and start only the web app:
+
+```bash
+MEMORA_DEV_API=http://127.0.0.1:8080 pnpm --filter @memora/web dev
+```
+
 ## Branches and pull requests
 
 `main` only changes through pull requests.

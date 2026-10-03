@@ -166,7 +166,10 @@ export function saved(
 /** Result of writing a tab's text into the shared record. */
 export interface Written {
   record: PageRecord;
-  /** Text that another tab had written and this write couldn't merge with, to keep. */
+  /**
+   * Text that couldn't stay in the record, to keep as a version: another tab's that this write
+   * couldn't merge with, or (restore) a closed tab's of the page's former type.
+   */
   displaced?: string;
 }
 
@@ -207,7 +210,10 @@ export interface Unstored {
   base: string;
 }
 
-/** Brings text a closed tab couldn't store into the page's record, or a new one. */
+/**
+ * Brings text a closed tab couldn't store into the page's record, or a new one. A page
+ * converted since can't take text of its former type: that is kept as a version instead.
+ */
 export function restore(
   id: string,
   record: PageRecord | undefined,
@@ -215,6 +221,7 @@ export function restore(
   writer: string,
   now: number,
 ): Written {
+  if (record && record.type !== unstored.type) return { record, displaced: unstored.text };
   if (record) return write(record, unstored.known, unstored.text, writer, now);
   const { type, revision, base, text } = unstored;
   return {

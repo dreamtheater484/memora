@@ -4,6 +4,45 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- **Edit words where they are, in every diagram:** double-click a box, arrow, group, topic, participant, message, note, block, period, event, task, slice or value on the drawing (or select it and press `F2`, or just start typing) and type. `Enter` keeps the words, `Shift+Enter` breaks a line, `Tab` keeps them and goes on (a connected box, a topic under it, the reply to a message), `Esc` leaves them as they were. Clicking the drawing selects the panel's row, and working in a row marks its item on the drawing.
+- **Keys for diagrams, after MindManager's:** `Enter` and `Shift+Enter` add the next item after or before the selected one, `Tab` or `Insert` one under it, `Ctrl/Cmd+Shift+Enter` one above it (or puts a step in a loop), `Alt+Enter` a note; the arrow keys, `Home` and `End` select; `Alt+↑`/`↓` move, `Alt+Shift+←`/`→` change the level; `Delete`, `Ctrl/Cmd+D`, `C`, `X`, `V`; `Ctrl/Cmd+A`, `K` and `G` select, connect and group boxes; `Ctrl/Cmd+1…9` and `Alt+0…8` set shapes and colours; `Ctrl/Cmd++`, `−` and `0` zoom; `Ctrl/Cmd+Enter` is Done. `?` in the editor lists them all.
+- **Flowcharts:** `Shift` and a drag over empty space selects the boxes in it; drag a box onto a group to put it in, or onto empty space to take it out; delete a group with its boxes; every shape in the panel.
+- **Sequence diagrams:** new steps go inside a selected block; steps move into and out of blocks with `Alt+↑`/`↓`, `Alt+Shift+←`/`→` or by dragging their grip; each message's arrow and activation are set from a menu between its two participants; new messages start like the selected one.
+- **Timelines, Gantt charts and pie charts:** periods, events, sections, tasks and slices move both ways (tasks and periods across sections); a Gantt task can end on a date or when another task starts, and be critical or a milestone as well as done or active; sections can be removed with or without what they hold.
+- **A Fit size for diagrams in rich pages:** the diagram fills the text's width and follows it; Word, PDF and HTML exports do the same.
+
+### Changed
+
+- **The diagram editor changes only what you edit:** every other line of the code, its comments, blank lines and layout stay exactly as they were, which keeps Markdown pages and their history tidy. (Before, one small change rewrote the whole diagram, quoting labels and splitting chains of arrows.)
+- **One undo history** for the drawing, the panel and the code: `Ctrl/Cmd+Z` in a panel field or the code undoes there too, and brings back what was selected.
+- The panel's fields grow with their words and take line breaks (`Shift+Enter`); rows that are added get the cursor; `Enter` in a row adds the next one, `Alt+↑`/`↓` moves it, `↑`/`↓` go to the next field.
+- While a dialog is open, such as the diagram editor, the app's shortcuts (`Ctrl/Cmd+K`, `Ctrl/Cmd+Alt+N`…) wait instead of acting on the page behind it.
+- On a phone, the diagram editor's header takes two rows and the drawing is fitted to the width at a readable size; the drawing gives way to the keyboard while you type in the panel.
+- Done Gantt tasks are drawn with a clear outline.
+
+### Fixed
+
+- **Converting a page between rich text and Markdown more than once could break it:** the Markdown editor showed the rich page's raw code, and the next keystroke saved it over the page. An editor open on a page that is converted (here or elsewhere) never writes its old text over it any more; anything typed in it that wasn't saved yet is kept as a version.
+- **Clearing a label no longer breaks a diagram:** emptying a mind map topic deleted it (and moved what was under it), and an empty participant, timeline period or section, or Gantt task gave a broken or unreadable diagram. Empty labels, titles and messages are allowed in every kind of diagram, and spaces typed at the start or end of a label are kept.
+- Double quotes, `#` and `;` in flowchart and mind map labels showed as `&quot;` and other codes; quotes in mind maps became typographic ones, and a literal `#35;` typed in a label was read as a code.
+- Labels and settings with `:`, `;`, `|`, `%%`, brackets or a backslash broke flowcharts, timelines, Gantt and pie charts in several places (for example `axisFormat %H:%M`, an event at `10:30`, or a pie's `showData`); boxes in nested groups could end up in the wrong group.
+- An empty loop or branch in a sequence diagram was drawn one letter per line, with the steps after it overlapping the participants.
+- `Esc` while renaming on the drawing kept the new words instead of leaving the old ones.
+- Clicking a message's words, a block or its condition on a sequence diagram now selects it.
+- Removing a Gantt task or section no longer breaks the tasks that started after it.
+- In Split view, the Markdown source no longer cuts off diagrams and long lines.
+- Diagrams in list items, nested lists, quotes and callouts are drawn in the source view, and editing them keeps the list or quote intact.
+- ` ```Mermaid ` and ` ```MERMAID ` are diagrams everywhere: source, preview, rich pages, history, exports, search and snippets.
+- Converting a rich page to Markdown no longer loses a diagram inside a table cell: it moves just below the table, and the dialog says so.
+- Screen readers name diagrams edited as code by their kind (a class diagram, a state diagram…), not just "Diagram".
+
+### Development
+
+- `PORT` also moves the dev server's API proxy, and `MEMORA_DEV_API` points it at another API. The dev preview no longer fails with "document is not defined".
+- Mermaid 12.0.0 is patched (`patches/`, applied by pnpm) to decode all entities in SVG labels.
+
 ## [0.9.6] - 2026-10-01
 
 ### Added

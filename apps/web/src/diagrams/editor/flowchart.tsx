@@ -5,7 +5,6 @@ import {
   type DiagramColour,
   type FlowDirection,
   type FlowHead,
-  type FlowLine,
   type FlowShape,
   type Flowchart,
 } from '@memora/shared';
@@ -20,18 +19,25 @@ import {
   Trash2,
   Ungroup,
 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Button, Input, SegmentedControl, Select } from '../../components/ui';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Button, SegmentedControl, Select } from '../../components/ui';
 import { cn } from '../../lib/cn';
-import type { CanvasView, Spot } from './Canvas';
+import { keysLabel } from '../../shell/shortcuts';
+import type { CanvasView } from './Canvas';
+import { TextField } from './fields';
+import type { HitMap } from './hits';
+import type { EditStart } from './keys';
+import { withText } from './labels';
 import {
   NEW_BOX,
   addNode,
   addSibling,
   connect,
-  edgeDomId,
   groupNodes,
+  groupTree,
+  moveToGroup,
   removeEdge,
+  removeGroup,
   removeNodes,
   reverseEdge,
   setDirection,
@@ -40,21 +46,17 @@ import {
   updateGroup,
   updateNode,
 } from './ops';
-import {
-  edgeIndexOf,
-  groupIdOf,
-  nodeIdOf,
-  type FlowEditorProps,
-  type FlowSelection,
-} from './flowchartDom';
+import { Section, type PanelProps } from './panel';
+import { itemKey, type Item, type Selection } from './selection';
 
 /*
- * Editing a flowchart (§9.4). On the drawing: click a box or an arrow to select it
- * (Shift adds boxes), double-click a box (or Enter, F2) to rename it in place, + beside a
- * selected box adds a connected one (+ on its other side adds one beside it), and dragging a
- * box onto another connects them. The panel holds the same and more: shapes, colours,
- * arrow styles, groups and the direction, and a list of every box with its connections,
- * which is also the way to edit with the keyboard or a screen reader.
+ * Editing a flowchart (§9.4). On the drawing: click a box, an arrow or a group to select it
+ * (Shift adds boxes, and Shift and a drag selects the boxes it encloses), double-click (or
+ * Enter, F2, or just type) to edit its words in place; + beside a selected box adds a
+ * connected one, the other + one beside it; drag a box onto another to connect them, onto a
+ * group to put it in, out of its group to take it out. The panel holds the same and more:
+ * shapes, colours, arrow styles, groups and the direction, and a list of every box with its
+ * arrows, which is also the way to edit with the keyboard or a screen reader.
  */
 
 const SHAPE_NAMES: Record<FlowShape, string> = {
@@ -115,236 +117,164 @@ function ShapeIcon({ shape }: { shape: FlowShape }) {
   );
 }
 
-/** The overlay on the drawing: selections, + handles, dragging to connect, renaming. */
-export function FlowchartOverlay({
+interface ExtrasProps {
+  view: CanvasView;
+  chart: Flowchart;
+  map: HitMap;
+  selection: Selection;
+  editing: EditStart | null;
+  change: PanelProps<Flowchart>['change'];
+  announce: (message: string) => void;
+}
+
+/** The flowchart's own controls on the drawing: + handles, and dragging boxes. */
+export function FlowchartExtras({
   view,
   chart,
-  change,
+  map,
   selection,
-  select,
   editing,
-  setEditing,
+  change,
   announce,
-}: FlowEditorProps & { view: CanvasView }) {
+}: ExtrasProps) {
   const { svg, viewport, spotOf, place } = view;
-  // The latest props, for the drawing's event handlers (attached once per drawing).
-  const latest = useRef({ chart, selection, change, select, setEditing, announce });
+  const latest = useRef({ chart, map, change, announce });
   useLayoutEffect(() => {
-    latest.current = { chart, selection, change, select, setEditing, announce };
+    latest.current = { chart, map, change, announce };
   });
-  const [link, setLink] = useState<{ from: string; x: number; y: number } | null>(null);
+  const [link, setLink] = useState<{
+    from: string;
+    x: number;
+    y: number;
+    over: Item | null;
+  } | null>(null);
 
-  // Wide, invisible copies of the arrows, so a thin line is easy to click.
-  useEffect(() => {
-    if (!svg) return;
-    for (const path of svg.querySelectorAll<SVGPathElement>('path[data-id^="L_"]')) {
-      if (path.classList.contains('diagram-hit')) continue;
-      const hit = path.cloneNode(false) as SVGPathElement;
-      hit.removeAttribute('id');
-      hit.removeAttribute('marker-end');
-      hit.removeAttribute('marker-start');
-      hit.removeAttribute('style');
-      hit.setAttribute('class', 'diagram-hit');
-      hit.setAttribute('data-edge-id', path.getAttribute('data-id') ?? '');
-      path.after(hit);
-    }
-  }, [svg]);
-
-  // A selected arrow is marked on the drawing itself.
-  useEffect(() => {
-    if (!svg) return;
-    svg.querySelectorAll('.is-selected').forEach((e) => e.classList.remove('is-selected'));
-    if (selection?.kind === 'edge' && chart.edges[selection.index]) {
-      const id = edgeDomId(chart, selection.index);
-      svg
-        .querySelector(`path[data-id="${CSS.escape(id)}"]:not(.diagram-hit)`)
-        ?.classList.add('is-selected');
-    }
-  }, [svg, selection, chart]);
-
-  // Clicks and drags on the drawing.
+  // Dragging a box: onto a box connects them, onto a group puts it in, out of its group takes
+  // it out.
   useEffect(() => {
     if (!svg || !viewport) return;
-    const { change, select, setEditing, announce } = {
-      change: (next: Flowchart) => latest.current.change(next),
-      select: (next: FlowSelection) => latest.current.select(next),
-      setEditing: (id: string | null) => latest.current.setEditing(id),
-      announce: (message: string) => latest.current.announce(message),
-    };
     let press: { from: string; x: number; y: number; dragging: boolean } | null = null;
+    const target = (e: PointerEvent) => {
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      return under?.closest('svg') === svg ? latest.current.map.itemAt(under) : null;
+    };
     const down = (e: PointerEvent) => {
-      if (e.button !== 0) return;
-      const id = nodeIdOf(svg, e.target as Element);
-      if (id) press = { from: id, x: e.clientX, y: e.clientY, dragging: false };
+      if (e.button !== 0 || e.shiftKey) return;
+      const item = latest.current.map.itemAt(e.target as Element);
+      if (item?.kind === 'node')
+        press = { from: item.id, x: e.clientX, y: e.clientY, dragging: false };
     };
     const move = (e: PointerEvent) => {
       if (!press) return;
       if (!press.dragging && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 6) return;
       press.dragging = true;
       const outer = viewport.getBoundingClientRect();
-      setLink({ from: press.from, x: e.clientX - outer.left, y: e.clientY - outer.top });
+      const over = target(e);
+      setLink({
+        from: press.from,
+        x: e.clientX - outer.left,
+        y: e.clientY - outer.top,
+        over: over && !(over.kind === 'node' && over.id === press.from) ? over : null,
+      });
     };
     const up = (e: PointerEvent) => {
       const p = press;
       press = null;
       if (!p?.dragging) return;
       setLink(null);
-      const to = nodeIdOf(svg, document.elementFromPoint(e.clientX, e.clientY));
-      if (to && to !== p.from) {
-        const { chart: current } = latest.current;
-        change(connect(current, p.from, to));
-        const label = (id: string) => current.nodes.find((n) => n.id === id)?.label ?? id;
-        announce(`Connected ${label(p.from)} to ${label(to)}`);
-      }
-    };
-    const click = (e: MouseEvent) => {
-      const target = e.target as Element;
-      const { chart: current, selection: selected } = latest.current;
-      const node = nodeIdOf(svg, target);
-      if (node) {
-        if (e.shiftKey && selected?.kind === 'nodes') {
-          const ids = selected.ids.includes(node)
-            ? selected.ids.filter((i) => i !== node)
-            : [...selected.ids, node];
-          select({ kind: 'nodes', ids });
-        } else select({ kind: 'nodes', ids: [node] });
-        return;
-      }
-      const edge = edgeIndexOf(current, target);
-      if (edge !== null) {
-        select({ kind: 'edge', index: edge });
-        return;
-      }
-      const group = groupIdOf(svg, target);
-      if (group) select({ kind: 'group', id: group });
-    };
-    const dblclick = (e: MouseEvent) => {
-      const node = nodeIdOf(svg, e.target as Element);
-      if (node) {
-        select({ kind: 'nodes', ids: [node] });
-        setEditing(node);
+      const { chart: current, change, announce } = latest.current;
+      const label = (id: string) => current.nodes.find((n) => n.id === id)?.label || id;
+      const over = target(e);
+      const node = current.nodes.find((n) => n.id === p.from);
+      if (over?.kind === 'node' && over.id !== p.from) {
+        change(connect(current, p.from, over.id));
+        announce(`Connected ${label(p.from)} to ${label(over.id)}`);
+      } else if (over?.kind === 'group' && node && node.group !== over.id) {
+        change(moveToGroup(current, [p.from], over.id), {
+          select: { kind: 'nodes', ids: [p.from] },
+        });
+        announce(`Put ${label(p.from)} in the group`);
+      } else if (!over && node?.group) {
+        change(moveToGroup(current, [p.from], null), { select: { kind: 'nodes', ids: [p.from] } });
+        announce(`Took ${label(p.from)} out of the group`);
       }
     };
     svg.addEventListener('pointerdown', down);
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
-    svg.addEventListener('click', click);
-    svg.addEventListener('dblclick', dblclick);
     return () => {
       svg.removeEventListener('pointerdown', down);
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      svg.removeEventListener('click', click);
-      svg.removeEventListener('dblclick', dblclick);
     };
   }, [svg, viewport]);
 
-  // Where each box and group is in the drawing, measured once per drawing.
-  const spots = useMemo(() => {
-    const out = new Map<string, Spot>();
-    if (!svg) return out;
-    for (const g of svg.querySelectorAll('g.node')) {
-      const id = nodeIdOf(svg, g);
-      if (id) out.set(id, spotOf(g));
-    }
-    for (const g of svg.querySelectorAll('g.cluster')) {
-      const id = groupIdOf(svg, g);
-      if (id) out.set(`group:${id}`, spotOf(g));
-    }
-    return out;
-  }, [svg, spotOf]);
-  const rect = (id: string) => {
-    const spot = spots.get(id);
-    return spot ? place(spot) : undefined;
+  const rectOf = (item: Item) => {
+    const hit = map.hitOf(item);
+    const element = hit?.elements[0];
+    return element ? place(spotOf(element)) : undefined;
   };
-
   const single =
     selection?.kind === 'nodes' && selection.ids.length === 1 ? selection.ids[0]! : null;
-  const singleRect = single ? rect(single) : undefined;
+  const singleRect = single ? rectOf({ kind: 'node', id: single }) : undefined;
   const forward = chart.direction === 'LR' || chart.direction === 'RL';
-  const addAfter = (from: string) => {
-    const added = addNode(chart, { from });
-    change(added.chart);
-    select({ kind: 'nodes', ids: [added.id] });
-    setEditing(added.id);
-    announce('Added a connected box');
+  const add = (how: 'after' | 'beside') => {
+    if (!single) return;
+    const added = how === 'after' ? addNode(chart, { from: single }) : addSibling(chart, single);
+    const item: Item = { kind: 'node', id: added.id };
+    change(added.chart, {
+      select: { kind: 'nodes', ids: [added.id] },
+      edit: { item, anchor: { kind: 'node', id: single } },
+      announce: how === 'after' ? 'Added a connected box' : 'Added a box beside it',
+    });
   };
-  const addBeside = (of: string) => {
-    const added = addSibling(chart, of);
-    change(added.chart);
-    select({ kind: 'nodes', ids: [added.id] });
-    setEditing(added.id);
-    announce('Added a box beside it');
-  };
+  const from = link ? rectOf({ kind: 'node', id: link.from }) : undefined;
+  const over = link?.over ? rectOf(link.over) : undefined;
 
-  const from = link ? rect(link.from) : undefined;
-  // A box just added isn't drawn yet: its label is typed beside the box it follows meanwhile,
-  // so nothing typed is lost.
-  const provisional = () => {
-    const parent = chart.edges.find((e) => e.to === editing)?.from;
-    const r = parent ? rect(parent) : undefined;
-    if (!r) return new DOMRect(40, 40, 160, 40);
-    return forward
-      ? new DOMRect(r.right + 40, r.y, Math.max(r.width, 120), r.height)
-      : new DOMRect(r.x, r.bottom + 40, Math.max(r.width, 120), r.height);
-  };
-  const editingRect = editing ? (rect(editing) ?? provisional()) : undefined;
-  const groupRect = selection?.kind === 'group' ? rect(`group:${selection.id}`) : undefined;
   return (
-    <div className="diagram-overlay">
-      {selection?.kind === 'nodes' &&
-        selection.ids.map((id) => {
-          const r = rect(id);
-          return r ? (
-            <div
-              key={id}
-              className="diagram-ring"
-              style={{ left: r.x - 5, top: r.y - 5, width: r.width + 10, height: r.height + 10 }}
-            />
-          ) : null;
-        })}
-      {groupRect && (
-        <div
-          className="diagram-ring is-group"
-          style={{
-            left: groupRect.x - 4,
-            top: groupRect.y - 4,
-            width: groupRect.width + 8,
-            height: groupRect.height + 8,
-          }}
-        />
-      )}
+    <>
       {single && singleRect && !editing && (
         <>
           <button
             type="button"
             className="diagram-overlay-control diagram-plus"
-            title="Add a connected box (Tab)"
+            title={`Add a connected box (${keysLabel('Tab')})`}
             aria-label="Add a connected box"
             style={
               forward
                 ? { left: singleRect.right + 12, top: singleRect.y + singleRect.height / 2 - 12 }
                 : { left: singleRect.x + singleRect.width / 2 - 12, top: singleRect.bottom + 12 }
             }
-            onClick={() => addAfter(single)}
+            onClick={() => add('after')}
           >
             <Plus aria-hidden />
           </button>
           <button
             type="button"
             className="diagram-overlay-control diagram-plus is-beside"
-            title="Add a box beside it (Shift+Enter)"
+            title={`Add a box beside it (${keysLabel('Shift Enter')})`}
             aria-label="Add a box beside it"
             style={
               forward
                 ? { left: singleRect.x + singleRect.width / 2 - 10, top: singleRect.bottom + 10 }
                 : { left: singleRect.right + 10, top: singleRect.y + singleRect.height / 2 - 10 }
             }
-            onClick={() => addBeside(single)}
+            onClick={() => add('beside')}
           >
             <Plus aria-hidden />
           </button>
         </>
+      )}
+      {over && (
+        <div
+          className={cn('diagram-ring is-target', link?.over?.kind === 'group' && 'is-group')}
+          style={{
+            left: over.x - 5,
+            top: over.y - 5,
+            width: over.width + 10,
+            height: over.height + 10,
+          }}
+        />
       )}
       {link && from && (
         <svg className="diagram-link" aria-hidden>
@@ -356,88 +286,7 @@ export function FlowchartOverlay({
           />
         </svg>
       )}
-      {editing && editingRect && (
-        <LabelInput
-          key={editing}
-          rect={editingRect}
-          scale={view.scale}
-          value={chart.nodes.find((n) => n.id === editing)?.label ?? ''}
-          onCommit={(label, then) => {
-            const node = chart.nodes.find((n) => n.id === editing);
-            let next = chart;
-            if (node && label && label !== node.label) next = updateNode(chart, editing, { label });
-            if (next !== chart) change(next);
-            setEditing(null);
-            if (then !== 'next') viewport?.focus();
-            if (then === 'next') {
-              const added = addNode(next, { from: editing });
-              change(added.chart);
-              select({ kind: 'nodes', ids: [added.id] });
-              setEditing(added.id);
-            }
-          }}
-          onCancel={() => {
-            setEditing(null);
-            viewport?.focus();
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-/** The input over a box while it is renamed; Tab also adds the next box. */
-function LabelInput({
-  rect,
-  scale,
-  value,
-  onCommit,
-  onCancel,
-}: {
-  rect: DOMRect;
-  scale: number;
-  value: string;
-  onCommit: (label: string, then?: 'next') => void;
-  onCancel: () => void;
-}) {
-  const [text, setText] = useState(value);
-  const done = useRef(false);
-  const commit = (then?: 'next') => {
-    if (done.current) return;
-    done.current = true;
-    onCommit(text.trim(), then);
-  };
-  const width = Math.max(rect.width, 140 * Math.min(scale, 1));
-  return (
-    <input
-      className="diagram-overlay-control diagram-label-input"
-      aria-label="Box label"
-      autoFocus
-      value={text}
-      onFocus={(e) => e.currentTarget.select()}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={() => commit()}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          commit();
-        } else if (e.key === 'Tab' && !e.shiftKey) {
-          e.preventDefault();
-          commit('next');
-        } else if (e.key === 'Escape') {
-          e.preventDefault();
-          e.stopPropagation();
-          done.current = true;
-          onCancel();
-        }
-      }}
-      style={{
-        left: rect.x + rect.width / 2 - width / 2,
-        top: rect.y + rect.height / 2 - 18,
-        width,
-        fontSize: Math.max(12, Math.min(18, 15 * scale)),
-      }}
-    />
+    </>
   );
 }
 
@@ -462,18 +311,18 @@ function Colours({
         role="radio"
         aria-checked={value === null}
         aria-label="No colour"
-        title="No colour"
+        title={`No colour (${keysLabel('Alt 0')})`}
         className={cn('diagram-swatch is-none', value === null && 'is-on')}
         onClick={() => onPick(null)}
       />
-      {DIAGRAM_COLOURS.map((c) => (
+      {DIAGRAM_COLOURS.map((c, i) => (
         <button
           key={c}
           type="button"
           role="radio"
           aria-checked={value === c}
           aria-label={DIAGRAM_SWATCHES[c].label}
-          title={DIAGRAM_SWATCHES[c].label}
+          title={`${DIAGRAM_SWATCHES[c].label} (${keysLabel(`Alt ${i + 1}`)})`}
           className={cn('diagram-swatch', value === c && 'is-on')}
           style={{ background: DIAGRAM_SWATCHES[c].fill, borderColor: DIAGRAM_SWATCHES[c].stroke }}
           onClick={() => onPick(c)}
@@ -483,11 +332,11 @@ function Colours({
   );
 }
 
-const LINES: { value: FlowLine; label: string }[] = [
+const LINES = [
   { value: 'solid', label: 'Solid' },
   { value: 'dotted', label: 'Dotted' },
   { value: 'thick', label: 'Thick' },
-];
+] as const;
 const HEADS: { value: FlowHead; label: string }[] = [
   { value: 'arrow', label: 'Arrow' },
   { value: 'none', label: 'None' },
@@ -495,28 +344,34 @@ const HEADS: { value: FlowHead; label: string }[] = [
   { value: 'cross', label: 'Cross' },
 ];
 
-export function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="diagram-panel-section">
-      <h3>{title}</h3>
-      {children}
-    </section>
-  );
-}
-
 /** The side panel of a flowchart. */
-export function FlowchartPanel(props: FlowEditorProps) {
-  const { chart, change, selection, select, setEditing, announce } = props;
+export function FlowchartPanel({
+  model: chart,
+  change,
+  selection,
+  select,
+  announce,
+}: PanelProps<Flowchart>) {
   const nodeLabel = (id: string) =>
-    chart.nodes.find((n) => n.id === id)?.label ??
-    chart.groups.find((g) => g.id === id)?.label ??
+    chart.nodes.find((n) => n.id === id)?.label ||
+    chart.groups.find((g) => g.id === id)?.label ||
     id;
   const ids = selection?.kind === 'nodes' ? selection.ids : [];
   const nodes = chart.nodes.filter((n) => ids.includes(n.id));
   const node = nodes.length === 1 ? nodes[0]! : null;
-  const edge = selection?.kind === 'edge' ? chart.edges[selection.index] : undefined;
+  const edgeIndex = selection?.kind === 'edge' ? selection.index : null;
+  const edge = edgeIndex !== null ? chart.edges[edgeIndex] : undefined;
   const group =
     selection?.kind === 'group' ? chart.groups.find((g) => g.id === selection.id) : undefined;
+  const groupOptions = [
+    { value: '-', label: 'No group' },
+    ...chart.groups.map((g) => ({ value: g.id, label: g.label || g.id })),
+  ];
+  const text = (item: Item) => (value: string) =>
+    change(withText(chart, item, value), { merge: itemKey(item) });
+  const selectOnFocus = (next: Selection) => () => {
+    if (JSON.stringify(next) !== JSON.stringify(selection)) select(next);
+  };
 
   return (
     <div className="diagram-panel">
@@ -531,10 +386,12 @@ export function FlowchartPanel(props: FlowEditorProps) {
           size="sm"
           onClick={() => {
             const added = addNode(chart, { group: null });
-            change(added.chart);
-            select({ kind: 'nodes', ids: [added.id] });
-            setEditing(added.id);
-            announce('Added a box');
+            const item: Item = { kind: 'node', id: added.id };
+            change(added.chart, {
+              select: { kind: 'nodes', ids: [added.id] },
+              edit: { item },
+              announce: 'Added a box',
+            });
           }}
         >
           <Plus aria-hidden /> Add a box
@@ -545,24 +402,28 @@ export function FlowchartPanel(props: FlowEditorProps) {
         <Section title="Box">
           <label className="diagram-field">
             <span>Label</span>
-            <Input
+            <TextField
+              multiline
               value={node.label}
-              onChange={(e) =>
-                change(updateNode(chart, node.id, { label: e.target.value }), `label:${node.id}`)
-              }
+              onValueChange={text({ kind: 'node', id: node.id })}
+              data-field="label"
             />
           </label>
           <div className="diagram-field">
             <span id="diagram-shape-label">Shape</span>
             <div className="diagram-shapes" role="radiogroup" aria-labelledby="diagram-shape-label">
-              {FLOW_SHAPES.slice(0, 10).map((shape) => (
+              {FLOW_SHAPES.map((shape, i) => (
                 <button
                   key={shape}
                   type="button"
                   role="radio"
                   aria-checked={node.shape === shape}
                   aria-label={SHAPE_NAMES[shape]}
-                  title={SHAPE_NAMES[shape]}
+                  title={
+                    i < 9
+                      ? `${SHAPE_NAMES[shape]} (${keysLabel(`Mod ${i + 1}`)})`
+                      : SHAPE_NAMES[shape]
+                  }
                   className={cn('diagram-shape', node.shape === shape && 'is-on')}
                   onClick={() => change(updateNode(chart, node.id, { shape }))}
                 >
@@ -578,6 +439,17 @@ export function FlowchartPanel(props: FlowEditorProps) {
               onPick={(colour) => change(updateNode(chart, node.id, { colour }))}
             />
           </div>
+          {chart.groups.length > 0 && (
+            <label className="diagram-field">
+              <span>Group</span>
+              <Select
+                aria-label="Group"
+                value={node.group ?? '-'}
+                options={groupOptions}
+                onValueChange={(g) => change(moveToGroup(chart, [node.id], g === '-' ? null : g))}
+              />
+            </label>
+          )}
           <label className="diagram-field">
             <span>Connect to</span>
             <Select
@@ -598,9 +470,12 @@ export function FlowchartPanel(props: FlowEditorProps) {
               size="sm"
               onClick={() => {
                 const added = addNode(chart, { from: node.id });
-                change(added.chart);
-                select({ kind: 'nodes', ids: [added.id] });
-                setEditing(added.id);
+                const item: Item = { kind: 'node', id: added.id };
+                change(added.chart, {
+                  select: { kind: 'nodes', ids: [added.id] },
+                  edit: { item, anchor: { kind: 'node', id: node.id } },
+                  announce: 'Added a connected box',
+                });
               }}
             >
               <Plus aria-hidden /> Connected box
@@ -608,11 +483,9 @@ export function FlowchartPanel(props: FlowEditorProps) {
             <Button
               size="sm"
               variant="danger"
-              onClick={() => {
-                change(removeNodes(chart, [node.id]));
-                select(null);
-                announce('Deleted the box');
-              }}
+              onClick={() =>
+                change(removeNodes(chart, [node.id]), { select: null, announce: 'Deleted the box' })
+              }
             >
               <Trash2 aria-hidden /> Delete
             </Button>
@@ -633,14 +506,30 @@ export function FlowchartPanel(props: FlowEditorProps) {
               }}
             />
           </div>
+          {chart.groups.length > 0 && (
+            <label className="diagram-field">
+              <span>Group</span>
+              <Select
+                aria-label="Group"
+                value={
+                  nodes.every((n) => n.group === nodes[0]!.group) ? (nodes[0]!.group ?? '-') : ''
+                }
+                placeholder="Several groups"
+                options={groupOptions}
+                onValueChange={(g) => change(moveToGroup(chart, ids, g === '-' ? null : g))}
+              />
+            </label>
+          )}
           <div className="diagram-actions">
             <Button
               size="sm"
               onClick={() => {
                 const grouped = groupNodes(chart, ids);
-                change(grouped.chart);
-                select({ kind: 'group', id: grouped.id });
-                announce('Grouped the boxes');
+                change(grouped.chart, {
+                  select: { kind: 'group', id: grouped.id },
+                  edit: { item: { kind: 'group', id: grouped.id } },
+                  announce: 'Grouped the boxes',
+                });
               }}
             >
               <Group aria-hidden /> Group them
@@ -648,10 +537,12 @@ export function FlowchartPanel(props: FlowEditorProps) {
             <Button
               size="sm"
               variant="danger"
-              onClick={() => {
-                change(removeNodes(chart, ids));
-                select(null);
-              }}
+              onClick={() =>
+                change(removeNodes(chart, ids), {
+                  select: null,
+                  announce: `Deleted ${ids.length} boxes`,
+                })
+              }
             >
               <Trash2 aria-hidden /> Delete
             </Button>
@@ -659,19 +550,16 @@ export function FlowchartPanel(props: FlowEditorProps) {
         </Section>
       )}
 
-      {edge && selection?.kind === 'edge' && (
+      {edge && edgeIndex !== null && (
         <Section title={`Arrow: ${nodeLabel(edge.from)} → ${nodeLabel(edge.to)}`}>
           <label className="diagram-field">
             <span>Label</span>
-            <Input
+            <TextField
+              multiline
               value={edge.label}
               placeholder="No label"
-              onChange={(e) =>
-                change(
-                  updateEdge(chart, selection.index, { label: e.target.value }),
-                  `edge:${selection.index}`,
-                )
-              }
+              onValueChange={text({ kind: 'edge', index: edgeIndex })}
+              data-field="label"
             />
           </label>
           <div className="diagram-field">
@@ -679,8 +567,8 @@ export function FlowchartPanel(props: FlowEditorProps) {
             <SegmentedControl
               label="Line"
               value={edge.line === 'invisible' ? 'solid' : edge.line}
-              onValueChange={(line) => change(updateEdge(chart, selection.index, { line }))}
-              segments={LINES}
+              onValueChange={(line) => change(updateEdge(chart, edgeIndex, { line }))}
+              segments={[...LINES]}
             />
           </div>
           <div className="diagram-field-row">
@@ -691,7 +579,7 @@ export function FlowchartPanel(props: FlowEditorProps) {
                 value={edge.start}
                 options={HEADS}
                 onValueChange={(v) =>
-                  change(updateEdge(chart, selection.index, { start: v as FlowHead }))
+                  change(updateEdge(chart, edgeIndex, { start: v as FlowHead }))
                 }
               />
             </label>
@@ -701,24 +589,23 @@ export function FlowchartPanel(props: FlowEditorProps) {
                 aria-label="Arrow end"
                 value={edge.end}
                 options={HEADS}
-                onValueChange={(v) =>
-                  change(updateEdge(chart, selection.index, { end: v as FlowHead }))
-                }
+                onValueChange={(v) => change(updateEdge(chart, edgeIndex, { end: v as FlowHead }))}
               />
             </label>
           </div>
           <div className="diagram-actions">
-            <Button size="sm" onClick={() => change(reverseEdge(chart, selection.index))}>
+            <Button size="sm" onClick={() => change(reverseEdge(chart, edgeIndex))}>
               <ArrowLeftRight aria-hidden /> Reverse
             </Button>
             <Button
               size="sm"
               variant="danger"
-              onClick={() => {
-                change(removeEdge(chart, selection.index));
-                select(null);
-                announce('Deleted the arrow');
-              }}
+              onClick={() =>
+                change(removeEdge(chart, edgeIndex), {
+                  select: null,
+                  announce: 'Deleted the arrow',
+                })
+              }
             >
               <Trash2 aria-hidden /> Delete
             </Button>
@@ -730,11 +617,10 @@ export function FlowchartPanel(props: FlowEditorProps) {
         <Section title="Group">
           <label className="diagram-field">
             <span>Name</span>
-            <Input
+            <TextField
               value={group.label}
-              onChange={(e) =>
-                change(updateGroup(chart, group.id, { label: e.target.value }), `group:${group.id}`)
-              }
+              onValueChange={text({ kind: 'group', id: group.id })}
+              data-field="label"
             />
           </label>
           <div className="diagram-field">
@@ -758,13 +644,28 @@ export function FlowchartPanel(props: FlowEditorProps) {
           <div className="diagram-actions">
             <Button
               size="sm"
-              onClick={() => {
-                change(ungroup(chart, group.id));
-                select(null);
-                announce('Removed the group; its boxes stay');
-              }}
+              onClick={() =>
+                change(ungroup(chart, group.id), {
+                  select: null,
+                  announce: 'Removed the group; its boxes stay',
+                })
+              }
             >
               <Ungroup aria-hidden /> Ungroup
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() => {
+                const inside = groupTree(chart, group.id);
+                const count = chart.nodes.filter((n) => n.group && inside.has(n.group)).length;
+                change(removeGroup(chart, group.id), {
+                  select: null,
+                  announce: `Deleted the group and its ${count} boxes`,
+                });
+              }}
+            >
+              <Trash2 aria-hidden /> Delete with its boxes
             </Button>
           </div>
         </Section>
@@ -779,6 +680,7 @@ export function FlowchartPanel(props: FlowEditorProps) {
               <li key={n.id}>
                 <button
                   type="button"
+                  data-item={itemKey({ kind: 'node', id: n.id })}
                   className={cn('diagram-outline-item', on && 'is-on')}
                   aria-pressed={on}
                   onClick={(e) =>
@@ -807,11 +709,13 @@ export function FlowchartPanel(props: FlowEditorProps) {
                       <li key={i}>
                         <button
                           type="button"
+                          data-item={itemKey({ kind: 'edge', index: i })}
                           className={cn(
                             'diagram-outline-item is-arrow',
-                            selection?.kind === 'edge' && selection.index === i && 'is-on',
+                            edgeIndex === i && 'is-on',
                           )}
-                          onClick={() => select({ kind: 'edge', index: i })}
+                          aria-pressed={edgeIndex === i}
+                          onClick={selectOnFocus({ kind: 'edge', index: i })}
                         >
                           → {nodeLabel(e.to)}
                           {e.label && <span className="text-fg-3"> ({e.label})</span>}
@@ -830,11 +734,13 @@ export function FlowchartPanel(props: FlowEditorProps) {
               <li key={g.id}>
                 <button
                   type="button"
+                  data-item={itemKey({ kind: 'group', id: g.id })}
                   className={cn(
                     'diagram-outline-item is-group',
                     selection?.kind === 'group' && selection.id === g.id && 'is-on',
                   )}
-                  onClick={() => select({ kind: 'group', id: g.id })}
+                  aria-pressed={selection?.kind === 'group' && selection.id === g.id}
+                  onClick={selectOnFocus({ kind: 'group', id: g.id })}
                 >
                   Group: {g.label}
                 </button>
@@ -844,8 +750,9 @@ export function FlowchartPanel(props: FlowEditorProps) {
         )}
       </Section>
       <p className="diagram-hint">
-        Double-click a box to rename it. Drag a box onto another to connect them. Tab adds a
-        connected box, Shift+Enter one beside it, Delete removes the selection.
+        Double-click, F2 or just type to edit words on the drawing. Drag a box onto another to
+        connect them, onto a group to put it in. Shift and a drag selects several boxes. Press ? for
+        every key.
       </p>
     </div>
   );

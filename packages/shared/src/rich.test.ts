@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { isDiagramLanguage } from './diagrams/language';
 import {
+  DIAGRAM_FIT,
+  RICH_LOSSES,
+  diagramWidth,
   isRichContent,
   parseRich,
   richAssetIds,
@@ -237,5 +241,116 @@ describe('richToMarkdown', () => {
     );
     expect(markdown).toBe('Further in\n\nNot indented');
     expect(lost).toEqual(['indent']);
+  });
+});
+
+describe('diagrams in rich pages', () => {
+  const diagram = (code: string, attrs: Record<string, unknown> = {}): RichNode => ({
+    type: 'codeBlock',
+    attrs: { language: 'mermaid', ...attrs },
+    content: [text(code)],
+  });
+  const row = (type: string, ...cells: RichNode[][]): RichNode => ({
+    type: 'tableRow',
+    content: cells.map((content) => ({ type, content })),
+  });
+
+  it('knows a diagram by its language in any case', () => {
+    for (const language of ['mermaid', 'Mermaid', 'MERMAID', ' mermaid ']) {
+      expect(isDiagramLanguage(language), language).toBe(true);
+    }
+    for (const language of ['', 'mermaid-js', 'js', null, undefined, 1]) {
+      expect(isDiagramLanguage(language), String(language)).toBe(false);
+    }
+    const page = doc(
+      diagram('flowchart LR\n  A[Start] --> B[End]', { language: 'Mermaid' }),
+      diagram('pie title Spend\n  "Rent" : 1', { language: 'MERMAID' }),
+    );
+    expect(richToText(page)).toBe('Start · End\nSpend · Rent');
+    // Written the way Markdown apps expect, whatever the case it was stored in.
+    expect(richToMarkdown(doc(diagram('pie', { language: 'Mermaid' })))).toEqual({
+      markdown: '```mermaid\npie\n```',
+      lost: [],
+    });
+  });
+
+  it('reads a diagram’s width: pixels, Fit, or its natural size', () => {
+    expect(diagramWidth(320)).toBe(320);
+    expect(diagramWidth('480')).toBe(480);
+    expect(diagramWidth(DIAGRAM_FIT)).toBe('fit');
+    for (const value of [null, undefined, 0, -5, 'wide', 'Fit', Number.NaN, {}]) {
+      expect(diagramWidth(value), String(value)).toBeNull();
+    }
+    const { lost } = richToMarkdown(doc(diagram('pie', { width: DIAGRAM_FIT })));
+    expect(lost).toEqual(['diagramLayout']);
+  });
+
+  it('moves a diagram out of a table cell to just below the table, keeping its code', () => {
+    const page = doc(
+      {
+        type: 'table',
+        content: [
+          row('tableHeader', [p(text('Step'))], [p(text('Flow'))]),
+          row('tableCell', [p(text('One'))], [diagram('flowchart LR\n  A --> B', { width: 320 })]),
+        ],
+      },
+      p(text('After')),
+    );
+    const { markdown, lost } = richToMarkdown(page);
+    expect(markdown).toBe(
+      [
+        '| Step | Flow                      |',
+        '| ---- | ------------------------- |',
+        '| One  | *Diagram below the table* |',
+        '',
+        '```mermaid',
+        'flowchart LR',
+        '  A --> B',
+        '```',
+        '',
+        'After',
+      ].join('\n'),
+    );
+    expect(lost).toEqual(['tableDiagrams', 'diagramLayout']);
+    expect(RICH_LOSSES.tableDiagrams).toMatch(/below its table/);
+  });
+
+  it('numbers several, in reading order, also from deeper in a cell and in a list', () => {
+    const table: RichNode = {
+      type: 'table',
+      content: [
+        row('tableHeader', [p(text('A'))], [p(text('B'))]),
+        row(
+          'tableCell',
+          [p(text('x')), diagram('pie title First', { language: 'Mermaid' })],
+          [
+            {
+              type: 'bulletList',
+              content: [
+                { type: 'listItem', content: [p(text('item')), diagram('pie title Second')] },
+              ],
+            },
+          ],
+        ),
+      ],
+    };
+    const { markdown, lost } = richToMarkdown(
+      doc({ type: 'bulletList', content: [{ type: 'listItem', content: [table] }] }),
+    );
+    const lines = markdown.split('\n');
+    expect(lines[2]).toMatch(
+      /^ {2}\| x<br>\*Diagram 1 below the table\* +\| item \*Diagram 2 below the table\* +\|$/,
+    );
+    expect(lines.slice(3)).toEqual([
+      '',
+      '  ```mermaid',
+      '  pie title First',
+      '  ```',
+      '',
+      '  ```mermaid',
+      '  pie title Second',
+      '  ```',
+    ]);
+    expect(lost).toEqual(['tableBlocks', 'tableDiagrams']);
   });
 });

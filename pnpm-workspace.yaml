@@ -21,3 +21,10 @@ ignoredBuiltDependencies:
 overrides:
   # Through mermaid > chevrotain: GHSA-r5fr-rjxr-66jc, GHSA-f23m-r3pf-42rh.
   lodash-es: ^4.18.1
+
+# Fixes applied to dependencies as they are installed (`pnpm patch`). Each patch is tied to the
+# exact version: upgrading the package means checking whether the fix is still needed.
+patchedDependencies:
+  # SVG text labels (flowcharts, mind maps) showed `&quot;` and `&#35;` as written: the
+  # entity reader only knew &amp; &lt; &gt; (patches/mermaid-12.0.0.patch).
+  mermaid@12.0.0: patches/mermaid-12.0.0.patch

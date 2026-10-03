@@ -63,6 +63,36 @@ describe('rich pages as HTML', () => {
     expect(html).toBe('<p style="margin-left: 4em">x</p>\n<p>x</p>\n<p>x</p>\n');
   });
 
+  it('draws diagrams in any case of Mermaid, at their size: pixels, Fit or natural', () => {
+    const diagram = (language: string, width?: unknown) => ({
+      type: 'codeBlock',
+      attrs: { language, ...(width === undefined ? {} : { width }) },
+      content: [{ type: 'text', text: 'pie' }],
+    });
+    const html = richToHtml(
+      {
+        type: 'doc',
+        content: [
+          diagram('Mermaid', 320),
+          diagram('mermaid', 'fit'),
+          diagram('MERMAID'),
+          diagram('mermaid', 'huge'),
+        ],
+      },
+      { diagram: () => '<svg></svg>' },
+    );
+    expect(html.match(/<div class="diagram-svg"[^>]*>/g)).toEqual([
+      '<div class="diagram-svg" style="width: 320px">',
+      '<div class="diagram-svg" style="width: 100%">',
+      '<div class="diagram-svg">',
+      '<div class="diagram-svg">',
+    ]);
+    // Without a drawing, the code, marked as Mermaid.
+    expect(richToHtml({ type: 'doc', content: [diagram('Mermaid')] })).toContain(
+      '<pre class="diagram-code"><code class="language-mermaid">pie</code></pre>',
+    );
+  });
+
   it('writes the document, escaping text and dropping unsafe addresses', () => {
     const html = richToHtml(
       {

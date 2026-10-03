@@ -1,6 +1,14 @@
 import { ASSET_SCHEME } from './assets';
 import { DIAGRAM_LANGUAGE } from './diagrams';
-import { RICH_INDENT_EM, RICH_MAX_INDENT, type RichMark, type RichNode } from './rich';
+import { isDiagramLanguage } from './diagrams/language';
+import {
+  DIAGRAM_FIT,
+  RICH_INDENT_EM,
+  RICH_MAX_INDENT,
+  diagramWidth,
+  type RichMark,
+  type RichNode,
+} from './rich';
 
 /*
  * A rich page as plain HTML (§8.4), without a browser: the readable copy in `.memora`
@@ -144,7 +152,7 @@ function render(node: RichNode, options: RichHtmlOptions): string {
     case 'codeBlock': {
       const language = typeof attrs?.language === 'string' ? attrs.language : '';
       const text = (node.content ?? []).map((c) => c.text ?? '').join('');
-      if (language === DIAGRAM_LANGUAGE) return diagramHtml(text, attrs, options);
+      if (isDiagramLanguage(language)) return diagramHtml(text, attrs, options);
       return `<pre><code${language ? ` class="language-${escape(language)}"` : ''}>${escape(text)}</code></pre>\n`;
     }
     case 'horizontalRule':
@@ -191,8 +199,9 @@ function render(node: RichNode, options: RichHtmlOptions): string {
 function diagramHtml(code: string, attrs: RichNode['attrs'], options: RichHtmlOptions): string {
   const svg = options.diagram?.(code) ?? null;
   const align = ['left', 'right'].includes(String(attrs?.align)) ? String(attrs?.align) : 'center';
-  const width = Number(attrs?.width);
-  const size = Number.isInteger(width) && width > 0 ? ` style="width: ${width}px"` : '';
+  const width = diagramWidth(attrs?.width);
+  const size =
+    width === DIAGRAM_FIT ? ' style="width: 100%"' : width ? ` style="width: ${width}px"` : '';
   const caption =
     typeof attrs?.caption === 'string' && attrs.caption
       ? `<figcaption>${escape(attrs.caption)}</figcaption>`

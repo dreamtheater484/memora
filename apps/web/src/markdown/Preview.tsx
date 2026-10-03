@@ -1,4 +1,4 @@
-import { ASSET_SCHEME } from '@memora/shared';
+import { ASSET_SCHEME, isDiagramLanguage } from '@memora/shared';
 import type { Element, ElementContent, Root, RootContent } from 'hast';
 import { toJsxRuntime, type Components } from 'hast-util-to-jsx-runtime';
 import { Check, Copy, PenLine } from 'lucide-react';
@@ -158,7 +158,7 @@ function Pre({ node, children, ...props }: WithNode<'pre'>) {
     return <MathView tex={textOf(code)} display line={line} />;
   }
   const language = classes.find((c) => c.startsWith('language-'))?.slice('language-'.length);
-  if (code && language === 'mermaid') return <Mermaid code={textOf(code)} line={line} />;
+  if (code && isDiagramLanguage(language)) return <Mermaid code={textOf(code)} line={line} />;
   if (code)
     return <CodeBlock code={textOf(code).replace(/\n$/, '')} language={language} line={line} />;
   return <pre {...props}>{children}</pre>;

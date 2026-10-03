@@ -184,8 +184,9 @@ function variables(p: Palette, theme: DiagramTheme): Record<string, unknown> {
     taskTextClickableColor: p.accent.ink,
     activeTaskBkgColor: p.cyan.solid,
     activeTaskBorderColor: p.cyan.solid,
+    // A done task's soft fill alone all but vanished against the page: its edge keeps it seen.
     doneTaskBkgColor: p.accent.soft,
-    doneTaskBorderColor: p.accent.soft,
+    doneTaskBorderColor: p.accent.line,
     critBkgColor: p.coral.solid,
     critBorderColor: p.coral.solid,
     gridColor: p.grid,

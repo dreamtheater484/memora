@@ -1,3 +1,4 @@
+import { isDiagramLanguage } from '@memora/shared';
 import { Extension } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
@@ -31,7 +32,7 @@ function decorate(
   doc.descendants((node, pos) => {
     if (node.type.name !== 'codeBlock') return true;
     const language = typeof node.attrs.language === 'string' ? node.attrs.language : '';
-    if (!language || language === 'mermaid') return false;
+    if (!language || isDiagramLanguage(language)) return false;
     const code = node.textContent;
     const id = `${language}\u0000${code}`;
     const tokens = cache.get(id);

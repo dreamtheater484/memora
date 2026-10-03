@@ -252,4 +252,24 @@ describe('rich pages and conversions', () => {
       conflict: undefined,
     });
   });
+
+  it('keeps a closed tab’s text as a version, not in the page, once the page was converted', () => {
+    const before = edited(`${base}- Maps\n`);
+    const converted = absorb(fromServer('p1', server(3, base), 0), rich(4, doc('Pack')))!;
+    const written = restore(
+      'p1',
+      converted,
+      {
+        text: before.content,
+        known: { writeId: 'w0', content: base },
+        type: 'markdown',
+        revision: 3,
+        base,
+      },
+      'tab',
+      5,
+    );
+    expect(written.record).toBe(converted);
+    expect(written.displaced).toBe(`${base}- Maps\n`);
+  });
 });

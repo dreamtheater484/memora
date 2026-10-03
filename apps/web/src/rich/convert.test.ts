@@ -77,6 +77,41 @@ describe('Markdown → rich', () => {
     });
   });
 
+  it('makes diagrams of Mermaid in any case, in lists and quotes too', () => {
+    const doc = markdownToRich(
+      [
+        '```Mermaid',
+        'pie title One',
+        '```',
+        '',
+        '- Step',
+        '  ```MERMAID',
+        '  pie title Two',
+        '  ```',
+        '',
+        '> [!NOTE]',
+        '> ```mermaid',
+        '> pie title Three',
+        '> ```',
+      ].join('\n'),
+    );
+    const blocks: RichNode[] = [];
+    const walk = (node: RichNode) => {
+      if (node.type === 'codeBlock') blocks.push(node);
+      node.content?.forEach(walk);
+    };
+    walk(doc);
+    expect(blocks.map((b) => [b.attrs?.language, b.content?.[0]?.text])).toEqual([
+      ['mermaid', 'pie title One'],
+      ['mermaid', 'pie title Two'],
+      ['mermaid', 'pie title Three'],
+    ]);
+    // And back: written as ```mermaid, in its list item.
+    expect(richToMarkdown(doc).markdown).toMatch(
+      /^- Step *\n\n? {2}```mermaid\n {2}pie title Two\n {2}```$/m,
+    );
+  });
+
   it('keeps links to pages and files, and never script', () => {
     const doc = markdownToRich(
       'See [[Launch plan|the plan]] and [the file](asset:0190e5a4-7c1d-7b3e-8a2f-1234567890ab).\n\n<script>alert(1)</script>\n\n[bad](javascript:alert(1))',

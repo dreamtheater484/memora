@@ -270,20 +270,80 @@ export const RICH_KEYS: readonly { keys: string; label: string }[] = [
   { keys: 'Esc Tab', label: 'Leave the editor' },
 ];
 
-/** The diagram editor's keys (§9.4), for the reference sheet. */
-export const DIAGRAM_KEYS: readonly { keys: string; label: string }[] = [
-  { keys: 'Enter', label: 'Rename the selected box' },
-  { keys: 'Tab', label: 'Add a connected box (while renaming: and name the next)' },
-  { keys: 'Shift Enter', label: 'Add a box beside it' },
-  { keys: '← → ↑ ↓', label: 'Select the box that way' },
-  { keys: 'Shift Click', label: 'Select more boxes' },
-  { keys: 'Delete', label: 'Delete the selection' },
-  { keys: 'Enter', label: 'Mind map outline: add a topic' },
-  { keys: 'Tab', label: 'Mind map outline: a level in (Shift Tab out)' },
-  { keys: 'Alt ↑ ↓', label: 'Mind map outline: move a topic' },
-  { keys: 'Mod Z', label: 'Undo (Mod Shift Z redo)' },
-  { keys: 'Mod Wheel', label: 'Zoom' },
-  { keys: 'Esc', label: 'Clear the selection, then close' },
+/** The groups of the diagram editor's keys, in the order they are listed. */
+export const DIAGRAM_KEY_GROUPS = {
+  all: 'Every diagram',
+  flowchart: 'Flowcharts',
+  mindmap: 'Mind maps',
+  sequence: 'Sequence diagrams',
+  charts: 'Timelines, Gantt and pie charts',
+  panel: 'The panel beside the drawing',
+} as const;
+
+export type DiagramKeyGroup = keyof typeof DIAGRAM_KEY_GROUPS;
+
+/**
+ * The diagram editor's keys (§9.4), after MindManager's where they fit: for the reference
+ * sheet and the editor's own key sheet (?). They work while the drawing has the focus; the
+ * panel's while one of its fields has.
+ */
+export const DIAGRAM_KEYS: readonly { keys: string; label: string; group: DiagramKeyGroup }[] = [
+  { group: 'all', keys: 'Double-click', label: 'Edit the words in place' },
+  { group: 'all', keys: 'F2', label: 'Edit the words (Space: at their end; or just type)' },
+  { group: 'all', keys: 'Enter', label: 'Add the next item (Shift Enter: one before it)' },
+  {
+    group: 'all',
+    keys: 'Tab',
+    label: 'Add an item under it (while editing: keep the words, go on)',
+  },
+  { group: 'all', keys: '← → ↑ ↓', label: 'Select the item that way' },
+  { group: 'all', keys: 'Home End', label: 'Select the first or last item' },
+  { group: 'all', keys: 'Alt ↑ ↓', label: 'Move the item' },
+  { group: 'all', keys: 'Delete', label: 'Delete the selection' },
+  { group: 'all', keys: 'Mod D', label: 'Duplicate' },
+  { group: 'all', keys: 'Mod C X V', label: 'Copy, cut, paste' },
+  { group: 'all', keys: 'Mod Z', label: 'Undo (Mod Shift Z or Mod Y: redo)' },
+  { group: 'all', keys: 'Mod + − 0', label: 'Zoom in, out, to fit' },
+  { group: 'all', keys: 'Mod Enter', label: 'Done' },
+  { group: 'all', keys: 'Esc', label: 'Stop editing, clear the selection, then close' },
+  { group: 'all', keys: '?', label: 'Show these keys' },
+  { group: 'flowchart', keys: 'Tab', label: 'Add a connected box' },
+  { group: 'flowchart', keys: 'Shift Enter', label: 'Add a box beside it' },
+  { group: 'flowchart', keys: 'Mod Shift Enter', label: 'Add a box before it' },
+  { group: 'flowchart', keys: 'Shift Click', label: 'Select more boxes' },
+  { group: 'flowchart', keys: 'Shift Drag', label: 'Select the boxes in a rectangle' },
+  { group: 'flowchart', keys: 'Mod A', label: 'Select every box' },
+  { group: 'flowchart', keys: 'Mod K', label: 'Connect the selected boxes in order' },
+  { group: 'flowchart', keys: 'Mod G', label: 'Group the boxes (Mod Shift G: ungroup)' },
+  { group: 'flowchart', keys: 'Mod 1…9', label: 'Shape' },
+  { group: 'flowchart', keys: 'Alt 0…8', label: 'Colour (0: none)' },
+  { group: 'flowchart', keys: 'Mod Shift Delete', label: 'Delete boxes, keep the flow; ungroup' },
+  { group: 'mindmap', keys: 'Enter', label: 'Add a topic after it (Shift Enter: before)' },
+  { group: 'mindmap', keys: 'Tab', label: 'Add a topic under it' },
+  { group: 'mindmap', keys: 'Mod Shift Enter', label: 'Add a topic above it' },
+  { group: 'mindmap', keys: 'Alt Shift ← →', label: 'A level out or in' },
+  { group: 'mindmap', keys: 'Alt Shift ↑ ↓', label: 'Move it first or last' },
+  { group: 'mindmap', keys: 'Mod Backspace', label: 'Select the topic it is under' },
+  { group: 'mindmap', keys: 'Mod Home', label: 'Select the central topic' },
+  { group: 'mindmap', keys: 'Mod 1…7', label: 'Shape' },
+  { group: 'mindmap', keys: 'Mod Shift Delete', label: 'Delete the topic, keep what is under it' },
+  { group: 'sequence', keys: 'Enter', label: 'Add a message after it (on a participant: from it)' },
+  { group: 'sequence', keys: 'Tab', label: 'Add the reply (on a participant: a participant)' },
+  { group: 'sequence', keys: 'Alt Enter', label: 'Add a note' },
+  { group: 'sequence', keys: 'Mod Shift Enter', label: 'Put it in a loop' },
+  { group: 'sequence', keys: 'Alt ← →', label: 'Move a participant' },
+  { group: 'sequence', keys: 'Alt Shift ← →', label: 'Out of or into a block' },
+  { group: 'sequence', keys: 'Mod Backspace', label: 'Select its block' },
+  { group: 'sequence', keys: 'Mod Shift Delete', label: 'Delete a block with its steps' },
+  { group: 'charts', keys: 'Enter', label: 'Add a period, event, task or slice after it' },
+  { group: 'charts', keys: 'Tab', label: 'Timeline: add an event to the period' },
+  { group: 'charts', keys: 'Mod Shift Delete', label: 'Delete a section with what it holds' },
+  { group: 'panel', keys: 'Enter', label: 'Add a row after it' },
+  { group: 'panel', keys: 'Shift Enter', label: 'Break a line in the words' },
+  { group: 'panel', keys: '↑ ↓', label: 'The field above or below' },
+  { group: 'panel', keys: 'Alt ↑ ↓', label: 'Move the row' },
+  { group: 'panel', keys: 'Tab', label: 'Mind map outline: a level in (Shift Tab: out)' },
+  { group: 'panel', keys: 'Insert', label: 'Mind map outline: add a topic under it' },
 ];
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -308,8 +368,18 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 /**
+ * An open dialog or popover holds every shortcut, the global ones too: they would act on the
+ * page behind it, or open another dialog in its place and lose what is in it (an unfinished
+ * diagram). The command palette lets the app's shortcuts through (`data-shortcuts`).
+ */
+const dialogOpen = () =>
+  !!document.querySelector(
+    '[role="dialog"][data-state="open"]:not([data-shortcuts]), [role="alertdialog"][data-state="open"]',
+  );
+
+/**
  * Listens for the shortcuts and runs the handler given for each. Shortcuts wait while a dialog
- * or menu is open, except the global ones.
+ * is open; all but the global ones also wait in text fields and menus.
  */
 export function useShortcuts(handlers: Partial<Record<ShortcutId, () => void>>): void {
   const current = useRef(handlers);
@@ -322,6 +392,7 @@ export function useShortcuts(handlers: Partial<Record<ShortcutId, () => void>>):
       const shortcut = SHORTCUTS.find((s) => s.match(e));
       const handler = shortcut && current.current[shortcut.id];
       if (!shortcut || !handler) return;
+      if (dialogOpen()) return;
       if (shortcut.scope !== 'global') {
         const target = e.target as HTMLElement | null;
         if (isTyping(target)) return;

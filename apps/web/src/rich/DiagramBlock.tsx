@@ -1,3 +1,4 @@
+import { diagramWidth, type DiagramWidth } from '@memora/shared';
 import type { Editor } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { NodeSelection } from '@tiptap/pm/state';
@@ -24,7 +25,7 @@ import {
 import { floatingPanel } from '../components/ui/styles';
 import { DrawnDiagram } from '../diagrams/DrawnDiagram';
 import { cn } from '../lib/cn';
-import type { DiagramAlign } from './diagram';
+import { DIAGRAM_SIZES, frameStyle, type DiagramAlign } from './diagram';
 import { editDiagramAt } from './diagramActions';
 
 /*
@@ -41,13 +42,6 @@ const ALIGNS: { value: DiagramAlign; label: string; icon: React.ReactNode }[] = 
   { value: 'right', label: 'Align right', icon: <AlignRight /> },
 ];
 
-const SIZES: { value: string; label: string; width: number | null }[] = [
-  { value: 'natural', label: 'Natural size', width: null },
-  { value: '320', label: 'Small', width: 320 },
-  { value: '480', label: 'Medium', width: 480 },
-  { value: '720', label: 'Large', width: 720 },
-];
-
 export interface DiagramBlockProps {
   node: PMNode;
   editor: Editor;
@@ -57,7 +51,7 @@ export interface DiagramBlockProps {
 
 export function DiagramBlock({ node, editor, getPos, selected }: DiagramBlockProps) {
   const attrs = node.attrs as {
-    width: number | null;
+    width: DiagramWidth;
     align: DiagramAlign | null;
     caption: string | null;
   };
@@ -132,13 +126,14 @@ export function DiagramBlock({ node, editor, getPos, selected }: DiagramBlockPro
   };
 
   const showCaption = !!attrs.caption || captioning;
-  const size = SIZES.find((s) => s.width === attrs.width)?.value ?? 'custom';
+  const width = diagramWidth(attrs.width);
+  const size = DIAGRAM_SIZES.find((s) => s.width === width)?.value ?? 'custom';
   return (
     <figure className={cn('rich-diagram', selected && 'is-selected')} data-align={align}>
       <div
         ref={frame}
         className="rich-diagram-frame"
-        style={attrs.width ? { width: `${attrs.width}px` } : undefined}
+        style={frameStyle(attrs.width)}
         onMouseDown={(e) => {
           if ((e.target as HTMLElement).closest('[role="toolbar"], button, input')) return;
           e.preventDefault();
@@ -208,10 +203,10 @@ export function DiagramBlock({ node, editor, getPos, selected }: DiagramBlockPro
                 <MenuRadioGroup
                   value={size}
                   onValueChange={(value) =>
-                    update({ width: SIZES.find((s) => s.value === value)?.width ?? null })
+                    update({ width: DIAGRAM_SIZES.find((s) => s.value === value)?.width ?? null })
                   }
                 >
-                  {SIZES.map((s) => (
+                  {DIAGRAM_SIZES.map((s) => (
                     <MenuRadioItem key={s.value} value={s.value}>
                       {s.label}
                     </MenuRadioItem>

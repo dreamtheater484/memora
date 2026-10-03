@@ -174,14 +174,15 @@ test.describe('Markdown pages', () => {
     await expect
       .poll(() => api.notes.content.get('q4'), { timeout: 10_000 })
       .toBe(
-        `Text above\n\n${fence(`mindmap\n  root(("Plan"))\n    Goals\n    Risks\n      Budget`)}\n\nText below\n`,
+        // Only what changed is written: the rest of the code stays as it was.
+        `Text above\n\n${fence(`mindmap\n  root((Plan))\n    Goals\n    Risks\n      Budget`)}\n\nText below\n`,
       );
 
     // Show code puts the cursor in the fence, which then shows its code.
     await page.locator('.cm-diagram').hover();
     await page.locator('.cm-diagram').getByRole('button', { name: 'Show code' }).click();
     await expect(page.locator('.cm-diagram')).toHaveCount(0);
-    await expect(page.locator('.cm-content')).toContainText('root(("Plan"))');
+    await expect(page.locator('.cm-content')).toContainText('root((Plan))');
   });
 
   test('a diagram at the top of a page is drawn when it opens', async ({ page }) => {
@@ -204,6 +205,107 @@ test.describe('Markdown pages', () => {
     await expect
       .poll(() => api.notes.content.get('q4'), { timeout: 10_000 })
       .toContain('A->>B: Message');
+  });
+});
+
+test.describe('editing on the drawing', () => {
+  test('a sequence diagram’s words are edited where they are, with the keys', async ({ page }) => {
+    const code = 'sequenceDiagram\n  A->>B: Hello\n  loop Every day\n    B->>A: Ping\n  end';
+    const api = await open(page, 'q4', `${fence(code)}\n`);
+    await page.getByRole('radio', { name: 'Preview' }).click();
+    const figure = page.locator('[data-preview] .mermaid-diagram');
+    await figure.hover();
+    await figure.locator('.diagram-edit').click();
+    await expect(canvas(page).locator('svg')).toBeVisible();
+    const words = (text: string) =>
+      canvas(page).locator('text.messageText').filter({ hasText: text });
+
+    // A double-click on a message edits its words in place; quotes stay quotes.
+    await words('Hello').dblclick();
+    await expect(editorDialog(page).locator('.diagram-label-input')).toBeFocused();
+    await page.keyboard.type('Say "hi"');
+    await page.keyboard.press('Enter');
+    await expect(words('Say "hi"')).toBeVisible();
+    await expect(editorDialog(page).getByRole('textbox', { name: 'Message' }).first()).toHaveValue(
+      'Say "hi"',
+    );
+    await expectNoA11yViolations(page);
+
+    // F2 edits the selected message; Esc leaves its words as they were.
+    await page.keyboard.press('F2');
+    await page.keyboard.type('Never mind');
+    await page.keyboard.press('Escape');
+    await expect(words('Say "hi"')).toBeVisible();
+
+    // Tab adds the reply, ready to be named.
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('Hi back');
+    await page.keyboard.press('Enter');
+    await expect(words('Hi back')).toBeVisible();
+
+    // A click on the loop's condition selects it; Enter adds a message inside it.
+    await canvas(page).locator('text.loopText').click();
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Pong');
+    await page.keyboard.press('Enter');
+    await expect(words('Pong')).toBeVisible();
+
+    // Undo takes the last change back, and brings back what was selected.
+    await page.keyboard.press('Control+z');
+    await expect(words('Pong')).toHaveCount(0);
+    await page.keyboard.press('Control+Shift+z');
+    await expect(words('Pong')).toBeVisible();
+
+    await page.keyboard.press('Control+Enter');
+    await expect(editorDialog(page)).toBeHidden();
+    await expect
+      .poll(() => api.notes.content.get('q4'), { timeout: 10_000 })
+      .toMatch(
+        /A->>B: Say "hi"\n\s+B-->>A: Hi back\n\s+loop Every day\n\s+B->>A: Ping\n\s+A->>B: Pong\n\s+end/,
+      );
+  });
+
+  test('the editor’s keys: its own sheet, boxes added and named, the app’s keys wait', async ({
+    page,
+  }) => {
+    const api = await open(page, 'pricing', richWith(FLOW));
+    await page.locator('.ProseMirror .rich-diagram-frame').click();
+    await page.getByRole('button', { name: 'Edit diagram' }).click();
+    await expect(canvas(page).locator('svg')).toBeVisible();
+    await expect(canvas(page)).toBeFocused();
+
+    // ? lists the keys; Esc closes the list, not the editor.
+    await page.keyboard.press('?');
+    const sheet = page.getByRole('dialog', { name: 'Keys of the diagram editor' });
+    await expect(sheet).toBeVisible();
+    await expect(sheet).toContainText('Add a connected box');
+    await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
+    await expect(editorDialog(page)).toBeVisible();
+
+    // The app's shortcuts wait while the editor is open.
+    await page.keyboard.press('Control+k');
+    await page.keyboard.press('Control+Alt+n');
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+
+    // The arrow keys select a box, Tab adds a connected one and names it.
+    await page.keyboard.press('ArrowDown');
+    await expect(canvas(page).locator('.diagram-ring')).toHaveCount(1);
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('Check stock');
+    await page.keyboard.press('Enter');
+    await expect(canvas(page).locator('g.node').filter({ hasText: 'Check stock' })).toBeVisible();
+    // Typing on a selected box renames it.
+    await page.keyboard.type('Stock checked');
+    await page.keyboard.press('Enter');
+    await expect(canvas(page).locator('g.node').filter({ hasText: 'Stock checked' })).toBeVisible();
+
+    await page.keyboard.press('Control+Enter');
+    await expect(editorDialog(page)).toBeHidden();
+    await expect
+      .poll(() => codeOf(storedDiagram(api)), { timeout: 10_000 })
+      .toContain('Stock checked');
+    expect(codeOf(storedDiagram(api))).toMatch(/n1 --> n4/);
   });
 });
 

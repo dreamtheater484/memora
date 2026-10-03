@@ -86,11 +86,14 @@ export const editorTheme = EditorView.theme({
     // Room at the end, so the last line can be typed on in the middle of the screen.
     paddingBottom: '30vh',
   },
-  // Every character as typed: no ligatures turning `-->` or `!=` into symbols.
+  // Every character as typed: no ligatures turning `-->` or `!=` into symbols. The page's
+  // readable width (`--measure`, MarkdownPage) is a maximum: with wrapped lines the text is
+  // never wider than its pane, whatever it holds (a wide drawing scrolls on its own).
   '.cm-content': {
     caretColor: 'var(--accent)',
     padding: '0.25rem 0',
     fontVariantLigatures: 'none',
+    minWidth: '0',
   },
   '.cm-line': { padding: '0 0.25rem 0 0' },
   '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)', borderLeftWidth: '2px' },
@@ -185,17 +188,21 @@ export const editorTheme = EditorView.theme({
   '.cm-completionIcon': { display: 'none' },
   // Image thumbnails under their lines.
   '.cm-image-thumb': { display: 'block', padding: '0.25rem 0 0.5rem' },
-  // A diagram drawn in place of its code, with its two buttons (diagrams.ts).
+  // A diagram drawn in place of its code, with its two buttons (diagrams.ts), indented like
+  // its code in a list item or a quote (`ch` of the editor's font, so it is set out here). It
+  // takes the text's width and never sets it: a drawing wider than the pane scrolls inside.
   '.cm-diagram': {
     position: 'relative',
     margin: '0.25rem 0',
+    marginLeft: 'calc(var(--cm-diagram-indent, 0) * 1ch)',
     padding: '0.75rem',
     border: '1px solid var(--line)',
     borderRadius: '0.5rem',
     background: 'var(--surface)',
-    fontFamily: 'var(--font-sans)',
     cursor: 'default',
+    contain: 'inline-size',
   },
+  '.cm-diagram > *': { fontFamily: 'var(--font-sans)' },
   '.cm-diagram-tools': {
     position: 'absolute',
     top: '0.4rem',

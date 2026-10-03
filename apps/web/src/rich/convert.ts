@@ -1,4 +1,11 @@
-import { parseRich, richToMarkdown, type MarkdownResult, type RichNode } from '@memora/shared';
+import {
+  DIAGRAM_LANGUAGE,
+  isDiagramLanguage,
+  parseRich,
+  richToMarkdown,
+  type MarkdownResult,
+  type RichNode,
+} from '@memora/shared';
 import { generateJSON } from '@tiptap/core';
 import type { Element, ElementContent, Root } from 'hast';
 import { toHtml } from 'hast-util-to-html';
@@ -73,6 +80,15 @@ function adapt(tree: Root) {
       // The fence's closing line break isn't part of the code.
       const last = code?.children.at(-1);
       if (last?.type === 'text') last.value = last.value.replace(/\n$/, '');
+      // ```Mermaid or ```MERMAID is a diagram, written the way rich pages store one.
+      const classes = code?.properties.className;
+      if (code && Array.isArray(classes)) {
+        code.properties.className = classes.map((c) =>
+          typeof c === 'string' && c.startsWith('language-') && isDiagramLanguage(c.slice(9))
+            ? `language-${DIAGRAM_LANGUAGE}`
+            : c,
+        );
+      }
     }
     // Task lists.
     if (node.tagName === 'ul' && hasClass(node, 'contains-task-list')) {
