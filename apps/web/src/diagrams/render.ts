@@ -1,4 +1,11 @@
-import { DIAGRAM_COLOURS, DIAGRAM_SWATCHES, colourClass, diagramSummary } from '@memora/shared';
+import {
+  DIAGRAM_COLOURS,
+  DIAGRAM_SWATCHES,
+  colourClass,
+  detectDiagram,
+  diagramSummary,
+  parseSequence,
+} from '@memora/shared';
 import DOMPurify from 'dompurify';
 import figtreeUrl from '@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2?url';
 import './render.css';
@@ -143,6 +150,36 @@ function darkenColours(svg: SVGSVGElement) {
   }
 }
 
+/** The words of the stand-in step an empty block gets while it is drawn (an invisible character). */
+const FILLER = '\u2060';
+/** A block's start, or a further branch of it (an empty branch is drawn as badly). */
+const BLOCK_START = /^(loop|alt|opt|par|critical|break|rect|else|and|option)\b/;
+const BLOCK_NEXT = /^(else|and|option|end)\b/;
+
+/**
+ * Mermaid lays an empty sequence block (a loop with nothing in it yet) out as a thin column
+ * down the whole diagram, and loses the place of everything after it. For the drawing only,
+ * each empty block or branch gets a note across the participants, taken out of the SVG again in
+ * `finish`: the block is drawn as an empty box where it is. The code itself is unchanged.
+ */
+export function fillEmptyBlocks(code: string): string {
+  if (detectDiagram(code) !== 'sequence') return code;
+  const parsed = parseSequence(code);
+  if (!parsed.ok || !parsed.model.participants.length) return code;
+  const ids = parsed.model.participants.map((p) => p.id);
+  const over = ids.length > 1 ? `${ids[0]},${ids.at(-1)}` : ids[0];
+  const lines = code.split(/\r?\n/);
+  const out: string[] = [];
+  lines.forEach((line, i) => {
+    out.push(line);
+    if (!BLOCK_START.test(line.trim())) return;
+    let next = i + 1;
+    while (next < lines.length && /^\s*(%%.*)?$/.test(lines[next]!)) next += 1;
+    if (BLOCK_NEXT.test(lines[next]?.trim() ?? '')) out.push(`Note over ${over}: ${FILLER}`);
+  });
+  return out.join('\n');
+}
+
 /** Sanitises Mermaid's SVG, finishes Memora's look, labels it, and reads its size. */
 function finish(raw: string, label: string, theme: DiagramTheme): Drawing {
   const clean = DOMPurify.sanitize(raw, {
@@ -152,6 +189,10 @@ function finish(raw: string, label: string, theme: DiagramTheme): Drawing {
   });
   const svg = clean.querySelector('svg');
   if (!svg) throw new DiagramError('The diagram couldn’t be drawn');
+  // The stand-ins of empty blocks (fillEmptyBlocks) leave their space, not themselves.
+  for (const note of svg.querySelectorAll('[data-et="note"]')) {
+    if (note.textContent?.replace(/\s/g, '') === FILLER) note.remove();
+  }
   // Mermaid leaves the words of some mind map shapes (circles, boxes, hexagons) starting at
   // the middle rather than centred on it.
   for (const words of svg.querySelectorAll<SVGGElement>('g.mindmap-node > g.label')) {
@@ -185,7 +226,7 @@ async function draw(code: string, theme: DiagramTheme, label: string): Promise<D
     mermaid.initialize(mermaidConfig(theme));
     const id = `memora-diagram-${++counter}`;
     try {
-      const { svg } = await mermaid.render(id, code);
+      const { svg } = await mermaid.render(id, fillEmptyBlocks(code));
       return finish(svg, label, theme);
     } catch (error) {
       throw new DiagramError(message(error));
