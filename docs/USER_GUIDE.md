@@ -98,13 +98,38 @@ Converting a rich page to Markdown first lists what Markdown can't keep (colours
 Flowcharts, mind maps, sequence diagrams, timelines, Gantt charts and pie charts, drawn in Memora's colours and edited by pointing and typing. Underneath, a diagram is [Mermaid](https://mermaid.js.org) code, so it travels with the page: Markdown exports, GitHub and other Mermaid tools draw it too.
 
 - **A new diagram:** type `/diagram` in any page, or use **Insert → Diagram** (rich pages) or the toolbar's **More → Diagram…** (Markdown pages). Pick a template from the gallery, or start blank.
-- **The editor** shows the drawing, with a panel for what is selected. **Done** puts the diagram in the page; **Cancel** or `Esc` leaves the page as it was. `Ctrl/Cmd+Z` undoes, and **Templates** starts again from another one.
-  - **Flowcharts:** click a box to select it, and `Enter` (or a double-click) to rename it. The **+** beside a selected box adds a connected one: type its name and press `Enter`, or `Tab` to go on to the next box. Drag one box onto another to connect them. The panel sets a box's shape and colour, and an arrow's label, line and ends. `Shift`-click selects more boxes, to group or delete them together; the arrow keys move between boxes.
-  - **Mind maps** are an outline: `Enter` adds a topic, `Tab` and `Shift+Tab` change its level, and `Alt+↑`/`↓` move it. Memora lays the map out around its centre, branches either side, each in its own colour.
-  - **Sequence diagrams:** the participants, then the steps in order: messages, notes, and blocks such as loops and alternatives. New steps go after the selected one.
-  - **Timelines, Gantt charts and pie charts** are lists: periods and their events; tasks with their dates or the task they follow; slices and their values.
-- **In rich pages** a diagram is selected like an image. Its toolbar opens the editor (or press `Enter`), sets the size (or drag the corner) and alignment, adds a caption and copies the diagram as a picture.
-- **In Markdown pages** diagrams are drawn in the source too, in place of their code. Point at one for **Edit diagram** and **Show code**; moving the cursor into it with the arrow keys shows its code. The preview has an **Edit** button, and the editor a **Code** tab. **Settings → Editing → Draw diagrams in the source** turns drawing in the source off.
+- **The editor** shows the drawing, with a panel beside it (below it on a phone) that lists everything in the diagram. **Done** (`Ctrl/Cmd+Enter`) puts the diagram in the page; **Cancel** or `Esc` leaves the page as it was. `Ctrl/Cmd+Z` undoes, also what was typed in the panel or the code, and brings back what was selected. **Templates** starts again from another one.
+- **Words are edited where they are**, in every kind of diagram: double-click a box, topic, participant, message, note, block, period, task or slice (or its value) on the drawing, or select it and press `F2`, or simply start typing. `Enter` keeps the words, `Shift+Enter` breaks a line where the label can have several, `Tab` keeps them and goes on (to a connected box, a topic under it, the reply to a message), and `Esc` leaves them as they were. The same words can be edited in the panel; a click on the drawing selects the panel's row, and a row being edited marks its item on the drawing.
+- **Keys**, after MindManager's where they fit (`?` in the editor shows them all):
+
+  | Keys                        | Does                                                                         |
+  | --------------------------- | ---------------------------------------------------------------------------- |
+  | `Enter` / `Shift+Enter`     | Add the next item after the selected one / before it                         |
+  | `Tab` or `Insert`           | Add an item under it: a connected box, a topic under it, the reply, an event |
+  | `Ctrl/Cmd+Shift+Enter`      | Add a box before it, a topic above it; put a step in a loop                  |
+  | `Alt+Enter`                 | Sequence diagrams: add a note                                                |
+  | Arrow keys, `Home`, `End`   | Select the item that way, the first, the last                                |
+  | `Ctrl/Cmd+Backspace`        | Select the topic or block it is in                                           |
+  | `Alt+↑` / `↓`               | Move the item (a step moves into and out of blocks, a task across sections)  |
+  | `Alt+Shift+←` / `→`         | A topic a level out or in; a step out of or into a block                     |
+  | `Alt+←` / `→`               | Move a participant                                                           |
+  | `Delete`                    | Delete the selection (a block or group: its contents stay)                   |
+  | `Ctrl/Cmd+Shift+Delete`     | Delete keeping the flow (boxes), what is under it (topics); a whole block    |
+  | `Ctrl/Cmd+D`, `C`, `X`, `V` | Duplicate, copy, cut, paste                                                  |
+  | `Ctrl/Cmd+A`, `K`, `G`      | Flowcharts: select every box, connect the selected ones, group them          |
+  | `Ctrl/Cmd+1…9`, `Alt+0…8`   | Shape; colour (`Alt+0`: none)                                                |
+  | `Ctrl/Cmd++`, `−`, `0`      | Zoom in, out, to fit                                                         |
+
+  In the panel, `Enter` in a row adds the next one, `Alt+↑`/`↓` move it, and `↑`/`↓` go to the field above or below.
+
+  - **Flowcharts:** the **+** beside a selected box adds a connected one; the smaller one adds one beside it. Drag a box onto another to connect them, onto a group to put it in, or onto empty space to take it out of its group. `Shift`-click, or `Shift` and a drag over empty space, selects several boxes. The panel sets shapes and colours (with their keys in the tooltips), an arrow's label, line and ends, and groups.
+  - **Mind maps:** the outline in the panel is the same map: `Enter` adds a topic, `Insert` one under it, `Tab` and `Shift+Tab` change its level, and `Backspace` in an empty topic removes it (what was under it stays). Memora lays the map out around its centre, branches either side, each in its own colour.
+  - **Sequence diagrams:** the participants, then the steps in order: messages, notes, and blocks such as loops and alternatives. New steps go after the selected one, or inside the selected block. Each message has a menu for its arrow (and starting or ending an activation); drag a step by its grip, or press `Alt+↑`/`↓`, to move it, into and out of blocks.
+  - **Timelines, Gantt charts and pie charts** are lists: periods and their events; tasks with their progress (done, active), whether they are critical or a milestone, and when they start and end (a date, a length, or another task); slices and their values. Sections can be moved, and removed with or without what they hold.
+
+- **In rich pages** a diagram is selected like an image. Its toolbar opens the editor (or press `Enter`), sets the size (Natural size, Small, Medium, Large, or **Fit**, which fills the text's width; or drag the corner) and alignment, adds a caption and copies the diagram as a picture.
+- **In Markdown pages** diagrams are drawn in the source too, in place of their code, also in list items, quotes and callouts. Point at one for **Edit diagram** and **Show code**; moving the cursor into it with the arrow keys shows its code. The preview has an **Edit** button, and the editor a **Code** tab. **Settings → Editing → Draw diagrams in the source** turns drawing in the source off. ` ```mermaid ` may be written in any case.
+- **Converting a page** between rich text and Markdown keeps its diagrams, as often as you like. A diagram in a rich table's cell moves to just below the table in Markdown (the convert dialog says so).
 - **Mermaid the editor doesn't know**, a type it can't edit or features beyond it, is still drawn. Such a diagram opens as code; what the visual editor doesn't know is kept as you wrote it.
 - **Exports** draw diagrams too: as pictures in Word documents, and as sharp drawings in PDF and HTML.
 
