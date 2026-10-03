@@ -229,8 +229,13 @@ export default function RichEditor({
           return true;
         },
       },
-      onUpdate: ({ editor: current }) => {
-        doc.edited(() => serialize(current), bridge.receiver ?? undefined);
+      onUpdate: ({ editor: current, transaction }) => {
+        // Only a change to the document is an edit: not what plugins add by themselves after
+        // one that changed nothing (the empty paragraph after a closing diagram, as the page
+        // opens), which is saved with the next real change.
+        const from = bridge.receiver;
+        if (!from || !transaction.docChanged) return;
+        doc.edited(() => serialize(current), from);
       },
     },
     [doc],
@@ -240,10 +245,13 @@ export default function RichEditor({
   useEffect(() => {
     if (!editor) return;
     const receiver: DocEditor = {
+      pageType: 'rich',
       set(text) {
         const json = parseRich(text);
         const node = json && readable(editor, json);
-        if (!node || editor.isDestroyed || node.eq(editor.state.doc)) return;
+        // Not a document this editor can show: it keeps its own, which the page then ignores.
+        if (!node || editor.isDestroyed) return false;
+        if (node.eq(editor.state.doc)) return;
         const { from, to } = editor.state.selection;
         const tr = editor.state.tr.replaceWith(0, editor.state.doc.content.size, node.content);
         const size = tr.doc.content.size;
@@ -265,8 +273,8 @@ export default function RichEditor({
     const start = () => {
       if (detach) return;
       bridge.connect(editor, receiver);
+      // Gives the editor the page's text as it is now.
       detach = doc.attach(receiver);
-      receiver.set(doc.content());
     };
     if (mounted(editor)) start();
     else editor.on('mount', start);

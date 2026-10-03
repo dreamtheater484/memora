@@ -123,6 +123,7 @@ export default function MarkdownEditor({
       pickFile: (v, images) => hostRef.current.pickFile(v, images),
     };
     const editor: DocEditor = {
+      pageType: 'markdown',
       set(text) {
         const current = cm.state.doc.toString();
         if (current === text) return;

@@ -1,4 +1,4 @@
-import type { Page } from '@memora/shared';
+import type { Page, PageType } from '@memora/shared';
 import { ApiRequestError, api, isUnreachable } from '../lib/api';
 import { mergeContent } from './merge';
 import {
@@ -24,6 +24,11 @@ import { MemoryStore, type LocalStore, type Op } from './store';
  *
  * If the store fails (full, or blocked), the page carries on in memory and this tab saves it
  * to the server itself; the app warns that closing the tab now could lose it.
+ *
+ * Text that arrives from elsewhere is the page's text from then on: an editor's older text is
+ * never read over it. Only an editor that shows the page as it is now counts: one of the
+ * page's type (a conversion changes it under an open editor), and one that could take its
+ * latest text. Any other editor is never given text and never saves.
  */
 
 export interface DocHost {
@@ -46,7 +51,16 @@ export interface DocHost {
 
 /** An editor showing the page: takes text that changed elsewhere. */
 export interface DocEditor {
-  set(text: string): void;
+  /**
+   * The kind of page it edits: it is only given text of that kind, and only saves while the
+   * page is of that kind.
+   */
+  readonly pageType: PageType;
+  /**
+   * Shows text that changed elsewhere. Answers false when it can't (a document it can't
+   * read): it then still shows older text, which is never saved over the page.
+   */
+  set(text: string): boolean | void;
 }
 
 export type DocState = 'loading' | 'ready' | 'missing' | 'unavailable' | 'error';
@@ -68,8 +82,8 @@ export class PageDoc {
   /** Components using the page; it closes when the last one goes. */
   refs = 0;
   private text = '';
-  /** Reads the editor's text; set while the text there is newer than `text`. */
-  private reader: (() => string) | null = null;
+  /** Reads an editor's text; set while the text there is newer than `text`. */
+  private reader: { read: () => string; from: DocEditor } | null = null;
   /** The record write this tab's text grew from. */
   private known = { writeId: '', content: '' };
   private record: PageRecord | undefined;
@@ -85,6 +99,8 @@ export class PageDoc {
   private refreshing: Promise<void> | null = null;
   private refreshAgain = false;
   private readonly editors = new Set<DocEditor>();
+  /** Editors that couldn't take the page's latest text: they show older text, not the page. */
+  private readonly behind = new Set<DocEditor>();
   private readonly listeners = new Set<() => void>();
   /** Edited in this tab since it was opened: closing it keeps a version (§9.7). */
   private editedHere = false;
@@ -105,8 +121,18 @@ export class PageDoc {
 
   /** The page's text as the user sees it. */
   content(): string {
-    if (this.reader) this.text = this.reader();
+    const reader = this.reader;
+    if (reader && this.counts(reader.from)) this.text = reader.read();
     return this.text;
+  }
+
+  /** Whether an editor shows the page as it is now, so that what it holds is the page. */
+  private counts(editor: DocEditor): boolean {
+    return (
+      this.editors.has(editor) &&
+      !this.behind.has(editor) &&
+      (!this.record || editor.pageType === this.record.type)
+    );
   }
 
   getSnapshot = (): DocSnapshot => this.snapshot;
@@ -215,6 +241,10 @@ export class PageDoc {
       }
       return;
     }
+    if (this.record && this.record.type !== record.type) {
+      this.retype(record);
+      return;
+    }
     this.record = record;
     this.state = 'ready';
     if (record.writeId !== this.known.writeId) {
@@ -234,32 +264,82 @@ export class PageDoc {
     this.emit();
   }
 
+  /**
+   * The page was converted (here, in another tab or on another device): its text is now of
+   * the other type. The open editor of the old type is never given it, and what it holds is
+   * never read again: the page follows the record. Anything typed here that isn't stored yet
+   * can't go into the page any more, so it is kept as a version.
+   */
+  private retype(record: PageRecord) {
+    const before = this.record!;
+    // Still read as the old type, by the editor that holds it.
+    const mine = this.content();
+    const typed = this.unpersisted && mine !== this.known.content;
+    this.record = record;
+    this.state = 'ready';
+    this.known = { writeId: record.writeId, content: record.content };
+    this.unpersisted = false;
+    this.setText(record.content);
+    if (typed) {
+      void this.keepLater({
+        kind: 'keepVersion',
+        pageId: this.id,
+        content: mine,
+        baseRevision: before.revision,
+      }).catch(() => undefined);
+      this.host.notify(
+        'This page was converted meanwhile. What you had just typed was kept as a version of the page.',
+      );
+    }
+    this.emit();
+  }
+
+  /** Text from elsewhere becomes the page's text, in every editor that can show it. */
   private setText(text: string) {
     this.text = text;
-    for (const editor of this.editors) editor.set(text);
+    // No editor's older text may be read over it (until the user types again).
+    this.reader = null;
+    for (const editor of this.editors) this.offer(editor, text);
+  }
+
+  /** Gives an editor of the page's type its text; one that can't show it falls behind. */
+  private offer(editor: DocEditor, text: string) {
+    if (this.record && editor.pageType !== this.record.type) return;
+    if (editor.set(text) === false) this.behind.add(editor);
+    else this.behind.delete(editor);
   }
 
   // Editing
 
+  /** An editor shows the page: it gets the page's text, and its changes are taken from now on. */
   attach(editor: DocEditor): () => void {
+    const text = this.content();
     this.editors.add(editor);
+    this.offer(editor, text);
     return () => {
-      // The editor goes: keep its text.
-      if (this.reader) this.text = this.reader();
-      this.reader = null;
+      // The editor goes: what was typed in it is the page's text (if it still counts).
+      if (this.reader?.from === editor) {
+        this.content();
+        this.reader = null;
+      }
       this.editors.delete(editor);
+      this.behind.delete(editor);
     };
   }
 
-  /** The user changed the text in `from`; `read` gets it (only when needed). */
-  edited(read: () => string, from?: DocEditor): void {
-    this.reader = read;
+  /**
+   * The user changed the text in `from`; `read` gets it (only when needed). Ignored from an
+   * editor that doesn't show the page as it is now (see `counts`): its text isn't the page's.
+   */
+  edited(read: () => string, from: DocEditor): void {
+    if (!this.counts(from)) return;
+    this.reader = { read, from };
     this.editedHere = true;
     const was = this.unpersisted;
     this.unpersisted = true;
     if (this.editors.size > 1) {
       const text = read();
-      for (const editor of this.editors) if (editor !== from) editor.set(text);
+      for (const editor of this.editors) if (editor !== from) this.offer(editor, text);
     }
     this.persistTimer ??= setTimeout(() => void this.persist(), PERSIST_MS);
     this.scheduleSave(IDLE_SAVE_MS);
@@ -299,12 +379,18 @@ export class PageDoc {
     const known = this.known;
     const last = this.record;
     let displaced: string | undefined;
+    let retyped = false;
     const change = (r: PageRecord | undefined) => {
       if (!r) {
         // Dropped from the cache meanwhile: start again from what this tab had.
         return last
           ? settle({ ...last, content: text, writeId: newWriteId(), writer: this.host.tabId })
           : undefined;
+      }
+      // Converted meanwhile (another tab took it in): text of the old type never goes into it.
+      if (last && r.type !== last.type) {
+        retyped = true;
+        return undefined;
       }
       const written = write(r, known, text, this.host.tabId, Date.now());
       displaced = written.displaced;
@@ -320,6 +406,11 @@ export class PageDoc {
     }
     // Not stored (still `unpersisted`): the next write tries again.
     if (!record) return;
+    if (retyped) {
+      // The page follows the conversion; what was typed is kept as a version.
+      if (this.record && this.record.type !== record.type) this.retype(record);
+      return;
+    }
     if (displaced !== undefined) {
       await this.keepLater({
         kind: 'keepVersion',

@@ -47,6 +47,7 @@ function useDocText(doc: PageDoc): [string, DocEditor] {
   const latest = useRef(text);
   const editor = useMemo<DocEditor>(
     () => ({
+      pageType: 'markdown',
       set(next) {
         latest.current = next;
         setText(next);
