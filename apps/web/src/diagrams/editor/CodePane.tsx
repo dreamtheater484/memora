@@ -1,4 +1,4 @@
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, indentWithTab } from '@codemirror/commands';
 import { StreamLanguage, syntaxHighlighting } from '@codemirror/language';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers } from '@codemirror/view';
@@ -8,6 +8,8 @@ import { editorTheme, markdownHighlight } from '../../editor/theme';
 /*
  * A diagram's Mermaid code (§9.3, §9.4): for diagram types without a visual editor, and in
  * Markdown pages beside the visual editor. Keywords, arrows, strings and comments coloured.
+ * Undo and redo are the diagram editor's (one history for the code and the drawing), and
+ * Ctrl/Cmd+Enter is its Done.
  */
 
 const KEYWORDS =
@@ -39,17 +41,21 @@ const mermaidLanguage = StreamLanguage.define({
 export function CodePane({
   code,
   onChange,
+  onUndo,
+  onRedo,
   label,
 }: {
   code: string;
   onChange: (code: string) => void;
+  onUndo: () => void;
+  onRedo: () => void;
   label: string;
 }) {
   const parent = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
-  const onChangeRef = useRef(onChange);
+  const latest = useRef({ onChange, onUndo, onRedo });
   useLayoutEffect(() => {
-    onChangeRef.current = onChange;
+    latest.current = { onChange, onUndo, onRedo };
   });
 
   useEffect(() => {
@@ -59,15 +65,20 @@ export function CodePane({
         doc: code,
         extensions: [
           lineNumbers(),
-          history(),
-          keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+          keymap.of([
+            { key: 'Mod-z', run: () => (latest.current.onUndo(), true) },
+            { key: 'Mod-y', run: () => (latest.current.onRedo(), true) },
+            { key: 'Mod-Shift-z', run: () => (latest.current.onRedo(), true) },
+            ...defaultKeymap.filter((binding) => binding.key !== 'Mod-Enter'),
+            indentWithTab,
+          ]),
           EditorView.lineWrapping,
           mermaidLanguage,
           syntaxHighlighting(markdownHighlight),
           editorTheme,
           EditorView.contentAttributes.of({ 'aria-label': label, spellcheck: 'false' }),
           EditorView.updateListener.of((update) => {
-            if (update.docChanged) onChangeRef.current(update.state.doc.toString());
+            if (update.docChanged) latest.current.onChange(update.state.doc.toString());
           }),
         ],
       }),
@@ -85,7 +96,17 @@ export function CodePane({
     const cm = view.current;
     if (!cm) return;
     const current = cm.state.doc.toString();
-    if (current !== code) cm.dispatch({ changes: { from: 0, to: current.length, insert: code } });
+    if (current === code) return;
+    // Only what changed, so the cursor stays where it was (an undo, the visual editor).
+    let from = 0;
+    while (from < current.length && from < code.length && current[from] === code[from]) from += 1;
+    let to = current.length;
+    let end = code.length;
+    while (to > from && end > from && current[to - 1] === code[end - 1]) {
+      to -= 1;
+      end -= 1;
+    }
+    cm.dispatch({ changes: { from, to, insert: code.slice(from, end) } });
   }, [code]);
 
   return <div ref={parent} className="diagram-code" />;

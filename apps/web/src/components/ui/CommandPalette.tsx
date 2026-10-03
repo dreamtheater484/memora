@@ -50,6 +50,8 @@ export function CommandPalette({ open, onOpenChange, ...props }: CommandPaletteP
         <D.Overlay className={overlayClass} />
         <D.Content
           aria-describedby={undefined}
+          // Its own shortcut closes it again; the app's others go on working over it.
+          data-shortcuts=""
           className={cn(
             'glass-raised fixed z-50 flex flex-col overflow-hidden outline-none',
             'inset-0 animate-fade-in',

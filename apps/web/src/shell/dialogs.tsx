@@ -433,8 +433,11 @@ function ShortcutsDialog() {
             Diagram editor
           </h3>
           <div className="divide-y divide-line">
-            {DIAGRAM_KEYS.map((k) => row(k.keys, k.label))}
+            {DIAGRAM_KEYS.filter((k) => k.group === 'all').map((k) => row(k.keys, k.label))}
           </div>
+          <p className="mt-1 text-xs text-fg-3">
+            Each kind of diagram has keys of its own: press ? in the diagram editor.
+          </p>
         </section>
       </div>
       <p className="mt-4 text-sm text-fg-2">

@@ -100,6 +100,31 @@
     flex: none;
     height: 42dvh;
   }
+  /* Typing in the panel (the keyboard takes half the screen): the drawing gives way. */
+  .diagram-editor-body:has(.diagram-editor-panel :focus) .diagram-editor-main {
+    height: 26dvh;
+  }
+  /* Two rows: the title with Cancel and Done, then the tools. */
+  .diagram-editor-bar {
+    padding: 0.5rem 0.6rem;
+    gap: 0.4rem;
+  }
+  .diagram-editor-bar > .diagram-editor-tools:not(:last-child) {
+    order: 1;
+    flex-basis: 100%;
+  }
+  .diagram-bar-label {
+    display: none;
+  }
+  /* 16px and more: a phone doesn't zoom in on the field. */
+  .diagram-text-field,
+  .diagram-label-input,
+  .diagram-date {
+    font-size: 16px !important;
+  }
+  .diagram-key-sheet dt {
+    flex-basis: 7.5rem;
+  }
   .diagram-editor-panel {
     width: auto;
     flex: 1;
@@ -222,6 +247,18 @@
 .diagram-ring.is-group {
   border-style: dashed;
 }
+/* Where a dragged box would go: onto a box (connect), into a group. */
+.diagram-ring.is-target {
+  border-color: var(--ok);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--ok), transparent 80%);
+}
+.diagram-marquee {
+  position: absolute;
+  pointer-events: none;
+  border: 1px dashed var(--accent);
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--accent), transparent 90%);
+}
 .diagram-overlay-control {
   pointer-events: auto;
 }
@@ -266,10 +303,10 @@
   stroke-width: 2;
   stroke-dasharray: 6 4;
 }
+/* Words edited in place: a field over them, at the drawing's zoom. */
 .diagram-label-input {
   position: absolute;
-  height: 36px;
-  padding: 0 0.6rem;
+  padding: 0.5rem 0.6rem;
   border-radius: 8px;
   border: 2px solid var(--accent);
   background: var(--raised);
@@ -278,6 +315,9 @@
   font-family: var(--font-sans);
   box-shadow: var(--shadow-pop);
   outline: none;
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
 }
 
 /* The panel. */
@@ -292,6 +332,13 @@
   gap: 0.6rem;
   padding: 0.9rem 1rem;
   border-bottom: 1px solid var(--line);
+}
+.diagram-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 1.5rem;
 }
 .diagram-panel-section h3 {
   margin: 0;
@@ -428,6 +475,39 @@
   gap: 0.15rem;
 }
 
+/* The panel's text fields: they grow with their words (Shift+Enter breaks a line). */
+.diagram-text-field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 2rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 400;
+  line-height: 1.3rem;
+  resize: none;
+  overflow: hidden;
+  outline: none;
+  transition:
+    border-color var(--dur-fast),
+    box-shadow var(--dur-fast);
+}
+.diagram-text-field::placeholder {
+  color: var(--fg-3);
+}
+.diagram-text-field:hover {
+  border-color: var(--line-strong);
+}
+.diagram-text-field:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent), transparent 80%);
+}
+
 /* Mind map outline. */
 .diagram-mind-outline {
   margin: 0;
@@ -465,6 +545,9 @@
 .diagram-mind-input:hover {
   background: var(--hover);
 }
+.diagram-mind-input:focus {
+  box-shadow: none;
+}
 .diagram-mind-input:focus,
 .diagram-mind-input.is-on {
   border-color: var(--accent);
@@ -473,6 +556,7 @@
 
 /* Rows of steps, tasks, slices. */
 .diagram-rows {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -506,9 +590,117 @@
 .diagram-row.is-slice > button {
   flex: none;
 }
-.diagram-row.is-on {
+.diagram-row.is-on,
+.diagram-message-line.is-event.is-on {
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+.diagram-row.is-participant,
+.diagram-row.is-section {
+  align-items: center;
+}
+.diagram-row.is-participant > .diagram-text-field,
+.diagram-row.is-section > .diagram-text-field {
+  flex: 1;
+}
+.diagram-row.is-section .diagram-row-controls,
+.diagram-row.is-slice .diagram-row-controls {
+  flex: none;
+  flex-direction: row;
+}
+/* A row's grip: drag it to move the step (into and out of blocks). */
+.diagram-grip {
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  width: 1rem;
+  flex: none;
+  border-radius: 0.25rem;
+  color: var(--fg-3);
+  cursor: grab;
+  touch-action: none;
+}
+.diagram-grip:hover {
+  background: var(--hover);
+  color: var(--fg-2);
+}
+.diagram-grip svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+.diagram-drop-line {
+  position: absolute;
+  right: 0.4rem;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+/* The arrow between a message's two participants: its style and activation. */
+.diagram-arrow-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.5rem;
+  height: 2rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--fg-2);
+}
+.diagram-arrow-button:hover,
+.diagram-arrow-button[aria-expanded='true'] {
+  border-color: var(--line-strong);
+  color: var(--fg);
+}
+.diagram-activation {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  display: grid;
+  place-items: center;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+/* An on/off choice in a row (a Gantt task is critical, a milestone). */
+.diagram-toggle {
+  flex: none;
+  height: 2rem;
+  padding: 0 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--fg-2);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.diagram-toggle:hover {
+  border-color: var(--line-strong);
+  color: var(--fg);
+}
+.diagram-toggle[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.diagram-events {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.diagram-length {
+  flex: 0 0 4rem;
+  width: 4rem;
 }
 .diagram-row.is-end,
 .diagram-row.is-branch .diagram-word {
@@ -553,6 +745,8 @@
 }
 .diagram-message-line.is-event {
   padding-left: 1rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
 }
 .diagram-row-controls {
   display: flex;
@@ -578,6 +772,71 @@
   color: var(--fg);
   font: inherit;
   font-size: 0.85rem;
+}
+
+/* The keys (?), over the drawing. */
+.diagram-key-sheet {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  width: min(27rem, calc(100% - 1.5rem));
+  max-height: calc(100% - 1.5rem);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-strong);
+  background: var(--raised);
+  box-shadow: var(--shadow-pop);
+  outline: none;
+}
+.diagram-key-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.6rem 0.4rem 1rem;
+}
+.diagram-key-sheet-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 650;
+}
+.diagram-key-sheet-body {
+  overflow-y: auto;
+  padding: 0 1rem 1rem;
+}
+.diagram-key-sheet section + section {
+  margin-top: 0.9rem;
+}
+.diagram-key-sheet h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.diagram-key-sheet dl {
+  margin: 0;
+}
+.diagram-key-sheet dl > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.82rem;
+}
+.diagram-key-sheet dt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  flex: 0 0 9.5rem;
+}
+.diagram-key-sheet dd {
+  margin: 0;
+  color: var(--fg-2);
 }
 
 /* The code beside the drawing. */
