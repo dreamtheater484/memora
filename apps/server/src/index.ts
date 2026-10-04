@@ -8,6 +8,8 @@ import { ensureInstanceMeta } from './db/meta';
 import { indexAllLinksOnce } from './notes/links';
 import { runMigrations } from './db/migrate';
 import { migrationsDir } from './paths';
+import { removeCapture } from './sync/capture';
+import { DesktopBridge } from './sync/secrets';
 import { APP_VERSION } from './version';
 
 /** Electron gives its utility processes a port to talk to the app (apps/desktop). */
@@ -17,6 +19,7 @@ type DesktopProcess = NodeJS.Process & {
     postMessage(message: unknown): void;
   };
 };
+const parent = (process as DesktopProcess).parentPort;
 
 /** Exit code asking to be started again (after a restore): Docker's restart policy does. */
 const RESTART_EXIT_CODE = 75;
@@ -48,16 +51,21 @@ async function main(): Promise<void> {
   }
   const db = openDatabase(config.databaseFile);
   let requestRestart = () => undefined as void;
+  // In the desktop app, sync's secrets are sealed by the system through the app (ADR 0006).
+  const bridge = parent && config.desktop ? new DesktopBridge(parent) : null;
   const app = await buildApp({
     config,
     db,
     version: APP_VERSION,
     onRestart: () => requestRestart(),
     secretKey,
+    ...(bridge ? { secretStore: bridge, pickFolder: () => bridge.pickFolder() } : {}),
   });
   if (restored) app.log.info({ backup: restored }, 'backup restored');
 
   try {
+    // Sync's triggers follow the schema: they are made again after the migrations.
+    removeCapture(db);
     const result = await runMigrations({
       db,
       migrationsDir,
@@ -95,7 +103,6 @@ async function main(): Promise<void> {
   requestRestart = () => void shutdown('restart');
   // In the desktop app, Memora runs as Electron's utility process: the app asks it to stop
   // (Windows has no SIGTERM), and is told when it is ready.
-  const parent = (process as DesktopProcess).parentPort;
   parent?.on('message', (event) => {
     if (event.data === 'shutdown') void shutdown('SIGTERM');
   });

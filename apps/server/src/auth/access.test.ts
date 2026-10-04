@@ -360,6 +360,21 @@ const RULES: Record<string, RouteRule> = {
   'GET /api/v1/admin/backups/:name': { access: 'admin' },
   'DELETE /api/v1/admin/backups/:name': { access: 'admin' },
   'POST /api/v1/admin/backups/:name/restore': { access: 'admin' },
+  // Sync through a cloud folder: the desktop app's (sync.test.ts); a server answers 404.
+  'GET /api/v1/sync': { access: 'admin' },
+  'POST /api/v1/sync/connect': { access: 'admin' },
+  'POST /api/v1/sync/cancel': { access: 'admin' },
+  'POST /api/v1/sync/pick-folder': { access: 'admin' },
+  'POST /api/v1/sync/google/start': { access: 'admin' },
+  // Google sends the browser back here; the one-time state is the check (sync.test.ts).
+  'GET /api/v1/sync/google/callback': { access: 'public' },
+  'PUT /api/v1/sync/google-client': { access: 'admin' },
+  'DELETE /api/v1/sync/google-client': { access: 'admin' },
+  'POST /api/v1/sync/enable': { access: 'admin' },
+  'POST /api/v1/sync/password': { access: 'admin' },
+  'POST /api/v1/sync/resume': { access: 'admin' },
+  'POST /api/v1/sync/now': { access: 'admin' },
+  'DELETE /api/v1/sync': { access: 'admin' },
   'GET /api/v1/search': {
     access: 'user',
     async ownListOnly(w) {

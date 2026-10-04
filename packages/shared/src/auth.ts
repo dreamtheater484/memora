@@ -229,6 +229,8 @@ export const AUDIT_EVENTS = [
   'security_changed',
   'export_created',
   'import_completed',
+  'sync_enabled',
+  'sync_disabled',
 ] as const;
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];
 

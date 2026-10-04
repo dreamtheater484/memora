@@ -35,7 +35,10 @@ export interface TestApp {
 
 export async function createTestApp(
   env: Record<string, string> = {},
-  options: Pick<AppOptions, 'fetchPolicy' | 'onRestart'> = {},
+  options: Pick<
+    AppOptions,
+    'fetchPolicy' | 'onRestart' | 'secretStore' | 'pickFolder' | 'syncTesting'
+  > = {},
 ): Promise<TestApp> {
   const dir = mkdtempSync(join(tmpdir(), 'memora-test-'));
   const config = loadConfig({ MEMORA_DATA_DIR: dir, MEMORA_WEB_DIR: join(dir, 'web'), ...env });

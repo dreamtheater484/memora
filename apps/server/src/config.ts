@@ -42,6 +42,12 @@ const envSchema = z.object({
   /** Set by the desktop app (apps/desktop): the secret its window signs in with. */
   MEMORA_DESKTOP_TOKEN: z.string().min(32).optional(),
   MEMORA_DESKTOP_NAME: z.string().max(100).optional(),
+  /** The desktop app's Google OAuth client, for sync through Google Drive (ADR 0006). */
+  MEMORA_GOOGLE_CLIENT_ID: z
+    .string()
+    .regex(/^[\w.-]+\.apps\.googleusercontent\.com$/)
+    .optional(),
+  MEMORA_GOOGLE_CLIENT_SECRET: z.string().max(200).optional(),
 });
 
 /** Addresses only this computer can reach: the desktop app listens on nothing else. */
@@ -95,6 +101,11 @@ export interface Config {
    * and the owner's account is made on the first start, named `name`.
    */
   desktop: { token: string; name: string } | null;
+  /**
+   * The Google OAuth client ("Desktop app") the desktop app signs in to Google Drive with, for
+   * sync (ADR 0006). Added to builds by CI; none: Google Drive needs a client of your own.
+   */
+  googleClient: { clientId: string; clientSecret?: string } | null;
 }
 
 export class ConfigError extends Error {
@@ -162,6 +173,12 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     secretKeyFile: resolve(e.MEMORA_SECRET_KEY_FILE ?? join(dataDir, 'secret.key')),
     desktop: e.MEMORA_DESKTOP_TOKEN
       ? { token: e.MEMORA_DESKTOP_TOKEN, name: e.MEMORA_DESKTOP_NAME?.trim() || 'Me' }
+      : null,
+    googleClient: e.MEMORA_GOOGLE_CLIENT_ID
+      ? {
+          clientId: e.MEMORA_GOOGLE_CLIENT_ID,
+          ...(e.MEMORA_GOOGLE_CLIENT_SECRET ? { clientSecret: e.MEMORA_GOOGLE_CLIENT_SECRET } : {}),
+        }
       : null,
   };
 }
