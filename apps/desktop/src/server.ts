@@ -3,8 +3,13 @@ import { createWriteStream, mkdirSync, renameSync, statSync, type WriteStream } 
 import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { app, utilityProcess } from 'electron';
+import { app, utilityProcess, type BrowserWindow } from 'electron';
+import { serveBridge } from './bridge';
 import { readSettings, saveSettings } from './settings';
+
+/** The Google OAuth client for sync through Google Drive, added by CI (docs/GOOGLE_DRIVE.md). */
+declare const __MEMORA_GOOGLE_CLIENT_ID__: string;
+declare const __MEMORA_GOOGLE_CLIENT_SECRET__: string;
 
 /** Memora's exit code when it wants to be started again: after a backup was restored. */
 export const RESTART_EXIT_CODE = 75;
@@ -84,7 +89,10 @@ function serverEnv(settings: Record<string, string>): Record<string, string> {
  * process, on this computer's loopback address only, and waits until it answers. `onExit`
  * hears of it stopping by itself: after a restore (RESTART_EXIT_CODE), or a crash.
  */
-export async function startServer(onExit: (code: number) => void): Promise<RunningServer> {
+export async function startServer(
+  onExit: (code: number) => void,
+  window: () => BrowserWindow | undefined = () => undefined,
+): Promise<RunningServer> {
   const port = await choosePort();
   const token = randomBytes(32).toString('base64url');
   const origin = `http://127.0.0.1:${port}`;
@@ -105,8 +113,16 @@ export async function startServer(onExit: (code: number) => void): Promise<Runni
       MEMORA_TRUST_PROXY: 'false',
       MEMORA_DESKTOP_TOKEN: token,
       MEMORA_DESKTOP_NAME: os.userInfo().username,
+      ...(__MEMORA_GOOGLE_CLIENT_ID__
+        ? {
+            MEMORA_GOOGLE_CLIENT_ID: __MEMORA_GOOGLE_CLIENT_ID__,
+            MEMORA_GOOGLE_CLIENT_SECRET: __MEMORA_GOOGLE_CLIENT_SECRET__,
+          }
+        : {}),
     }),
   });
+  // Sync's secrets and the folder picker (ADR 0006).
+  serveBridge(child, window);
   child.stdout?.pipe(log, { end: false });
   child.stderr?.pipe(log, { end: false });
 

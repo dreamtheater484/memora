@@ -37,7 +37,10 @@ function run(): void {
   };
 
   const start = async () => {
-    server = await startServer((code) => void stopped(code));
+    server = await startServer(
+      (code) => void stopped(code),
+      () => window,
+    );
   };
 
   /** Memora stopped by itself: after restoring a backup it starts again; otherwise, ask. */

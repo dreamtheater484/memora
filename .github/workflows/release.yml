@@ -274,6 +274,10 @@ jobs:
           MEMORA_STORE_IDENTITY: ${{ vars.MEMORA_STORE_IDENTITY }}
           MEMORA_STORE_PUBLISHER: ${{ vars.MEMORA_STORE_PUBLISHER }}
           MEMORA_STORE_PUBLISHER_NAME: ${{ vars.MEMORA_STORE_PUBLISHER_NAME }}
+          # Sync through Google Drive (docs/GOOGLE_DRIVE.md): the app's OAuth client. Without
+          # it, the app offers Google Drive with a client of the person's own.
+          MEMORA_GOOGLE_CLIENT_ID: ${{ vars.MEMORA_GOOGLE_CLIENT_ID }}
+          MEMORA_GOOGLE_CLIENT_SECRET: ${{ github.event_name == 'push' && secrets.MEMORA_GOOGLE_CLIENT_SECRET || '' }}
         run: |
           # electron-builder takes a variable that is set but empty as a certificate's path:
           # the ones without a value are removed.
