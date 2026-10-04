@@ -145,7 +145,7 @@ The test opens the app's window; on Linux without a screen, run it as `xvfb-run 
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | Every commit (pre-commit hook)         | Your git email is a GitHub noreply address · staged files contain no personal patterns · no secrets (secretlint) · formatting and lint |
 | Every commit message (commit-msg hook) | No personal patterns                                                                                                                   |
-| Every push (pre-push hook)             | All files scanned · type check · tests                                                                                                 |
+| Every push (pre-push hook)             | All files scanned · type check · tests, then the timed tests on their own                                                              |
 | CI (every push and pull request)       | All of the above, plus **gitleaks over the full git history** and a check of every commit's author email                               |
 
 ### One-time setup

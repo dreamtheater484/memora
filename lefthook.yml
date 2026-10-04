@@ -23,11 +23,17 @@ commit-msg:
       run: node scripts/check-forbidden.mjs --message-file {1}
 
 pre-push:
-  parallel: true
-  commands:
-    privacy:
-      run: node scripts/check-forbidden.mjs
-    typecheck:
-      run: node scripts/typecheck.mjs
-    test:
-      run: node scripts/run-bin.mjs vitest run
+  jobs:
+    - group:
+        parallel: true
+        jobs:
+          - name: privacy
+            run: node scripts/check-forbidden.mjs
+          - name: typecheck
+            run: node scripts/typecheck.mjs
+          - name: test
+            run: node scripts/run-bin.mjs vitest run --project=!perf
+    # The timed tests (vitest.config.ts) start once everything above has finished, so the type
+    # check and the other tests can't slow them down.
+    - name: perf
+      run: node scripts/run-bin.mjs vitest run --project=perf
