@@ -1,7 +1,19 @@
-import { CloudOff, OctagonAlert } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { SaveIndicator } from '../components/ui';
+import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import {
+  CloudAlert,
+  CloudCheck,
+  CloudOff,
+  CloudUpload,
+  OctagonAlert,
+  RefreshCw,
+} from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { useDesktop } from '../auth/queries';
+import { IconButton, SaveIndicator } from '../components/ui';
 import { cn } from '../lib/cn';
+import { formatRelative } from '../lib/time';
+import { cloudSyncQuery } from '../settings/cloudSync';
 import { useGlobalSaveState } from '../sync/hooks';
 import { isOffline, useSync } from '../sync/status';
 import { useGo } from './location';
@@ -38,6 +50,64 @@ export function GlobalSaveIndicator() {
       onClick={state === 'conflict' && conflicts[0] ? () => go.page(conflicts[0]!) : undefined}
     />
   );
+}
+
+/**
+ * The desktop app's sync through a cloud folder (ADR 0006), beside the save indicator: how it
+ * is doing, and the way to its settings. Nothing while sync is off.
+ */
+export function CloudSyncIndicator() {
+  const desktop = useDesktop();
+  const { data: status } = useQuery({ ...cloudSyncQuery, enabled: desktop });
+  const navigate = useNavigate();
+  // Runs while you type take a moment: only a longer one shows as syncing.
+  const running = useLasting(!!status?.running, 1000);
+  if (!desktop || !status || (status.state !== 'on' && status.state !== 'paused')) return null;
+  let icon: ReactNode;
+  let label: string;
+  let tone = '';
+  if (status.paused) {
+    icon = <CloudAlert />;
+    label = 'Sync is paused: open its settings';
+    tone = 'text-warn';
+  } else if (running) {
+    icon = <RefreshCw className="animate-spin [animation-duration:1.6s]" />;
+    label = 'Syncing with your other computers…';
+  } else if (status.lastError) {
+    icon = <CloudAlert />;
+    label = `Sync didn’t work: ${status.lastError.message}`;
+    tone = 'text-danger';
+  } else if (status.waiting > 0) {
+    icon = <CloudUpload />;
+    label = 'Changes made here are about to sync';
+  } else {
+    icon = <CloudCheck />;
+    label = status.lastSyncAt
+      ? `Synced with your other computers ${formatRelative(status.lastSyncAt)}`
+      : 'Sync is on';
+  }
+  return (
+    <IconButton
+      label={label}
+      icon={icon}
+      className={tone}
+      onClick={() => void navigate({ to: '/settings/sync' })}
+    />
+  );
+}
+
+/** True once `value` has been true for `ms`; false as soon as it isn't. */
+function useLasting(value: boolean, ms: number): boolean {
+  const [lasting, setLasting] = useState(false);
+  useEffect(() => {
+    if (!value) return;
+    const timer = setTimeout(() => setLasting(true), ms);
+    return () => {
+      clearTimeout(timer);
+      setLasting(false);
+    };
+  }, [value, ms]);
+  return value && lasting;
 }
 
 function Banner({

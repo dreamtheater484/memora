@@ -1,6 +1,8 @@
 import type { AuditEntry, AuditEvent } from '@memora/shared';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import {
+  Cloud,
+  CloudOff,
   ArchiveRestore,
   Ban,
   CircleCheck,
@@ -98,6 +100,8 @@ const EVENTS: Record<
   },
   export_created: { icon: <FileDown />, text: () => 'exported pages' },
   import_completed: { icon: <FileUp />, text: () => 'imported pages' },
+  sync_enabled: { icon: <Cloud />, text: () => 'turned sync through a cloud folder on' },
+  sync_disabled: { icon: <CloudOff />, text: () => 'turned sync through a cloud folder off' },
 };
 
 /** Security-relevant events (§9.1): logins, failed logins, and account changes. */

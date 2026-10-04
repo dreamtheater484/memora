@@ -15,6 +15,7 @@ export const HELP = {
   importExport: `${DOCS}/USER_GUIDE.md#import-and-export`,
   offline: `${DOCS}/USER_GUIDE.md#offline-and-the-app`,
   backups: `${DOCS}/BACKUP_RESTORE.md`,
+  sync: `${DOCS}/DESKTOP.md#sync-your-computers`,
   troubleshooting: `${DOCS}/TROUBLESHOOTING.md`,
   changes: `${REPO}/blob/v${APP_VERSION}/CHANGELOG.md`,
 } as const;

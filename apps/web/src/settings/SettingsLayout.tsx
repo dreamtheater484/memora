@@ -2,6 +2,7 @@ import { Link, Outlet } from '@tanstack/react-router';
 import {
   ArrowLeft,
   ArrowUpDown,
+  CloudCog,
   DatabaseBackup,
   MonitorSmartphone,
   PenLine,
@@ -23,18 +24,22 @@ interface NavItem {
     | '/settings/device'
     | '/settings/users'
     | '/settings/audit'
-    | '/settings/backups';
+    | '/settings/backups'
+    | '/settings/sync';
   label: string;
   icon: ReactNode;
   admin?: boolean;
   /** Only on a server, not in the desktop app. */
   server?: boolean;
+  /** Only in the desktop app. */
+  desktop?: boolean;
 }
 
 const NAV: NavItem[] = [
   { to: '/settings/account', label: 'Account', icon: <UserRound /> },
   { to: '/settings/editing', label: 'Editing', icon: <PenLine /> },
   { to: '/settings/data', label: 'Import & export', icon: <ArrowUpDown /> },
+  { to: '/settings/sync', label: 'Sync', icon: <CloudCog />, desktop: true },
   { to: '/settings/device', label: 'This device', icon: <MonitorSmartphone />, server: true },
   { to: '/settings/users', label: 'Users', icon: <Users />, admin: true, server: true },
   { to: '/settings/audit', label: 'Audit log', icon: <ScrollText />, admin: true, server: true },
@@ -49,7 +54,10 @@ export function SettingsLayout() {
   const user = useCurrentUser();
   const desktop = useDesktop();
   const items = NAV.filter(
-    (item) => (!item.admin || user.role === 'admin') && !(desktop && item.server),
+    (item) =>
+      (!item.admin || user.role === 'admin') &&
+      !(desktop && item.server) &&
+      !(!desktop && item.desktop),
   );
   return (
     <div className="aurora-bg flex h-full flex-col overflow-y-auto">
