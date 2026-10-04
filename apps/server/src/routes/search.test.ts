@@ -1,7 +1,6 @@
 import {
   MARK_END,
   MARK_START,
-  uuidv7,
   type ContentSaved,
   type SearchResponse,
   type Template,
@@ -128,53 +127,7 @@ describe('search', () => {
     await save(a, 'Something else entirely.');
     expect(await find('roadmap')).toEqual(['Beta']);
   });
-
-  it('stays within budget with 10,000 pages', async () => {
-    const words = ['plan', 'garden', 'budget', 'meeting', 'travel', 'recipe', 'idea', 'review'];
-    const insert = t.db.prepare(
-      `INSERT INTO pages (id, owner_id, section_id, title, type, content, content_text, sort_key, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'markdown', ?, ?, ?, ?, ?)`,
-    );
-    const owner = (t.db.prepare('SELECT id FROM users').get() as { id: string }).id;
-    t.db.transaction(() => {
-      for (let i = 0; i < 10_000; i += 1) {
-        const text = Array.from(
-          { length: 60 },
-          (_, j) => words[(i * 7 + j * 3) % words.length],
-        ).join(' ');
-        insert.run(
-          uuidv7(),
-          owner,
-          inboxId,
-          `Note ${i} ${words[i % words.length]}`,
-          text,
-          text,
-          `a${i}`,
-          i,
-          i,
-        );
-      }
-    })();
-    const times: number[] = [];
-    const queries = ['garden', 'plan bud', '"travel recipe"', 'idea -review', 'note 99', 'meet'];
-    // Warmed up first, and enough samples that one pause of a shared CI machine (other test
-    // files run at the same time) doesn't decide the 95th percentile.
-    for (const q of queries) await me.get(`/api/v1/search?q=${encodeURIComponent(q)}`);
-    for (const q of queries) {
-      for (let i = 0; i < 10; i += 1) {
-        const started = performance.now();
-        const res = await me.get(`/api/v1/search?q=${encodeURIComponent(q)}`);
-        times.push(performance.now() - started);
-        expect(res.statusCode).toBe(200);
-      }
-    }
-    times.sort((x, y) => x - y);
-    const p95 = times[Math.floor(times.length * 0.95)]!;
-    // The budget (§14) is for the Linux image. Shared Windows CI machines run the same code at
-    // about the budget itself, so there the test only catches gross slowdowns.
-    const budget = process.platform === 'win32' ? 200 : 100;
-    expect(p95, `95th percentile ${p95.toFixed(1)} ms`).toBeLessThan(budget);
-  });
+  // Its speed with 10,000 pages: search.perf.test.ts.
 });
 
 describe('tags', () => {
