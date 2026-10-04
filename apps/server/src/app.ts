@@ -39,6 +39,11 @@ import { kanbanRoutes } from './routes/kanban';
 import { transferRoutes } from './routes/transfer';
 import { KanbanService } from './kanban/service';
 import { JobService } from './transfer/jobs';
+import { syncRoutes } from './routes/sync';
+import type { VaultKdf } from './sync/crypto';
+import { SealedFileSecretStore, type SecretStore } from './sync/secrets';
+import { SyncService } from './sync/service';
+import type { GoogleEndpoints } from './sync/stores/gdrive';
 
 export interface AppOptions {
   config: Config;
@@ -59,12 +64,28 @@ export interface AppOptions {
   onRestart?: () => void;
   /** The instance's secret key; read from `config.secretKeyFile` when first needed otherwise. */
   secretKey?: Buffer;
+  /**
+   * Where sync keeps its sign-in and key (ADR 0006): the desktop app's main process. Without
+   * one, a file sealed with the instance key (development and tests).
+   */
+  secretStore?: SecretStore;
+  /** The system's folder picker, through the desktop app. */
+  pickFolder?: () => Promise<string | null>;
+  /** Tests: Google's addresses, WebDAV over http on this computer, runs started by hand. */
+  syncTesting?: {
+    googleEndpoints?: GoogleEndpoints;
+    allowHttp?: boolean;
+    timers?: boolean;
+    partBytes?: number;
+    kdf?: VaultKdf;
+  };
 }
 
 declare module 'fastify' {
   interface FastifyInstance {
     authService: AuthService;
     events: EventHub;
+    sync: SyncService;
   }
 }
 
@@ -85,6 +106,9 @@ export async function buildApp({
   fetchPolicy = DEFAULT_FETCH_POLICY,
   onRestart = () => undefined,
   secretKey,
+  secretStore,
+  pickFolder,
+  syncTesting,
 }: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     // `base: null` drops pid/hostname from every line: inside Docker they are noise.
@@ -136,6 +160,32 @@ export async function buildApp({
     now,
   );
   const kanban = new KanbanService(db, now);
+  const instanceKey = () => secretKey ?? loadSecretKey(config.secretKeyFile);
+  const sync = new SyncService({
+    db,
+    config,
+    events,
+    notes,
+    secrets:
+      secretStore ??
+      new SealedFileSecretStore(join(config.dataDir, 'sync-secrets.enc'), instanceKey),
+    ...(pickFolder ? { pickFolder } : {}),
+    owner: () => auth.ensureDesktopOwner().id,
+    log: {
+      info: (obj, msg) => app.log.info(obj, msg),
+      warn: (obj, msg) => app.log.warn(obj, msg),
+    },
+    now,
+    version,
+    google: {
+      client: config.googleClient,
+      ...(syncTesting?.googleEndpoints ? { endpoints: syncTesting.googleEndpoints } : {}),
+    },
+    ...(syncTesting?.allowHttp ? { allowHttp: true } : {}),
+    ...(syncTesting?.timers === false ? { timers: false } : {}),
+    ...(syncTesting?.partBytes ? { partBytes: syncTesting.partBytes } : {}),
+    ...(syncTesting?.kdf ? { kdf: syncTesting.kdf } : {}),
+  });
   const jobs = new JobService(join(config.dataDir, 'tmp', 'jobs'), events, now, (error, job) =>
     app.log.warn({ err: error, job: job.id, kind: job.kind }, 'job failed'),
   );
@@ -159,6 +209,7 @@ export async function buildApp({
   };
   app.decorate('authService', auth);
   app.decorate('events', events);
+  app.decorate('sync', sync);
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ApiError) {
@@ -241,6 +292,7 @@ export async function buildApp({
   await assetRoutes(app, deps);
   await transferRoutes(app, { ...deps, jobs, version });
   kanbanRoutes(app, { ...deps, kanban });
+  syncRoutes(app, { ...deps, sync });
   eventRoutes(app, deps);
 
   const hasWebApp = existsSync(join(config.webDir, 'index.html'));
@@ -283,7 +335,9 @@ export async function buildApp({
       const thinned = notes.thinVersions(config.historyRetention);
       const purged = notes.purgeExpired(now() - config.trashMs);
       let cleaned = 0;
-      if (purged.removed > 0 || now() - assetsCleanedAt > 24 * 3_600_000) {
+      // With sync on, only once this computer has all the notes: a file whose page hasn't
+      // arrived yet isn't unused.
+      if ((purged.removed > 0 || now() - assetsCleanedAt > 24 * 3_600_000) && sync.settled()) {
         cleaned = cleanUnusedAssets(db, now());
         assetsCleanedAt = now();
       }
@@ -302,8 +356,17 @@ export async function buildApp({
   };
   // The desktop app catches up on the backup it missed while it was closed, a minute in.
   let catchUp: NodeJS.Timeout | undefined;
+  sync.onCleanup = () => {
+    try {
+      cleanUnusedAssets(db, now());
+      assetsCleanedAt = now();
+    } catch (error) {
+      app.log.warn({ err: error }, 'removing unused files failed');
+    }
+  };
   app.addHook('onReady', async () => {
     await jobs.prepare();
+    await sync.start();
     runMaintenance();
     maintenance = setInterval(runMaintenance, MAINTENANCE_INTERVAL_MS);
     maintenance.unref();
@@ -314,6 +377,8 @@ export async function buildApp({
     }
   });
   app.addHook('onClose', async () => {
+    // What changed in the last moments goes to the sync folder before Memora closes.
+    await sync.stop(true);
     clearInterval(maintenance);
     clearTimeout(catchUp);
     backups.stop();

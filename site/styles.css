@@ -226,6 +226,28 @@ summary {
   color: var(--ink-2);
 }
 
+/* The privacy page: text at a readable width. */
+.prose {
+  max-width: 720px;
+  padding-top: 40px;
+  padding-bottom: 40px;
+  line-height: 1.6;
+}
+
+.prose h1 {
+  margin: 0 0 16px;
+  font-size: 2rem;
+}
+
+.prose h2 {
+  margin: 32px 0 8px;
+  font-size: 1.25rem;
+}
+
+.prose li + li {
+  margin-top: 8px;
+}
+
 footer {
   padding-bottom: 40px;
   color: var(--ink-2);

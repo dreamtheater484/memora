@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { SyncStatus, SyncedPart } from './cloudSync';
 import type { Job } from './transfer';
 import { PAGE_TYPES, idSchema, type PageMeta, type PageType, type TreeChanges } from './notes';
 
@@ -138,7 +139,11 @@ export type ServerEvent =
   /** Projects or boards were added, renamed, reordered, archived or deleted (§9.11). */
   | { type: 'projects.changed'; origin: string | null }
   /** Something on a board changed; `cardId` when it was one card. */
-  | { type: 'board.changed'; boardId: string; cardId?: string; origin: string | null };
+  | { type: 'board.changed'; boardId: string; cardId?: string; origin: string | null }
+  /** Sync through a cloud folder (the desktop app) started, finished or failed a run. */
+  | { type: 'sync.status'; status: SyncStatus }
+  /** Sync brought in changes from other computers: reload these parts. */
+  | { type: 'synced'; parts: SyncedPart[] };
 
 /** Most pages one browser reports as open. */
 export const MAX_PRESENCE_PAGES = 50;

@@ -42,7 +42,7 @@ import { useProjects } from '../kanban/projects';
 import { isNotesLevel, useCurrent, useGo, type Current } from './location';
 import { shortcutKeys } from './shortcuts';
 import { useShell } from './store';
-import { GlobalSaveIndicator } from './SyncStatus';
+import { CloudSyncIndicator, GlobalSaveIndicator } from './SyncStatus';
 import { LayoutMenu } from '../workspace/LayoutMenu';
 
 const THEME_ICON = { system: <Monitor />, light: <Sun />, dark: <Moon /> };
@@ -291,6 +291,7 @@ export function TopBar() {
       </button>
       <div className="flex flex-[1_0_0%] items-center justify-end gap-1.5">
         <GlobalSaveIndicator />
+        <CloudSyncIndicator />
         {notes && current.section && (
           <span className="hidden @tablet:contents @desktop:hidden">
             <IconButton label="Pages" icon={<PanelRight />} onClick={() => setPagesOpen(true)} />

@@ -55,6 +55,13 @@ ENV NODE_ENV=production \
     PORT=3000 \
     MEMORA_DATA_DIR=/data
 
+# Debian's security fixes published since the base image was built (the image scan fails on any
+# that are fixed but missing).
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /usr/local/bin/node /usr/local/bin/node
 
 WORKDIR /app

@@ -23,6 +23,7 @@ import { initialShared, useSync, type Shared } from './status';
 import { blobOf, openStore, type LocalStore } from './store';
 import { kanbanEvent } from '../kanban/api';
 import { jobUpdated } from '../transfer/jobs';
+import { cloudSynced, cloudSyncStatus } from '../settings/cloudSync';
 
 /*
  * The sync engine of one tab (§9.6). Tabs of the same browser share the store and a
@@ -440,6 +441,12 @@ export class SyncEngine implements SenderHost, DocHost, LiveHost {
       case 'projects.changed':
       case 'board.changed':
         kanbanEvent(this.queryClient, event);
+        break;
+      case 'sync.status':
+        cloudSyncStatus(this.queryClient, event.status);
+        break;
+      case 'synced':
+        cloudSynced(this.queryClient, event.parts);
         break;
     }
   }

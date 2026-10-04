@@ -619,6 +619,71 @@ export const cardSearch = sqliteTable('card_search', {
   cardId: text('card_id').notNull().unique(),
 });
 
+/*
+ * Sync through a cloud folder (ADR 0006, the desktop app). While sync is on, triggers that the
+ * sync service installs note each changed row of a synced table in `sync_dirty`, with the row
+ * as it was before (its base); a run sends those and merges what other computers sent.
+ */
+
+/** The sync settings and the run's bookkeeping, one JSON value per key (`sync/state.ts`). */
+export const syncState = sqliteTable('sync_state', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+});
+
+/** Rows changed here and not sent yet. `base` is the row as last synced; null for a new row. */
+export const syncDirty = sqliteTable(
+  'sync_dirty',
+  {
+    tbl: text('tbl').notNull(),
+    /** The row's key, as a JSON array of its key columns' values. */
+    key: text('key').notNull(),
+    base: text('base'),
+    /** Counts changes, so a change made while a batch was on its way isn't lost. */
+    ver: integer('ver').notNull().default(1),
+  },
+  (t) => [primaryKey({ columns: [t.tbl, t.key] })],
+);
+
+/** Hybrid logical clocks: when each row was added, each group of its columns last changed, or it was deleted. */
+export const syncClock = sqliteTable(
+  'sync_clock',
+  {
+    tbl: text('tbl').notNull(),
+    key: text('key').notNull(),
+    born: text('born'),
+    /** `{ group: clock }` for groups changed after the row was added. */
+    clocks: text('clocks').notNull().default('{}'),
+    deleted: text('deleted'),
+  },
+  (t) => [primaryKey({ columns: [t.tbl, t.key] })],
+);
+
+/** Changes from other computers waiting for a row they need (a parent, a file). */
+export const syncParked = sqliteTable(
+  'sync_parked',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    tbl: text('tbl').notNull(),
+    key: text('key').notNull(),
+    device: text('device').notNull(),
+    change: text('change').notNull(),
+    parkedAt: integer('parked_at').notNull(),
+  },
+  (t) => [index('sync_parked_tbl_key_idx').on(t.tbl, t.key)],
+);
+
+/** Rows another computer has under another key here: a tag merged by name, its inbox. */
+export const syncAlias = sqliteTable(
+  'sync_alias',
+  {
+    tbl: text('tbl').notNull(),
+    fromKey: text('from_key').notNull(),
+    toKey: text('to_key').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.tbl, t.fromKey] })],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type NotebookRow = typeof notebooks.$inferSelect;

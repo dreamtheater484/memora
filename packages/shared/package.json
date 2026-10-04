@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "fractional-indexing": "^4.0.0",
+    "node-diff3": "^3.2.1",
     "string-width": "^8.3.0",
     "zod": "^4.6.5"
   }

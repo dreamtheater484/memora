@@ -4,6 +4,17 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- **Sync your computers through a folder in the cloud** (Memora for your computer, **Settings → Sync**): Google Drive, Infomaniak kDrive, Nextcloud or another WebDAV server, or any folder a sync app keeps up to date. No server or Docker needed. [DESKTOP.md](docs/DESKTOP.md#sync-your-computers) explains it.
+  - **Memora uses one folder and nothing else.** On Google Drive, Google enforces it: Memora asks only to see the files it creates. On WebDAV, Memora keeps to the folder's address itself, and asks for an application password.
+  - **Encrypted on your computer** with a passphrase only you know, before anything reaches the folder: notes, files and their names. The cloud provider can't read them.
+  - Each computer keeps its own copy, so Memora still works offline; changes go through the folder within seconds.
+  - Pages changed on two computers at once: Markdown is merged when the changes don't overlap; otherwise the other text is kept in the page's history. Tags, project keys and card numbers made on two computers at once are sorted out by themselves.
+  - The sign-in and the key are kept by the computer's own protection (Windows credential store, macOS Keychain, Linux keyring), never with the notes or in backups.
+- A sync indicator in the top bar of the desktop app, and the list of computers that sync.
+- A privacy page on the download site.
+
 ## [0.9.7] - 2026-10-03
 
 ### Added

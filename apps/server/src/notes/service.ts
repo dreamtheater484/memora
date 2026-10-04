@@ -1561,6 +1561,11 @@ export class NotesService {
     });
   }
 
+  /** The tree rows of pages, for the events about pages sync changed. */
+  pageRows(owner: string, ids: readonly string[]): PageMeta[] {
+    return this.pageMetas(owner, ids);
+  }
+
   private pageMetas(owner: string, ids: readonly string[]): PageMeta[] {
     return chunks(ids).flatMap((part) =>
       this.orm

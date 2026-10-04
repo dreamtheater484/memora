@@ -35,7 +35,10 @@ export interface TestApp {
 
 export async function createTestApp(
   env: Record<string, string> = {},
-  options: Pick<AppOptions, 'fetchPolicy' | 'onRestart'> = {},
+  options: Pick<
+    AppOptions,
+    'fetchPolicy' | 'onRestart' | 'secretStore' | 'pickFolder' | 'syncTesting'
+  > = {},
 ): Promise<TestApp> {
   const dir = mkdtempSync(join(tmpdir(), 'memora-test-'));
   const config = loadConfig({ MEMORA_DATA_DIR: dir, MEMORA_WEB_DIR: join(dir, 'web'), ...env });
@@ -51,6 +54,8 @@ export async function createTestApp(
     // Cheap hashing keeps the tests fast; the real parameters are tested in password.test.ts.
     hashParams: { memoryCost: 256, timeCost: 1, parallelism: 1 },
     ...options,
+    // A sync vault's key at the cheapest settings a vault may have (units.test.ts uses the real).
+    syncTesting: { kdf: { logN: 14, r: 8, p: 1 }, ...options.syncTesting },
   });
   await app.ready();
 

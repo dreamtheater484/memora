@@ -16,7 +16,13 @@ const result = await build({
   target: 'node22',
   external: ['electron'],
   // Signed builds can update themselves on macOS too (src/updates.ts, docs/SIGNING.md).
-  define: { __MEMORA_SIGNED__: JSON.stringify(Boolean(process.env.CSC_LINK)) },
+  define: {
+    __MEMORA_SIGNED__: JSON.stringify(Boolean(process.env.CSC_LINK)),
+    // Sync through Google Drive (ADR 0006): the app's OAuth client, from CI (docs/GOOGLE_DRIVE.md).
+    // Google's clients for desktop apps can't keep a secret, and don't rely on it.
+    __MEMORA_GOOGLE_CLIENT_ID__: JSON.stringify(process.env.MEMORA_GOOGLE_CLIENT_ID ?? ''),
+    __MEMORA_GOOGLE_CLIENT_SECRET__: JSON.stringify(process.env.MEMORA_GOOGLE_CLIENT_SECRET ?? ''),
+  },
   sourcemap: false,
   legalComments: 'eof',
   metafile: true,
