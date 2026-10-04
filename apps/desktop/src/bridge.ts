@@ -31,6 +31,10 @@ const isRequest = (message: unknown): message is Request =>
 
 /** Whether secrets can be sealed by the system here. */
 export function secureStorage(): boolean {
+  // macOS always has the Keychain, and asking reads it: an app whose signature changed (an
+  // update of an unsigned build) would make macOS ask the person, at every start, to let
+  // Memora in, though sync isn't used. The Keychain is only read once there are secrets.
+  if (process.platform === 'darwin') return true;
   if (!safeStorage.isEncryptionAvailable()) return false;
   if (process.platform !== 'linux') return true;
   const backend = safeStorage.getSelectedStorageBackend();
