@@ -40,6 +40,7 @@ import { transferRoutes } from './routes/transfer';
 import { KanbanService } from './kanban/service';
 import { JobService } from './transfer/jobs';
 import { syncRoutes } from './routes/sync';
+import type { VaultKdf } from './sync/crypto';
 import { SealedFileSecretStore, type SecretStore } from './sync/secrets';
 import { SyncService } from './sync/service';
 import type { GoogleEndpoints } from './sync/stores/gdrive';
@@ -76,6 +77,7 @@ export interface AppOptions {
     allowHttp?: boolean;
     timers?: boolean;
     partBytes?: number;
+    kdf?: VaultKdf;
   };
 }
 
@@ -182,6 +184,7 @@ export async function buildApp({
     ...(syncTesting?.allowHttp ? { allowHttp: true } : {}),
     ...(syncTesting?.timers === false ? { timers: false } : {}),
     ...(syncTesting?.partBytes ? { partBytes: syncTesting.partBytes } : {}),
+    ...(syncTesting?.kdf ? { kdf: syncTesting.kdf } : {}),
   });
   const jobs = new JobService(join(config.dataDir, 'tmp', 'jobs'), events, now, (error, job) =>
     app.log.warn({ err: error, job: job.id, kind: job.kind }, 'job failed'),

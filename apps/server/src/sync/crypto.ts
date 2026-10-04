@@ -42,6 +42,8 @@ export type FileKind = keyof typeof FILE_KINDS;
 
 /** scrypt with N = 2^16, r = 8, p = 1, as for encrypted backups (D34). */
 const KDF = { logN: 16, r: 8, p: 1 };
+/** scrypt's settings for a new vault. */
+export type VaultKdf = typeof KDF;
 
 /** Largest file content after decompression: change batches and snapshot parts stay far below. */
 export const MAX_PLAIN_BYTES = 256 * 1024 * 1024;
@@ -75,7 +77,7 @@ export interface VaultKeys {
   names: Buffer;
 }
 
-function kdf(passphrase: string, salt: Buffer, { logN, r, p }: typeof KDF): Promise<Buffer> {
+function kdf(passphrase: string, salt: Buffer, { logN, r, p }: VaultKdf): Promise<Buffer> {
   const N = 2 ** logN;
   return new Promise((resolve, reject) =>
     scrypt(passphrase.normalize('NFC'), salt, 32, { N, r, p, maxmem: 256 * r * N }, (error, key) =>
@@ -102,16 +104,17 @@ const checkText = (vaultId: string) => Buffer.from(`memora-vault:${vaultId}`, 'u
 export async function createVault(
   passphrase: string,
   now: number,
+  settings: VaultKdf = KDF,
 ): Promise<{ header: VaultHeader; keys: VaultKeys }> {
   const vaultId = uuidv7(now);
   const salt = randomBytes(16);
-  const keys = deriveKeys(vaultId, await kdf(passphrase, salt, KDF));
+  const keys = deriveKeys(vaultId, await kdf(passphrase, salt, settings));
   const header: VaultHeader = {
     format: VAULT_FORMAT,
     version: VAULT_VERSION,
     vaultId,
     createdAt: now,
-    kdf: { name: 'scrypt', ...KDF, salt: salt.toString('base64') },
+    kdf: { name: 'scrypt', ...settings, salt: salt.toString('base64') },
     check: seal(keys, VAULT_FILE, 'check', checkText(vaultId)).toString('base64'),
   };
   return { header, keys };

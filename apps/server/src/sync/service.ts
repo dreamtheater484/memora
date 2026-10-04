@@ -34,6 +34,7 @@ import {
   VAULT_FILE,
   VaultError,
   type VaultHeader,
+  type VaultKdf,
   type VaultKeys,
 } from './crypto';
 import { SyncEngine, type Applied, type Incoming, type SnapshotPosition } from './engine';
@@ -189,6 +190,8 @@ export interface SyncOptions {
   timers?: boolean;
   /** Tests make snapshots of several parts. */
   partBytes?: number;
+  /** Tests: cheaper key settings for new vaults. */
+  kdf?: VaultKdf;
 }
 
 const BATCH_LIMIT = 4000;
@@ -751,7 +754,7 @@ export class SyncService {
           }
           throw error;
         }
-        const made = await createVault(passphrase, this.o.now());
+        const made = await createVault(passphrase, this.o.now(), this.o.kdf);
         header = made.header;
         keys = made.keys;
       }
