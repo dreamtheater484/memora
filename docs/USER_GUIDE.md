@@ -151,6 +151,8 @@ You never need to save. What you type is kept on the device at once, and sent to
 - If a Markdown page changed on two devices at once, Memora merges the two by itself when the changes don't overlap.
 - When they do overlap, the page shows a conflict with **Keep mine**, **Keep theirs** and **Compare**. Compare shows the two side by side and lets you choose, change by change. Nothing is lost: both versions stay in the page's history.
 
+**Memora for your computer** can keep several computers in sync too, through a folder in your cloud storage (Google Drive, kDrive, Nextcloud): see [Sync your computers](DESKTOP.md#sync-your-computers).
+
 ## Finding things
 
 ![Search results with highlighted matches](images/search.png)

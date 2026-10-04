@@ -41,14 +41,15 @@ The dev entry (`src/*.ts`, run by `tsx`) and the bundle (`dist/server.mjs`) both
 2. If a backup waits to be restored (`restore/`, D35), put it in place of `memora.db`.
 3. Read the instance key (`auth/secretKey.ts`, D47), making `secret.key` (mode 600) on first start. A damaged key stops the process with a readable message.
 4. Open `memora.db` with the durability pragmas: WAL, `synchronous=FULL`, foreign keys.
-5. **Migrations** (`db/migrate.ts`):
+5. Remove sync's triggers (`sync/capture.ts`): they are made from the schema, and are made again once the migrations have run.
+6. **Migrations** (`db/migrate.ts`):
    - refuse to open a database written by a newer version (downgrade protection);
    - take a consistent backup before changing an existing database;
    - apply the pending Drizzle migrations.
-6. Record the instance ID and the version that created the database in `app_meta`.
-7. Listen, and start the backup schedule. If no account exists yet, print a one-time setup code to stdout (kept only in memory).
-8. Every 6 hours, delete expired sessions, prune the audit log (a year, at most 50,000 entries), thin out page versions, purge the recycle bin, and delete files nothing uses any more.
-9. On `SIGTERM`/`SIGINT`, close the server, then close the database, which checkpoints the WAL. After a restore was prepared, the same, but ending with exit code 75, for Docker's restart policy to start Memora again.
+7. Record the instance ID and the version that created the database in `app_meta`.
+8. Listen, and start the backup schedule and, in the desktop app with sync on, sync's runs. If no account exists yet, print a one-time setup code to stdout (kept only in memory).
+9. Every 6 hours, delete expired sessions, prune the audit log (a year, at most 50,000 entries), thin out page versions, purge the recycle bin, and delete files nothing uses any more.
+10. On `SIGTERM`/`SIGINT`, send what sync has waiting (at most 5 s), close the server, then close the database, which checkpoints the WAL. After a restore was prepared, the same, but ending with exit code 75, for Docker's restart policy to start Memora again.
 
 ## Container
 
@@ -146,7 +147,39 @@ Memora for your computer is the same server and web app, packaged with Electron.
 - **The window** (`src/window.ts`) runs the web app like a browser tab: sandboxed, with context isolation and no Node.js. Only Memora's own address opens in it; other links open in the computer's browser. A session that ended signs in again by itself. A right-click menu for text (spelling, cut, copy and paste) stands in for the browser's.
 - **Updates** (`src/updates.ts`): electron-updater reads the `latest*.yml` files of the newest GitHub release. Windows and the AppImage install updates themselves; macOS does once signed; elsewhere the app offers the download.
 - **Packaging.** `scripts/resources.mjs` puts the server bundle, its migrations, its packages outside the bundle (better-sqlite3 with this system's builds; it uses Node's stable API, so it runs in Electron as built) and the web app in `build/memora`, which becomes the app's resources. `electron-builder.config.cjs` makes the installers, with fixed names for the download page, and signs when the signing secrets are set ([SIGNING.md](SIGNING.md)).
+- **The bridge** (`src/bridge.ts`) answers the server's requests on the utility process's message port: sync's secrets, sealed with Electron's `safeStorage` in `sync.secrets` beside the data folder (refused where Linux has no keyring), and the system's folder picker. The Google OAuth client for sync is added to the build by CI (`MEMORA_GOOGLE_CLIENT_ID`, [GOOGLE_DRIVE.md](GOOGLE_DRIVE.md)) and passed to the server.
 - **Tests.** `test/app.spec.ts` drives the packaged app with Playwright: it opens signed in, keeps a notebook across a restart at the same address, lists the licences, and closes the database cleanly. CI runs it on Ubuntu for every change; the release workflow on Windows, macOS and Ubuntu, against both the packaged app and the installed one.
+
+## Sync through a cloud folder (`apps/server/src/sync`, `routes/sync.ts`, ADR 0006)
+
+The desktop app keeps several computers' notes the same through one folder: Google Drive, WebDAV (kDrive, Nextcloud) or a folder on the computer. Each computer keeps its own database; the folder holds end-to-end encrypted files ([SYNC_FORMAT.md](SYNC_FORMAT.md)). Only in desktop mode: on a server, the routes answer 404.
+
+- **What syncs** (`tables.ts`). The synced tables in the order they are applied (parents first), each with its key columns, its owner columns (never sent, the owner here), columns kept per computer (`pages.revision`), groups of columns that change as one (a page's type, content and text; a page's or card's place; a deletion), files sent apart (`asset_blobs.data`) and a JSON column merged key by key (`user_settings.value_json`, where you were on this computer stays). Everything else is listed as local; `units.test.ts` fails for a table in neither list. Columns are read from the schema, so new ones sync by themselves.
+- **Capturing** (`capture.ts`). While sync is set up (paused too: what changes meanwhile is sent once it runs again), triggers on each synced table note changed rows in `sync_dirty` with the row as it was before its first change (its base). They are made at each start from the schema, removed before migrations, and skipped while `sync_state` has `mute` (sync applying changes of its own).
+- **The engine** (`engine.ts`, synchronous, in transactions):
+  - `collect` turns waiting rows into changes: a new row whole, a changed row as the groups that differ from its base, a gone row as a deletion, each with a hybrid logical clock (`hlc.ts`) later than the row's own clocks, even one from a computer whose time is far ahead; `sent` settles them once the batch is in the folder, keeping a row changed again in the meantime.
+  - `apply` merges changes from other computers, each change in a savepoint:
+    - per group, the later clock wins;
+    - a group changed here and not sent keeps this computer's value;
+    - Markdown pages changed on both sides are merged three ways (`merge3` in `@memora/shared`); otherwise the other text becomes a `conflict` version;
+    - a deletion wins over changes from before it;
+    - names that must be unique are settled the same way everywhere: tags merge into the older, a taken project key goes to the newer project, a card number clash renumbers the newer card;
+    - rows whose parent isn't here yet wait in `sync_parked` (30 days); a row whose parent was deleted for good is deleted with it, as it was on the computer that deleted the parent;
+    - another computer's inbox and merged tags are in `sync_alias`: rows that refer to them refer to the row they were merged into, and changes to the merged row itself are done with;
+    - a conflict version is kept in a savepoint of its own, after the changes, and only for a page that is still there;
+    - after each batch, `repairTree` and `repairCards` undo what concurrent moves leave: loops of parents, subpages in another section than their parent, live rows in deleted parents, cards in another board's column. The repairs are captured, so they go out like any change.
+  - `snapshotPage` reads every row as it was last sent (a row not sent yet isn't in it) with its clocks, in parts, with no query left open between them; the changes still waiting go in the snapshot's last parts.
+- **Vault** (`crypto.ts`). scrypt gives the vault key from the passphrase; HKDF the content and name keys. Every file is AES-256-GCM with its header and its path authenticated; stored files are named by an HMAC of their SHA-256.
+- **Stores** (`store.ts`, `stores/`). One interface (read, write, list, remove) over paths checked against Memora's own shapes. `folder.ts` writes beside a file and renames it into place; `webdav.ts` keeps to one HTTPS base address, never follows a redirect and ignores listing entries outside the folder; `gdrive.ts` uses the `drive.file` scope only, with OAuth for installed apps (PKCE, a loopback redirect to `/api/v1/sync/google/callback`).
+- **The service** (`service.ts`): setting up, the runs, and the status (`sync.status` events).
+  - `connect` checks Memora may write a file there and read it back, and refuses a folder without a vault whose vault folders have files in them; `enable` makes or opens the vault.
+  - A run reads other computers' batches in order, each from where it left off. A batch not delivered yet holds back that computer's later ones; so does one that can't be used (damaged, changed, too large), until a snapshot has what it had, and the run says so. Removed ones are read from a snapshot.
+  - Then it sends what changed here, stored files first, each batch as a new file.
+  - Now and then it writes this computer's record and a snapshot, then removes its own batches a month old that a snapshot holds (never the newest), and stored files nothing refers to (only names of their shape).
+  - Runs come a few seconds after a change, every 15 s otherwise, with back-off after failures.
+  - A restored backup (another data id) pauses sync; so do a sign-in that stopped working and a vault that changed.
+  - Unused files are only removed (`assets/cleanup.ts`) once sync has settled.
+- **Secrets** (`secrets.ts`): the cloud sign-in and the vault key, never in the database. In the desktop app the main process seals them (`apps/desktop/src/bridge.ts`); the server run by hand uses a file sealed with the instance key.
 
 ## Live events (`apps/server/src/events`, `routes/events.ts`)
 

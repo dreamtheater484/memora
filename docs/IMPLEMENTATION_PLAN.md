@@ -129,6 +129,7 @@ These are parked and listed in §17. The data model is designed so they can be a
 | D47 | Two-step verification (Phase 12)        | **TOTP written on `node:crypto`**, with recovery codes and an administrator's "required"; secrets sealed with an **instance key file** (`data/secret.key`), not in the database or its backups. **Database encryption at rest parked** (ADR 0005).                                                                                                                                                                                                                                                                                                                                            | No dependency to trust for a security feature. A copy of the database or a backup doesn't give the second step away; a lost key still leaves recovery codes. An encrypted volume protects the rest, without running every install on a forked storage driver.                                                                    |
 | D48 | The first release (Phase 13)            | **0.9.0, a public beta**, not 1.0. The release is a tag: the workflow checks it against the packages, the changelog and CI, and publishes images, SBOMs and notes. Guides are linked from the app at the running version.                                                                                                                                                                                                                                                                                                                                                                     | Everything planned for 1.0 is in, but it hasn't met real use yet, and the Synology and Windows install tests are still to be done by hand. 1.0 is a promise of stability that should follow time in use.                                                                                                                         |
 | D49 | The desktop app (Phase 14)              | **Electron**, with the server unchanged as its utility process and the web app in its window. The server has a desktop mode: one owner without a password, signed in by a secret made at each launch, on the loopback address only. Installers for Windows (one-click NSIS), macOS (one universal DMG) and Ubuntu (deb, and an AppImage), which update themselves from GitHub Releases. Signing turns on when its secrets are set.                                                                                                                                                            | One code base serves both variants, and the window runs Chromium, the engine the tests already check pixel for pixel. Tauri would be smaller but needs Node.js beside it and runs on three different web engines. Signing needs the maintainer's identity (and Apple's fee), so the pipeline is ready and waits for the secrets. |
+| D50 | Sync through a cloud folder (Phase 15)  | **The desktop app syncs through one folder** (Google Drive with the `drive.file` scope, WebDAV for kDrive and Nextcloud, or a folder a sync app keeps up to date). Each computer keeps its own database; the folder holds **end-to-end encrypted** change batches written once by their computer, files and snapshots. Changes are captured by triggers and merged per group of columns by hybrid logical clocks; Markdown pages merge three ways, other conflicts keep both sides. Secrets are sealed by the operating system. [ADR 0006](adr/0006-sync-through-a-cloud-folder.md).          | Several computers without Docker or HTTPS. Google enforces the one-folder rule; WebDAV can't, so Memora keeps to its folder itself and recommends an application password. The database can't live in a synced folder, and cloud storage has no dependable locking, hence one writer per file.                                   |
 
 ---
 
@@ -1151,6 +1152,7 @@ Long lists (pages, search results, cards) render only what is visible on screen.
 | **M4 · Boards**              | 10     | run projects on Kanban boards linked to your notes                                         |
 | **M5 · v0.9 (beta)**         | 11–13  | use the wide-screen workspace, 2FA and the finished setup guide                            |
 | **M6 · Desktop**             | 14     | install Memora on a computer with a click: no Docker, no server                            |
+| **M7 · Sync**                | 15     | keep several computers in sync through a cloud folder, end-to-end encrypted                |
 
 ---
 
@@ -1410,6 +1412,23 @@ _Two variants, one code base (D49): **Memora for your computer** for everyone, a
 
 **→ Milestone M6 · the desktop app, in 0.9.3.**
 
+### Phase 15 — Sync through a cloud folder · L
+
+_The desktop app keeps several computers' notes the same through one folder (D50, [ADR 0006](adr/0006-sync-through-a-cloud-folder.md), [DESKTOP.md](DESKTOP.md#sync-your-computers), [SYNC_FORMAT.md](SYNC_FORMAT.md))._
+
+- [x] Capturing changes: triggers made from the schema at each start (removed before migrations), the row as it was before its first change, nothing captured while sync applies its own.
+- [x] The engine: batches of changes with hybrid logical clocks; per-group last-writer-wins; local changes not sent yet kept; Markdown pages merged three ways, other conflicts kept as versions; deletions; unique tags, project keys and card numbers; changes that wait for their parent; repairs after concurrent moves; snapshots in parts.
+- [x] The vault: scrypt and HKDF keys from a passphrase, AES-256-GCM files bound to their path, stored files named by an HMAC.
+- [x] Stores: a folder on the computer, WebDAV (kDrive, Nextcloud) kept to one HTTPS address, Google Drive with `drive.file` and OAuth for installed apps (PKCE, loopback redirect).
+- [x] The runs: in order per computer, waiting for batches not delivered yet, catching up from a snapshot, files first, removing old batches and unused files; paused after a restore, a sign-in that stopped working, or a vault that changed.
+- [x] Secrets sealed by the system through the desktop app (`safeStorage`), refused without a keyring; the folder picker.
+- [x] Settings → Sync, and a sync indicator in the top bar.
+- [x] Tests: two and three computers through a folder, WebDAV and Google Drive stand-ins, the encryption, confinement of paths.
+- [ ] The project's Google OAuth client and consent screen, in production ([GOOGLE_DRIVE.md](GOOGLE_DRIVE.md)), by the maintainer.
+- [ ] Tried by hand with Google Drive, kDrive and Nextcloud.
+
+**Acceptance:** two computers set up sync through Google Drive or kDrive in a few minutes, and a page written on one appears on the other within half a minute, with nothing else in the cloud storage touched.
+
 ---
 
 ## 16. Setup guide outline
@@ -1447,18 +1466,18 @@ _Two variants, one code base (D49): **Memora for your computer** for everyone, a
 
 ## 17. Parked / future
 
-| Item                                                                                                          | Notes                                                                                                      |
-| ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Sharing notebooks and boards between users (view/edit), card assignees, @mentions                             | The data model already reserves `owner_id` and `assignee_id`. Needs a permissions layer.                   |
-| Real-time co-editing                                                                                          | Yjs CRDTs with TipTap and CodeMirror bindings. Would replace revision-based saving for shared pages.       |
-| Inline "Live" Markdown mode (Typora/Obsidian style)                                                           | A v1.x candidate, built on CodeMirror decorations.                                                         |
-| End-to-end encryption                                                                                         | Conflicts with server-side search and export. Revisit together with sharing.                               |
-| Importers for other note-taking apps                                                                          | Not needed now. The Markdown and DOCX importers cover many cases.                                          |
-| Kanban list/table view, calendar view, recurring cards, card dependencies, due-date reminders (push or email) | Candidates after v1.0.                                                                                     |
-| Public read-only share links                                                                                  | Needs careful security design.                                                                             |
-| Browser extension (web clipper)                                                                               | Would save pages or selections straight into the Inbox.                                                    |
-| Mobile apps in the app stores (Capacitor)                                                                     | The desktop app is Phase 14; phones use Memora Server's installable web app. Stores cost fees and reviews. |
-| UI translations                                                                                               | The code is i18n-ready from v1.0.                                                                          |
+| Item                                                                                                          | Notes                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sharing notebooks and boards between users (view/edit), card assignees, @mentions                             | The data model already reserves `owner_id` and `assignee_id`. Needs a permissions layer.                                                                      |
+| Real-time co-editing                                                                                          | Yjs CRDTs with TipTap and CodeMirror bindings. Would replace revision-based saving for shared pages.                                                          |
+| Inline "Live" Markdown mode (Typora/Obsidian style)                                                           | A v1.x candidate, built on CodeMirror decorations.                                                                                                            |
+| End-to-end encryption                                                                                         | For Memora Server, conflicts with server-side search and export. Revisit together with sharing. (The desktop app's sync folder is end-to-end encrypted: D50.) |
+| Importers for other note-taking apps                                                                          | Not needed now. The Markdown and DOCX importers cover many cases.                                                                                             |
+| Kanban list/table view, calendar view, recurring cards, card dependencies, due-date reminders (push or email) | Candidates after v1.0.                                                                                                                                        |
+| Public read-only share links                                                                                  | Needs careful security design.                                                                                                                                |
+| Browser extension (web clipper)                                                                               | Would save pages or selections straight into the Inbox.                                                                                                       |
+| Mobile apps in the app stores (Capacitor)                                                                     | The desktop app is Phase 14; phones use Memora Server's installable web app. Stores cost fees and reviews.                                                    |
+| UI translations                                                                                               | The code is i18n-ready from v1.0.                                                                                                                             |
 
 ---
 

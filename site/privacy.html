@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Memora: privacy</title>
+    <meta
+      name="description"
+      content="What Memora does with your notes and, when you sync through Google Drive, with your Google account."
+    />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="./">
+        <svg viewBox="0 0 64 64" width="32" height="32" aria-hidden="true">
+          <rect width="64" height="64" rx="14" fill="#4f46e5" />
+          <path d="M16 46V18h6l10 14 10-14h6v28h-6V29l-10 13-10-13v17z" fill="#fff" />
+        </svg>
+        Memora
+      </a>
+      <a class="quiet" href="https://github.com/dreamtheater484/memora">Source on GitHub</a>
+    </header>
+
+    <main class="prose">
+      <h1>Privacy</h1>
+      <p>
+        Memora is a notebook app that runs on your own computer, or on a server of your own. Its
+        makers run no service for it: nobody but you receives your notes, and Memora sends no
+        telemetry.
+      </p>
+
+      <h2>Your notes</h2>
+      <p>
+        Memora keeps your notes on your computer (or your server). It connects to the internet only
+        to check GitHub for a new version, to download the pictures of a web page you paste, and,
+        when you turn sync on, to reach the sync folder you chose.
+      </p>
+
+      <h2>Sync through Google Drive</h2>
+      <p>
+        When you sync your computers through Google Drive, Memora asks Google for one permission: to
+        see, edit, create and delete only the Google Drive files that Memora itself creates (the
+        <code>drive.file</code> scope). With it, Google lets Memora see nothing else in your Drive.
+      </p>
+      <ul>
+        <li>
+          Memora uses that access only to keep your notes the same on your own computers: it writes
+          and reads its own files in its own folder, and removes old ones it no longer needs.
+        </li>
+        <li>
+          Everything it writes is encrypted on your computer first, with a passphrase only you know.
+          Neither Google nor the makers of Memora can read it.
+        </li>
+        <li>
+          The sign-in stays on your computer, kept by the operating system's own protection. It is
+          not sent anywhere but to Google.
+        </li>
+        <li>
+          Memora doesn't send data from your Google account to anyone else, and doesn't use it for
+          anything but sync. Its use of data received from Google APIs adheres to the
+          <a href="https://developers.google.com/terms/api-services-user-data-policy"
+            >Google API Services User Data Policy</a
+          >, including the Limited Use requirements.
+        </li>
+        <li>
+          To stop it, turn sync off in Memora (Settings → Sync), or remove Memora's access in your
+          <a href="https://myaccount.google.com/connections">Google account</a>. Memora's folder
+          stays in your Drive until you delete it.
+        </li>
+      </ul>
+
+      <h2>Sync through WebDAV or a folder</h2>
+      <p>
+        With kDrive, Nextcloud or another WebDAV server, Memora connects to the address you gave it,
+        with the password you gave it, and works in that folder only. With a folder on your
+        computer, Memora connects to nothing: your sync app does.
+      </p>
+
+      <h2>Questions</h2>
+      <p>
+        Memora is open source: everything it does can be read in its
+        <a href="https://github.com/dreamtheater484/memora">source code</a>. Ask questions or report
+        a problem on <a href="https://github.com/dreamtheater484/memora/issues">GitHub</a>.
+      </p>
+    </main>
+
+    <footer>
+      <p>
+        Memora is free and open source (MIT licence), made by
+        <a href="https://github.com/dreamtheater484">dreamtheater484</a>.
+        <a href="./">Download</a>
+      </p>
+    </footer>
+  </body>
+</html>

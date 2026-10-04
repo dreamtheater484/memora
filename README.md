@@ -10,7 +10,7 @@ A notebook for your own computer or your own server: notebooks with coloured sec
 | ---------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | For        | Everyone                                                                                  | Enthusiasts with Docker or a NAS                             |
 | Runs on    | Windows, macOS, Ubuntu                                                                    | Docker on Linux, Windows or macOS, or a Synology NAS         |
-| Your notes | On that computer                                                                          | On your server, in sync on every device, your phone included |
+| Your notes | On that computer, or in sync on all your computers through your cloud storage             | On your server, in sync on every device, your phone included |
 | Installing | Download, open, done                                                                      | A compose file, and HTTPS for use away from home             |
 | Get it     | **[Download page](https://dreamtheater484.github.io/memora/)** · [Guide](docs/DESKTOP.md) | [Server guide](docs/SETUP.md)                                |
 
@@ -28,6 +28,7 @@ Both are the same Memora, from the same code and the same release. You can start
 - **Kanban:** projects with boards, swimlanes, WIP limits and cards that drag with a mouse, a finger or the keyboard. Any note links to any card.
 - **Every screen:** panes with tabs on wide and ultra-wide monitors, a phone layout, and an installable app.
 - **Open formats:** Markdown, Word, HTML, PDF, and a documented `.memora` archive, in and out.
+- **Your computers in sync:** the desktop app keeps several computers the same through one folder in Google Drive, kDrive or Nextcloud, end-to-end encrypted, without a server.
 - **Yours:** an app on your computer, or one small Docker container on a NAS or any Docker host, with one SQLite file. No telemetry, nothing loaded from other sites, two-step verification on the server, and a [security review](docs/SECURITY_REVIEW.md).
 
 | Kanban boards                                                    | Dark theme                                                 | Phones                                             |
