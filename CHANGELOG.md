@@ -4,6 +4,8 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-04
+
 ### Added
 
 - **Sync your computers through a folder in the cloud** (Memora for your computer, **Settings → Sync**): Google Drive, Infomaniak kDrive, Nextcloud or another WebDAV server, or any folder a sync app keeps up to date. No server or Docker needed. [DESKTOP.md](docs/DESKTOP.md#sync-your-computers) explains it.
@@ -12,6 +14,7 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
   - Each computer keeps its own copy, so Memora still works offline; changes go through the folder within seconds.
   - Pages changed on two computers at once: Markdown is merged when the changes don't overlap; otherwise the other text is kept in the page's history. Tags, project keys and card numbers made on two computers at once are sorted out by themselves.
   - The sign-in and the key are kept by the computer's own protection (Windows credential store, macOS Keychain, Linux keyring), never with the notes or in backups.
+  - **Google Drive, for now:** signing in needs a Google Cloud client of your own (**Settings → Sync → Advanced**, [how to make one](docs/DESKTOP.md#your-own-google-cloud-client)). Or choose a folder that the Google Drive app keeps in sync. kDrive, Nextcloud, other WebDAV servers and folders work as they are.
 - A sync indicator in the top bar of the desktop app, and the list of computers that sync.
 - A privacy page on the download site.
 
@@ -227,7 +230,8 @@ The first release: a public beta. Everything planned for 1.0 is in; what's left 
 - Setup guides for Synology, Linux and Windows, with three ways to get HTTPS.
 - `memora-admin` inside the container for lost passwords, lost phones, backups and restores.
 
-[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.9.7...HEAD
+[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/dreamtheater484/memora/compare/v0.9.7...v0.10.0
 [0.9.7]: https://github.com/dreamtheater484/memora/compare/v0.9.6...v0.9.7
 [0.9.6]: https://github.com/dreamtheater484/memora/compare/v0.9.5...v0.9.6
 [0.9.5]: https://github.com/dreamtheater484/memora/compare/v0.9.4...v0.9.5
