@@ -145,7 +145,7 @@ The test opens the app's window; on Linux without a screen, run it as `xvfb-run 
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | Every commit (pre-commit hook)         | Your git email is a GitHub noreply address · staged files contain no personal patterns · no secrets (secretlint) · formatting and lint |
 | Every commit message (commit-msg hook) | No personal patterns                                                                                                                   |
-| Every push (pre-push hook)             | All files scanned · type check · tests                                                                                                 |
+| Every push (pre-push hook)             | All files scanned · type check · tests, then the timed tests on their own                                                              |
 | CI (every push and pull request)       | All of the above, plus **gitleaks over the full git history** and a check of every commit's author email                               |
 
 ### One-time setup
@@ -191,3 +191,4 @@ docker build -f docker/Dockerfile -t memora:local . && node scripts/demo/screens
 - A new dependency's licence must be on the list in `scripts/licenses.mjs`, or the build stops. Add a licence there only when it asks for nothing beyond shipping its notice (the list says why each one is fine).
 - Every feature meets the [definition of done](docs/IMPLEMENTATION_PLAN.md#134-definition-of-done-every-feature): tests, light and dark themes, phone to ultra-wide, keyboard accessible, docs updated.
 - Database changes: edit `apps/server/src/db/schema.ts`, run `pnpm db:generate`, and commit the generated migration. Migrations run automatically on start, with a backup first.
+- A test that times the server against a budget ([§14](docs/IMPLEMENTATION_PLAN.md#14-performance-budgets)) goes in a `*.perf.test.ts` file in `apps/server/src`. Those run on their own once every other test is done (the `perf` project in `vitest.config.ts`): next to other tests, they would time how busy the machine is.
