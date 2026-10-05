@@ -24,10 +24,22 @@ The Store is free for individual developers: no fee and no credit card, only an 
    | Package/Identity/Publisher              | `MEMORA_STORE_PUBLISHER`      |
    | Package/Properties/PublisherDisplayName | `MEMORA_STORE_PUBLISHER_NAME` |
 
-4. From the next release on, the Windows job also makes `Memora-Store.appx`. It isn't attached to the release; it's in the workflow run's artifacts, as **microsoft-store-package**.
-5. In Partner Center, create a submission, upload `Memora-Store.appx`, and fill in the listing (description, screenshots from `docs/images`, the privacy statement from [DESKTOP.md](DESKTOP.md#privacy)). Microsoft reviews it, usually within a few days.
+4. From the next release on, the Windows job keeps `Memora-Store.appx` with that identity. It isn't attached to the release; it's in the workflow run's artifacts, as **microsoft-store-package**.
+5. In Partner Center, create a submission and upload `Memora-Store.appx`. Fill in the listing:
+   - the description and features from the [README](../README.md#what-it-does), and screenshots from `docs/images`;
+   - the privacy policy: `https://dreamtheater484.github.io/memora/privacy.html`;
+   - under **Submission options → Restricted capabilities**, why Memora needs `runFullTrust`: "Memora is a desktop app (Electron). It runs its own notes server on this computer's loopback address, which needs full trust, as every packaged desktop app does."
+
+   Microsoft reviews it, usually within a few days.
 
 For later releases, upload the new package in a new submission. The download on GitHub stays unsigned; the download page can then point Windows users to the Store.
+
+**What's different in the Store's package** ([DESKTOP.md](DESKTOP.md#windows-from-the-microsoft-store)):
+
+- **It doesn't update itself**: the Store does. (Windows keeps an installed package read-only, so it couldn't replace itself anyway.)
+- **Its notes are in `%USERPROFILE%\Memora`**, not in `%APPDATA%\Memora`. Windows keeps what a Store app creates in AppData in a folder of the app's own, and deletes it with the app: uninstalling would delete the notes. Keeping AppData out of that (the `unvirtualizedResources` capability) is meant for Microsoft's own games, so the Store wouldn't allow it.
+
+**Tested in every release run:** until the identity is set, the Windows job builds the Store package with a stand-in identity. `apps/desktop/scripts/test-store.ps1` then signs a copy with a throwaway certificate, installs it as the Store would, starts Memora from the Start menu, checks that its server answers and where the notes are, and uninstalls it, checking the notes stay. Its screenshot is `store.png` in the run's `desktop-screenshot-Windows-X64` artifact.
 
 ## Windows: SignPath Foundation
 

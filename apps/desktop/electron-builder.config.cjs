@@ -11,7 +11,8 @@
 // Without them the apps are built unsigned (macOS: signed "ad hoc", which Apple Silicon needs).
 //
 // With the Microsoft Store's identity for the app (MEMORA_STORE_*), a Store package is built
-// too, for uploading in Partner Center: the Store signs it.
+// too, for uploading in Partner Center: the Store signs it. Until the identity is set, CI builds
+// it with a stand-in one, and tests it (scripts/test-store.ps1).
 
 const env = process.env;
 const macSigned = Boolean(env.CSC_LINK);

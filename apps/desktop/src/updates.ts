@@ -6,6 +6,8 @@ declare const __MEMORA_SIGNED__: boolean;
 
 export const DOWNLOAD_PAGE = 'https://dreamtheater484.github.io/memora/';
 const SIX_HOURS = 6 * 3_600_000;
+/** The Store's own list of updates, where it shows Memora's too. */
+const STORE_UPDATES = 'ms-windows-store://downloadsandupdates';
 
 /**
  * Whether the app can replace itself with a new version: on Windows, as an AppImage, and on
@@ -46,9 +48,12 @@ async function offerRestart(info: UpdateInfo): Promise<void> {
   if (response === 0) autoUpdater.quitAndInstall();
 }
 
-/** Checks for a new version at start and every six hours, from the GitHub releases. */
+/**
+ * Checks for a new version at start and every six hours, from the GitHub releases. Not in the
+ * Microsoft Store's package: the Store updates it, as it does its other apps.
+ */
 export function startUpdates(): void {
-  if (!app.isPackaged || process.env.MEMORA_NO_UPDATES) return;
+  if (!app.isPackaged || process.env.MEMORA_NO_UPDATES || process.windowsStore) return;
   autoUpdater.logger = null;
   autoUpdater.autoDownload = canInstall();
   autoUpdater.autoInstallOnAppQuit = true;
@@ -67,6 +72,18 @@ export function startUpdates(): void {
 export async function checkForUpdatesNow(): Promise<void> {
   if (!app.isPackaged) {
     await dialog.showMessageBox({ message: 'Updates are checked in the installed app only.' });
+    return;
+  }
+  if (process.windowsStore) {
+    const { response } = await dialog.showMessageBox({
+      type: 'info',
+      message: 'The Microsoft Store updates Memora',
+      detail: `You have ${app.getVersion()}. The Store installs new versions by itself, as it does for your other apps.`,
+      buttons: ['Open the Store’s updates', 'OK'],
+      defaultId: 1,
+      cancelId: 1,
+    });
+    if (response === 0) void shell.openExternal(STORE_UPDATES);
     return;
   }
   try {
