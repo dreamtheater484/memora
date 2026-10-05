@@ -1,0 +1,138 @@
+name: Android
+
+# The trial of Memora for Android (apps/android): Node.js built for Android from the official
+# source, Memora's own server and web app inside an Android app, run on an emulator. It reports
+# the APK sizes, the start-up times and the memory used, with screenshots.
+
+on:
+  push:
+    branches: [spike/android-trial]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_ANDROID: 24.21.0
+  # NDK r29 (sdkmanager's package name), and the oldest Android the app runs on (8.0).
+  NDK_PACKAGE: ndk;29.0.14206865
+  ANDROID_API: 26
+
+jobs:
+  node:
+    name: Node.js for Android (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
+    steps:
+      - uses: actions/checkout@v7
+      # A new build only when the version or the recipe changes: one takes about an hour.
+      - uses: actions/cache@v6
+        id: cache
+        with:
+          path: node-android/node-${{ matrix.arch }}
+          key: node-android-${{ env.NODE_ANDROID }}-${{ matrix.arch }}-${{ hashFiles('apps/android/scripts/build-node.sh') }}
+      - name: The Android NDK
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "$NDK_PACKAGE" > /dev/null
+      - name: Node.js ${{ env.NODE_ANDROID }}, its source checked against nodejs.org's checksums
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSLO "https://nodejs.org/dist/v$NODE_ANDROID/node-v$NODE_ANDROID.tar.xz"
+          curl -fsSL "https://nodejs.org/dist/v$NODE_ANDROID/SHASUMS256.txt" | grep " node-v$NODE_ANDROID.tar.xz\$" | sha256sum -c -
+          tar xf "node-v$NODE_ANDROID.tar.xz"
+      - name: Build it for Android
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          ndk="$ANDROID_HOME/ndk/${NDK_PACKAGE#ndk;}"
+          time apps/android/scripts/build-node.sh "node-v$NODE_ANDROID" "$ndk" "$ANDROID_API" ${{ matrix.arch }} node-android
+          rm -rf node-android/src-*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: node-android-${{ matrix.arch }}
+          path: node-android/node-${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 7
+
+  apk:
+    name: The app
+    needs: node
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: The server and the web app, laid out as in the desktop app
+        run: |
+          pnpm build
+          cd apps/desktop
+          pnpm build
+          pnpm resources
+      - name: The Android NDK, and Node.js's headers for the SQLite addon
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "$NDK_PACKAGE" > /dev/null
+          curl -fsSLO "https://nodejs.org/dist/v$NODE_ANDROID/node-v$NODE_ANDROID-headers.tar.gz"
+          curl -fsSL "https://nodejs.org/dist/v$NODE_ANDROID/SHASUMS256.txt" | grep " node-v$NODE_ANDROID-headers.tar.gz\$" | sha256sum -c -
+          tar xzf "node-v$NODE_ANDROID-headers.tar.gz"
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: node-android-*
+          path: natives
+          merge-multiple: true
+      - name: better-sqlite3 for Android
+        run: |
+          ndk="$ANDROID_HOME/ndk/${NDK_PACKAGE#ndk;}"
+          pkg="$(cd apps/server/node_modules/better-sqlite3 && pwd -P)"
+          for arch in arm64 x86_64; do
+            rm -rf "$RUNNER_TEMP/sqlite"
+            cp -aL "$(dirname "$pkg")" "$RUNNER_TEMP/sqlite"
+            apps/android/scripts/build-sqlite.sh "$RUNNER_TEMP/sqlite/better-sqlite3" "$PWD/node-v$NODE_ANDROID" "$ndk" "$ANDROID_API" $arch natives
+          done
+      - name: Build the APKs
+        run: |
+          apps/android/scripts/stage.sh natives
+          cd apps/android
+          ./gradlew --no-daemon assembleRelease
+          ls -la app/build/outputs/apk/release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: memora-android-apks
+          path: apps/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  emulator:
+    name: Run it on an emulator
+    needs: apk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: memora-android-apks
+          path: apks
+      - name: KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          ram-size: 4096M
+          disable-animations: true
+          script: apps/android/scripts/trial.sh apks/app-x86_64-release.apk trial
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: android-trial
+          path: trial
+          retention-days: 14
