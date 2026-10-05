@@ -53,10 +53,12 @@ export function registerAuth(
   const apiLimit = new RateLimit(API_REQUESTS_PER_MINUTE, 60_000, now);
   let warnedPlainHttp = false;
 
+  // Browsers keep Secure cookies on http://127.0.0.1 and http://localhost; Android's WebView
+  // doesn't, so the Android app gets the plain one there.
   const isSecure = (request: FastifyRequest) =>
     request.protocol === 'https' ||
     baseOrigin?.startsWith('https:') === true ||
-    LOCALHOSTS.has(request.hostname);
+    (LOCALHOSTS.has(request.hostname) && config.desktop?.shell !== 'android');
 
   function sessionToken(request: FastifyRequest): string | undefined {
     const cookies = parseCookies(request.headers.cookie);

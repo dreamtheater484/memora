@@ -42,6 +42,8 @@ const envSchema = z.object({
   /** Set by the desktop app (apps/desktop): the secret its window signs in with. */
   MEMORA_DESKTOP_TOKEN: z.string().min(32).optional(),
   MEMORA_DESKTOP_NAME: z.string().max(100).optional(),
+  /** Which app runs this server in desktop mode: Electron (the default) or the Android app. */
+  MEMORA_DESKTOP_SHELL: z.enum(['electron', 'android']).default('electron'),
   /** The desktop app's Google OAuth client, for sync through Google Drive (ADR 0006). */
   MEMORA_GOOGLE_CLIENT_ID: z
     .string()
@@ -100,7 +102,7 @@ export interface Config {
    * are no passwords: the app's window signs in with `token`, a secret made at each launch,
    * and the owner's account is made on the first start, named `name`.
    */
-  desktop: { token: string; name: string } | null;
+  desktop: { token: string; name: string; shell: 'electron' | 'android' } | null;
   /**
    * The Google OAuth client ("Desktop app") the desktop app signs in to Google Drive with, for
    * sync (ADR 0006). Added to builds by CI; none: Google Drive needs a client of your own.
@@ -172,7 +174,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     gotenbergUrl: e.MEMORA_GOTENBERG_URL?.replace(/\/+$/, ''),
     secretKeyFile: resolve(e.MEMORA_SECRET_KEY_FILE ?? join(dataDir, 'secret.key')),
     desktop: e.MEMORA_DESKTOP_TOKEN
-      ? { token: e.MEMORA_DESKTOP_TOKEN, name: e.MEMORA_DESKTOP_NAME?.trim() || 'Me' }
+      ? {
+          token: e.MEMORA_DESKTOP_TOKEN,
+          name: e.MEMORA_DESKTOP_NAME?.trim() || 'Me',
+          shell: e.MEMORA_DESKTOP_SHELL,
+        }
       : null,
     googleClient: e.MEMORA_GOOGLE_CLIENT_ID
       ? {
