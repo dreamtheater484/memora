@@ -26,6 +26,16 @@ Double-click `Memora-Setup.exe`. It installs Memora for you, without asking for 
 
 **The first time:** until the app is signed ([SIGNING.md](SIGNING.md)), Windows may say "Windows protected your PC". Choose **More info**, then **Run anyway**. It asks only once.
 
+### Windows, from the Microsoft Store
+
+Memora is on its way to the Microsoft Store. Installed from there, it's the same Memora, with three differences:
+
+- **No warning the first time:** the Store signs the app.
+- **The Store updates it**, as it does your other apps from the Store. **Help → Check for updates** opens the Store's list of updates.
+- **Your notes are in your own folder**, `C:\Users\<you>\Memora\Data`, and the log beside them in `…\Memora\logs`. Windows deletes what a Store app keeps in `%APPDATA%` when the app is uninstalled; here, uninstalling keeps your notes, as it does for the download.
+
+To move from the download to the Store version, or back: export everything as a **Memora archive** in one (**Settings → Import & export**), and import it in the other.
+
 ### macOS
 
 Open `Memora.dmg` and drag Memora onto **Applications**. Then open Memora from Applications or Launchpad.
@@ -138,11 +148,12 @@ Use the same client on every computer: Google lets a client's apps see only the 
 
 ## Where your notes are
 
-| System  | Folder                                      |
-| ------- | ------------------------------------------- |
-| Windows | `%APPDATA%\Memora\Data`                     |
-| macOS   | `~/Library/Application Support/Memora/Data` |
-| Ubuntu  | `~/.config/Memora/Data`                     |
+| System                            | Folder                                      |
+| --------------------------------- | ------------------------------------------- |
+| Windows                           | `%APPDATA%\Memora\Data`                     |
+| Windows, from the Microsoft Store | `%USERPROFILE%\Memora\Data`                 |
+| macOS                             | `~/Library/Application Support/Memora/Data` |
+| Ubuntu                            | `~/.config/Memora/Data`                     |
 
 **File → Open the data folder** opens it. It holds the same files as a server's data folder: `memora.db` with all your notes, `backups/`, and `secret.key`. Uninstalling Memora keeps this folder.
 
@@ -169,7 +180,7 @@ The backups are in the data folder, so on the same disk as your notes. To also b
 
 Memora connects to the internet for these things only:
 
-- to check GitHub for a new version;
+- to check GitHub for a new version (the Microsoft Store version doesn't: the Store updates it);
 - to download the pictures of a web page you paste;
 - when you turn sync on, to reach your sync folder: Google Drive or your WebDAV server (a folder on this computer needs no connection of Memora's own).
 
