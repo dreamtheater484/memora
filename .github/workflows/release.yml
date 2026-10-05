@@ -229,6 +229,12 @@ jobs:
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
+    env:
+      # The Microsoft Store's identity for the app (docs/SIGNING.md): with it, the Windows build
+      # makes a Store package too. Until it's set, a stand-in identity makes one to test.
+      MEMORA_STORE_IDENTITY: ${{ vars.MEMORA_STORE_IDENTITY || 'Memora.StoreTest' }}
+      MEMORA_STORE_PUBLISHER: ${{ vars.MEMORA_STORE_PUBLISHER || 'CN=Memora Store Test' }}
+      MEMORA_STORE_PUBLISHER_NAME: ${{ vars.MEMORA_STORE_PUBLISHER_NAME || 'Memora contributors' }}
     defaults:
       run:
         shell: bash
@@ -270,10 +276,6 @@ jobs:
           MEMORA_AZURE_ACCOUNT: ${{ vars.MEMORA_AZURE_ACCOUNT }}
           MEMORA_AZURE_PROFILE: ${{ vars.MEMORA_AZURE_PROFILE }}
           MEMORA_AZURE_PUBLISHER: ${{ vars.MEMORA_AZURE_PUBLISHER }}
-          # The Microsoft Store's identity for the app: then a Store package is built too.
-          MEMORA_STORE_IDENTITY: ${{ vars.MEMORA_STORE_IDENTITY }}
-          MEMORA_STORE_PUBLISHER: ${{ vars.MEMORA_STORE_PUBLISHER }}
-          MEMORA_STORE_PUBLISHER_NAME: ${{ vars.MEMORA_STORE_PUBLISHER_NAME }}
           # Sync through Google Drive (docs/GOOGLE_DRIVE.md): the app's OAuth client. Without
           # it, the app offers Google Drive with a client of the person's own.
           MEMORA_GOOGLE_CLIENT_ID: ${{ vars.MEMORA_GOOGLE_CLIENT_ID }}
@@ -327,6 +329,13 @@ jobs:
           else
             MEMORA_APP="$app" pnpm test
           fi
+      - name: Install the Microsoft Store package, as the Store would, and test that
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >-
+          ./scripts/test-store.ps1 -Package release/Memora-Store.appx
+          -Identity $env:MEMORA_STORE_IDENTITY -Publisher $env:MEMORA_STORE_PUBLISHER
+          -Screenshot screenshots/store.png
       - name: Screenshots of the app on ${{ matrix.name }}, and the logs of a failed test
         if: always()
         uses: actions/upload-artifact@v7
