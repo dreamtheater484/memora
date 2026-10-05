@@ -1,0 +1,9 @@
+# Gradle and Android Studio
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+# Made by scripts/stage.sh from the server, the web app and the native builds
+app/src/main/assets/
+app/src/main/jniLibs/
