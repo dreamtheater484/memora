@@ -89,9 +89,11 @@ jobs:
           ndk="$ANDROID_HOME/ndk/${NDK_PACKAGE#ndk;}"
           pkg="$(cd apps/server/node_modules/better-sqlite3 && pwd -P)"
           for arch in arm64 x86_64; do
+            # A copy with its node-addon-api beside it, in a node_modules folder as Node looks for.
             rm -rf "$RUNNER_TEMP/sqlite"
-            cp -aL "$(dirname "$pkg")" "$RUNNER_TEMP/sqlite"
-            apps/android/scripts/build-sqlite.sh "$RUNNER_TEMP/sqlite/better-sqlite3" "$PWD/node-v$NODE_ANDROID" "$ndk" "$ANDROID_API" $arch natives
+            mkdir -p "$RUNNER_TEMP/sqlite"
+            cp -aL "$(dirname "$pkg")" "$RUNNER_TEMP/sqlite/node_modules"
+            apps/android/scripts/build-sqlite.sh "$RUNNER_TEMP/sqlite/node_modules/better-sqlite3" "$PWD/node-v$NODE_ANDROID" "$ndk" "$ANDROID_API" $arch natives
           done
       - name: Build the APKs
         run: |
