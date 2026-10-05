@@ -14,9 +14,17 @@ declare const __MEMORA_GOOGLE_CLIENT_SECRET__: string;
 /** Memora's exit code when it wants to be started again: after a backup was restored. */
 export const RESTART_EXIT_CODE = 75;
 
+/**
+ * Memora's folder. The Microsoft Store's package is the exception (docs/SIGNING.md): Windows
+ * keeps what a Store app writes in AppData apart, and deletes it with the app. Its notes go in
+ * the person's own folder instead, as in C:\Users\<name>\Memora, which uninstalling leaves.
+ */
+const memoraDir = () =>
+  process.windowsStore ? path.join(app.getPath('home'), 'Memora') : app.getPath('userData');
+
 /** The notes: memora.db, the backups and the instance key, as on a server's /data. */
-export const dataDir = () => path.join(app.getPath('userData'), 'Data');
-export const logDir = () => path.join(app.getPath('userData'), 'logs');
+export const dataDir = () => path.join(memoraDir(), 'Data');
+export const logDir = () => path.join(memoraDir(), 'logs');
 
 /** The server bundle, its migrations and the web app: beside the app, or built for development. */
 export function resourcesDir(): string {
