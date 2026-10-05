@@ -17,7 +17,11 @@ afterEach(async () => {
 describe('the desktop app (Phase 14)', () => {
   it('listens on this computer only', () => {
     expect(() => loadConfig({ ...DESKTOP, HOST: '0.0.0.0' })).toThrow(ConfigError);
-    expect(loadConfig(DESKTOP).desktop).toEqual({ token: TOKEN, name: 'Sam' });
+    expect(loadConfig(DESKTOP).desktop).toEqual({ token: TOKEN, name: 'Sam', shell: 'electron' });
+    expect(loadConfig({ ...DESKTOP, MEMORA_DESKTOP_SHELL: 'android' }).desktop?.shell).toBe(
+      'android',
+    );
+    expect(() => loadConfig({ ...DESKTOP, MEMORA_DESKTOP_SHELL: 'ios' })).toThrow(ConfigError);
     expect(loadConfig({}).desktop).toBeNull();
   });
 
@@ -46,6 +50,23 @@ describe('the desktop app (Phase 14)', () => {
     expect((await again.get('/api/v1/auth/me')).json()).toMatchObject({
       user: { id: (me.json() as { user: { id: string } }).user.id },
     });
+  });
+
+  it('signs the Android app in with a plain cookie, which its WebView keeps on 127.0.0.1', async () => {
+    const cookies = async (env: Record<string, string>) => {
+      t = await createTestApp(env);
+      const res = await t.client(HOST).get(`/api/v1/auth/desktop?token=${TOKEN}`);
+      await t.close();
+      t = undefined;
+      return ([] as string[])
+        .concat(res.headers['set-cookie'] ?? [])
+        .filter((c) => !c.includes('Max-Age=0'));
+    };
+    const [electron] = await cookies(DESKTOP);
+    expect(electron).toMatch(/^__Host-memora_session=.*; Secure/);
+    const [android] = await cookies({ ...DESKTOP, MEMORA_DESKTOP_SHELL: 'android' });
+    expect(android).toMatch(/^memora_session=/);
+    expect(android).not.toContain('Secure');
   });
 
   it('only sends the window on to a page of this app', async () => {

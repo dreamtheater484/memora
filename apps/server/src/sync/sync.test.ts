@@ -49,12 +49,15 @@ afterEach(async () => {
   rmSync(folder, { recursive: true, force: true });
 });
 
-async function computer(partBytes?: number): Promise<Computer> {
+async function computer(partBytes?: number, env: Record<string, string> = {}): Promise<Computer> {
   const secrets = new MemorySecretStore();
-  const t = await createTestApp(DESKTOP, {
-    secretStore: secrets,
-    syncTesting: { timers: false, ...(partBytes ? { partBytes } : {}) },
-  });
+  const t = await createTestApp(
+    { ...DESKTOP, ...env },
+    {
+      secretStore: secrets,
+      syncTesting: { timers: false, ...(partBytes ? { partBytes } : {}) },
+    },
+  );
   const me = t.client(HOST);
   const signIn = await me.get(`/api/v1/auth/desktop?token=${TOKEN}`);
   expect(signIn.statusCode).toBe(303);
@@ -160,6 +163,15 @@ describe('setting sync up', () => {
     expect(weak.statusCode).toBe(400);
     expect(weak.json().error.details.fields.passphrase).toBeTruthy();
     expect(readdirSync(folder)).not.toContain('memora-vault.json');
+  });
+
+  it('names a phone by the name the Android app gives, not "localhost"', async () => {
+    const phone = await computer(undefined, {
+      MEMORA_DESKTOP_SHELL: 'android',
+      MEMORA_DESKTOP_NAME: 'Pixel 9',
+    });
+    const { status } = await connect(phone);
+    expect(status.device?.name).toBe('Pixel 9');
   });
 
   it('is only in the desktop app', async () => {
