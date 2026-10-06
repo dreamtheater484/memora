@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "@fastify/static": "^10.1.5",
-    "@fastify/websocket": "^11.3.1",
+    "@fastify/websocket": "^11.3.2",
     "@memora/shared": "workspace:*",
     "@types/better-sqlite3": "^9.6.0",
     "@types/ws": "^8.18.2",
