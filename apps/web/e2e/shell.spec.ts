@@ -1,5 +1,6 @@
+import type { TreeChanges } from '@memora/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { FakeApi, NOW, THEMES, expectNoA11yViolations, openShell } from './helpers';
+import { ADMIN, FakeApi, NOW, THEMES, expectNoA11yViolations, openShell } from './helpers';
 import { FakeNotes } from './notes';
 
 // The three sizes from the mockups plus the wide breakpoint (§9.12).
@@ -123,6 +124,42 @@ test.describe('behaviour', () => {
     await expect(page.getByText(/^Moved .*Work.* to the recycle bin$/)).toBeVisible();
     await expect(work).toHaveCount(0);
     expect(api.requests.some((r) => r.method === 'DELETE' && r.path.endsWith('/work'))).toBe(true);
+  });
+
+  test('notes synced in while Settings is open show on coming back', async ({ page }) => {
+    const api = new FakeApi();
+    await openShell(page, 'light', api);
+    await page.getByRole('button', { name: 'Account' }).click();
+    await page.getByRole('menuitem', { name: 'Account settings' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+    // The tab passes each event it has handled on to the browser's other tabs: heard there,
+    // the events below were handled while Settings was open.
+    await page.evaluate((user) => {
+      const relayed = new Promise<void>((resolve) => {
+        const channel = new BroadcastChannel(`memora-sync-${user}`);
+        channel.onmessage = (e: MessageEvent<{ t: string; event?: { type: string } }>) => {
+          if (e.data.t !== 'event' || e.data.event?.type !== 'page.updated') return;
+          channel.close();
+          resolve();
+        };
+      });
+      Object.assign(window, { relayed });
+    }, ADMIN.id);
+    // Another computer's notebook, as the desktop app's sync brings it in: the rows change on
+    // the server, which announces a tree change, then each page that came in.
+    const made = api.notes.respond('POST', '/api/v1/notebooks', { name: 'Travel', color: 'teal' })!
+      .json as TreeChanges;
+    const added = api.notes.respond('POST', '/api/v1/pages', {
+      sectionId: made.sections![0]!.id,
+      title: 'Packing list',
+    })!.json as TreeChanges;
+    api.announce({ type: 'tree.changed', origin: null });
+    api.announce({ type: 'page.updated', page: added.pages![0]!, revision: 1, origin: null });
+    await page.evaluate(() => (window as unknown as { relayed: Promise<void> }).relayed);
+
+    await page.getByRole('link', { name: 'Notes' }).click();
+    const nav = page.getByRole('navigation', { name: 'Navigation' });
+    await expect(nav.getByRole('treeitem', { name: 'Travel', exact: true })).toBeVisible();
   });
 
   test('pages move to another section from the Move dialog', async ({ page }) => {

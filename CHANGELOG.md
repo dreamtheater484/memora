@@ -4,6 +4,10 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Fixed
+
+- **Notes synced from your other computers show as soon as they arrive.** After joining a sync folder, the notebooks that came in could stay hidden until Memora was started again, although sync said it was done. The same happened to whatever sync brought in while **Settings** was open: the notes list showed what it had before.
+
 ## [0.10.0] - 2026-10-04
 
 ### Added
