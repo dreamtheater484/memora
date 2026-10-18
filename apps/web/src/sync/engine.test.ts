@@ -1,7 +1,8 @@
 import type { PageMeta, Section, Tree } from '@memora/shared';
 import { QueryClient } from '@tanstack/react-query';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { treeKey } from '../notes/keys';
+import { PageDoc } from './doc';
 import { SyncEngine } from './engine';
 import type { LocalStore } from './store';
 
@@ -58,6 +59,10 @@ describe('the sync engine', () => {
     });
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('shows a page changed elsewhere in the tree at once', () => {
     engine.event({
       type: 'page.updated',
@@ -75,5 +80,14 @@ describe('the sync engine', () => {
     engine.event({ type: 'page.updated', page: page('q'), revision: 1, origin: null });
     expect(client.getQueryState(treeKey)?.isInvalidated).toBe(true);
     expect(tree().pages.map((p) => p.id)).toEqual(['p']);
+  });
+
+  it('catching up also brings the open pages the tree shows changed', async () => {
+    const seen = vi.spyOn(PageDoc.prototype, 'seen');
+    engine.retain(engine.doc('p'));
+    setPages([page('p', 3), page('q', 5)]);
+    engine.catchUp();
+    await vi.waitFor(() => expect(seen).toHaveBeenCalledWith(3));
+    expect(seen).toHaveBeenCalledTimes(1);
   });
 });
