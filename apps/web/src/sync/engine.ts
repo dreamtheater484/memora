@@ -461,7 +461,14 @@ export class SyncEngine implements SenderHost, DocHost, LiveHost {
     else this.options.dataId = dataId;
   }
 
+  /**
+   * Shows changed rows in the tree at once. A tree that waits to load again is left to that:
+   * setting its data would make it look current, so it would never load the rest of what
+   * changed. (Sync in the desktop app announces a tree change, then each page it brought in,
+   * often while Settings is open and nothing shows the tree.)
+   */
   private mergeTree(changes: TreeChanges) {
+    if (this.queryClient.getQueryState(treeKey)?.isInvalidated) return;
     this.queryClient.setQueryData<Tree>(treeKey, (tree) => tree && mergeChanges(tree, changes));
   }
 
