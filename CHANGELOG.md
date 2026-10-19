@@ -4,6 +4,10 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Fixed
+
+- **Settings → Sync** no longer says that phones need Memora Server: Memora for Android syncs through kDrive or another WebDAV server.
+
 ## [0.11.0] - 2026-10-19
 
 ### Added
