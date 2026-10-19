@@ -49,7 +49,7 @@ The dev entry (`src/*.ts`, run by `tsx`) and the bundle (`dist/server.mjs`) both
 7. Record the instance ID and the version that created the database in `app_meta`.
 8. Listen, and start the backup schedule and, in the desktop app with sync on, sync's runs. If no account exists yet, print a one-time setup code to stdout (kept only in memory).
 9. Every 6 hours, delete expired sessions, prune the audit log (a year, at most 50,000 entries), thin out page versions, purge the recycle bin, and delete files nothing uses any more.
-10. On `SIGTERM`/`SIGINT`, send what sync has waiting (at most 5 s), close the server, then close the database, which checkpoints the WAL. After a restore was prepared, the same, but ending with exit code 75, for Docker's restart policy to start Memora again.
+10. On `SIGTERM`/`SIGINT` (in the desktop app, when the app asks it to stop), close the server within 3 s whatever the browsers do (`http/closing.ts`): requests being answered get their answer, connections nothing needs end at once, and what is still open after 3 s is cut. Then send what sync has waiting (at most 5 s) and close the database, which checkpoints the WAL. The log says what was open and how long each step took. After a restore was prepared, the same, but ending with exit code 75, for Docker's restart policy to start Memora again.
 
 ## Container
 

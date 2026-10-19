@@ -9,6 +9,7 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 - **Notes synced from your other computers show as soon as they arrive.** After joining a sync folder, the notebooks that came in could stay hidden until Memora was started again, although sync said it was done. The same happened to whatever sync brought in while **Settings** was open: the notes list showed what it had before.
 - **Memora syncs when you come back to it.** Bringing its window back syncs the cloud folder at once, instead of at the next run, and reconnects for changes straight away.
 - After the connection to the server was lost for a while, an open page now catches up with changes made elsewhere meanwhile, not only the notes list.
+- **Memora for your computer always closes cleanly.** Now and then it took 10 s to stop and was then ended, leaving the database's write-ahead log behind (your notes were safe: Memora takes it in at the next start). It no longer waits on connections the window doesn't need any more. Memora on a server doesn't wait on browsers when it's stopped either.
 
 ## [0.10.0] - 2026-10-04
 

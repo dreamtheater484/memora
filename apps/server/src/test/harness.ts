@@ -37,7 +37,7 @@ export async function createTestApp(
   env: Record<string, string> = {},
   options: Pick<
     AppOptions,
-    'fetchPolicy' | 'onRestart' | 'secretStore' | 'pickFolder' | 'syncTesting'
+    'fetchPolicy' | 'onRestart' | 'secretStore' | 'pickFolder' | 'syncTesting' | 'closeGraceMs'
   > = {},
 ): Promise<TestApp> {
   const dir = mkdtempSync(join(tmpdir(), 'memora-test-'));
