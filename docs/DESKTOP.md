@@ -75,6 +75,7 @@ Use Memora on more than one computer, and keep the notes the same on all of them
 ### How it works
 
 - Each computer keeps its own copy of the notes, so Memora works offline as before. Changes go through the folder within seconds while the computers are online.
+- When Memora starts, and when you come back to its window, it syncs at once: what changed on your other computers meanwhile shows straight away.
 - **Everything is encrypted on your computer** before it goes to the folder: notes, files, and their names. The key comes from a passphrase only you know. Your cloud provider sees how many files there are, how large they are and when they change, but not what's in them.
 - **Memora uses one folder and nothing else** in your cloud storage.
 - When the same page was changed on two computers before they synced:

@@ -278,6 +278,11 @@ export class FakeApi {
     }
   }
 
+  /** Tells every browser about a change made elsewhere (by the desktop app's sync, say). */
+  announce(event: ServerEvent) {
+    this.publish(event);
+  }
+
   /** The content saves sent, whether or not the server was there to take them. */
   saves() {
     return this.requests.filter((r) => r.method === 'PUT' && r.path.endsWith('/content'));
