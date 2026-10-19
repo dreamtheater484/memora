@@ -13,24 +13,24 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
-    "@node-rs/argon2": "^2.2.1",
+    "@node-rs/argon2": "^2.2.2",
     "better-sqlite3": "^13.0.3",
     "yauzl": "^3.4.0",
     "yazl": "^3.3.1"
   },
   "devDependencies": {
-    "@fastify/static": "^10.1.5",
-    "@fastify/websocket": "^11.3.1",
+    "@fastify/static": "^10.1.6",
+    "@fastify/websocket": "^11.3.4",
     "@memora/shared": "workspace:*",
     "@types/better-sqlite3": "^9.6.0",
     "@types/ws": "^8.18.2",
     "@types/yauzl": "^3.4.0",
     "@types/yazl": "^3.3.1",
     "drizzle-kit": "^0.31.11",
-    "drizzle-orm": "^0.45.3",
+    "drizzle-orm": "^0.45.4",
     "esbuild": "^0.28.2",
-    "fastify": "^5.12.5",
+    "fastify": "^5.12.7",
     "tsx": "^4.23.15",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   }
 }
