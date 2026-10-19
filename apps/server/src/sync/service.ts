@@ -822,7 +822,9 @@ export class SyncService {
   }
 
   private deviceName(): string {
-    return (os.hostname() || this.o.config.desktop?.name || 'This computer').slice(0, 100);
+    // Android calls every phone "localhost": the app names the phone itself (its model).
+    const host = this.o.config.desktop?.shell === 'android' ? '' : os.hostname();
+    return (host || this.o.config.desktop?.name || 'This computer').slice(0, 100);
   }
 
   /** A new password for WebDAV or kDrive, after the old one stopped working. */

@@ -1,0 +1,94 @@
+name: Node.js for Android into main's cache
+
+# Puts the Node.js for Android that another run of the Android workflow built (its
+# node-android-<arch> artifacts, kept 7 days) into main's cache, so that main and the releases
+# don't spend 1.5 to 3 hours per processor type building the same again. A cache belongs to its
+# branch, and a tag's run reads only main's: after a pull request changes how Node.js is built,
+# or the first time, main would build it once more (docs/RELEASING.md#nodejs-for-android).
+#
+# It takes them only from a successful Android run of this repository, not of a fork, whose
+# Node.js version and build-node.sh are main's: what the cache key says is inside.
+#
+# Its own workflow: it reads other runs' artifacts (actions: read), which android.yml can't ask
+# for, as the release calls it with contents: read only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run:
+        description: The id of the Android run to take Node.js from (the number in its address)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  seed:
+    name: Node.js for Android (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run ${{ inputs.run }} built what main's cache key says
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ inputs.run }}
+        run: |
+          fail() { echo "::error::$*"; exit 1; }
+          [ "$GITHUB_REF" = refs/heads/main ] || fail "Run this on main: only main's cache reaches the releases"
+          [[ "$RUN" =~ ^[0-9]+$ ]] || fail "\"$RUN\" isn't a run's id"
+          info="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN" \
+            --jq '[.path, (.conclusion // "none"), (.head_repository.full_name // "none"), .head_sha] | @tsv')"
+          IFS=$'\t' read -r path conclusion repo sha <<< "$info"
+          echo "Run $RUN: $path, $conclusion, $repo at $sha"
+          [ "$path" = .github/workflows/android.yml ] || fail "Run $RUN isn't the Android workflow's"
+          [ "$conclusion" = success ] || fail "Run $RUN didn't succeed ($conclusion)"
+          [ "$repo" = "$GITHUB_REPOSITORY" ] || fail "Run $RUN is of $repo, not of this repository"
+          version() { sed -n 's/^  NODE_ANDROID: *//p'; }
+          node="$(version < .github/workflows/android.yml)"
+          [ -n "$node" ] || fail "android.yml has no NODE_ANDROID"
+          git fetch --quiet --depth=1 origin "$sha"
+          [ "$(git show "$sha:.github/workflows/android.yml" | version)" = "$node" ] ||
+            fail "Run $RUN built another version of Node.js than main's $node"
+          git show "$sha:apps/android/scripts/build-node.sh" | cmp -s - apps/android/scripts/build-node.sh ||
+            fail "Run $RUN built Node.js with another build-node.sh than main's"
+          echo "node=$node" >> "$GITHUB_OUTPUT"
+      # Exactly android.yml's path and key: with another path, the cache's version differs, and
+      # android.yml wouldn't find it.
+      - uses: actions/cache/restore@v6
+        id: cache
+        with:
+          path: node-android/node-${{ matrix.arch }}
+          key: node-android-${{ steps.check.outputs.node }}-${{ matrix.arch }}-${{ hashFiles('apps/android/scripts/build-node.sh') }}
+          lookup-only: true
+      - name: Main has it already
+        if: steps.cache.outputs.cache-hit == 'true'
+        run: echo "::notice::main's cache already has Node.js ${{ steps.check.outputs.node }} for ${{ matrix.arch }}"
+      - uses: actions/download-artifact@v8
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          name: node-android-${{ matrix.arch }}
+          path: node-android
+          run-id: ${{ inputs.run }}
+          github-token: ${{ github.token }}
+      - name: It's Node.js for Android on ${{ matrix.arch }}
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          bin=node-android/node-${{ matrix.arch }}
+          # An artifact doesn't keep the file's mode; the build's own cache has it executable.
+          chmod +x "$bin"
+          file "$bin"
+          sha256sum "$bin"
+          case ${{ matrix.arch }} in arm64) cpu='ARM aarch64' ;; x86_64) cpu='x86-64' ;; esac
+          file "$bin" | grep -q "ELF 64-bit .*$cpu.*/system/bin/linker64" ||
+            { echo "::error::$bin isn't a program for Android on ${{ matrix.arch }}"; exit 1; }
+      - uses: actions/cache/save@v6
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: node-android/node-${{ matrix.arch }}
+          key: node-android-${{ steps.check.outputs.node }}-${{ matrix.arch }}-${{ hashFiles('apps/android/scripts/build-node.sh') }}

@@ -4,6 +4,10 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- **Memora for Android.** The same Memora on your phone, with your notes on it, in sync with your computers through kDrive or another WebDAV folder. From this version on, each release has an APK for it, `Memora-x.y.z-arm64.apk`: install it from the release page, and update by installing the next one over it, notes included. Coming from the trial app? It takes one reinstall. All of it is in [ANDROID.md](docs/ANDROID.md).
+
 ### Fixed
 
 - **Notes synced from your other computers show as soon as they arrive.** After joining a sync folder, the notebooks that came in could stay hidden until Memora was started again, although sync said it was done. The same happened to whatever sync brought in while **Settings** was open: the notes list showed what it had before.

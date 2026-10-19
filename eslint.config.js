@@ -17,6 +17,9 @@ export default defineConfig(
     // The desktop app's packaged builds and the resources put beside them (apps/desktop).
     'apps/desktop/build/',
     'apps/desktop/release/',
+    // The Android app's Gradle builds, and the engine staged into it (apps/android).
+    'apps/android/**/build/',
+    'apps/android/app/src/main/assets/',
   ]),
   js.configs.recommended,
   tseslint.configs.recommended,
@@ -57,6 +60,12 @@ export default defineConfig(
     languageOptions: {
       globals: { ...globals.serviceworker },
     },
+  },
+  {
+    // What starts the server on Android (apps/android): CommonJS, to reach Node's module loader.
+    files: ['apps/android/engine/*.cjs'],
+    languageOptions: { sourceType: 'commonjs' },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   prettier,
 );

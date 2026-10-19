@@ -6,7 +6,8 @@
  *   node scripts/release-notes.mjs v0.9.0 --check   also check the version is the packages'
  *
  * Fails when the version has no section, when the section is empty or undated, or (with
- * --check) when a package.json says another version: a tag must release what it names.
+ * --check) when a package.json says another version: a tag must release what it names. With
+ * --check, it also fails when the Android app can't number the version (androidVersionCode).
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -33,6 +34,25 @@ export function parseVersion(input) {
 }
 
 export const isPrerelease = (version) => SEMVER.exec(version)?.[4] !== undefined;
+
+/**
+ * The Android app's versionCode for a version: MAJOR × 10,000,000 + MINOR × 10,000 + PATCH × 10,
+ * plus 9 for a release, or N − 1 for its candidate `-rc.N`. Android installs an APK over another
+ * only with a higher code, so it rises with every version, and a release comes after its
+ * candidates (docs/RELEASING.md). apps/android/app/build.gradle.kts has the same rule; the
+ * Android workflow checks the APKs agree with this one.
+ */
+export function androidVersionCode(version) {
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-rc\.([1-9]))?$/.exec(version);
+  if (!match) {
+    throw new Error(`Android can't number ${version}: a pre-release must be -rc.1 to -rc.9`);
+  }
+  const [major, minor, patch] = match.slice(1, 4).map(Number);
+  if (major > 209 || minor > 999 || patch > 999) {
+    throw new Error(`Android can't number ${version}: at most 209.999.999`);
+  }
+  return major * 10_000_000 + minor * 10_000 + patch * 10 + (match[4] ? Number(match[4]) - 1 : 9);
+}
 
 /** The image tags a version gets: 1.2.3 and 1.2, plus `latest` unless it is a pre-release. */
 export function imageTags(version) {
@@ -87,6 +107,7 @@ function main(argv) {
     if (flags.includes('--check')) {
       const wrong = mismatchedPackages(version);
       if (wrong.length) throw new Error(`not version ${version}: ${wrong.join(', ')}`);
+      androidVersionCode(version);
     }
     process.stdout.write(notesFor(readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8'), version));
     return 0;

@@ -19,6 +19,10 @@ test-results/
 *.pem
 *.key
 *.crt
+# the Android app's signing key (docs/SIGNING.md#android)
+*.jks
+*.keystore
+*.p12
 secrets/
 
 # local-only files (personal strings list, local deploy settings, …)

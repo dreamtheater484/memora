@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   absoluteLinks,
+  androidVersionCode,
   imageTags,
   isPrerelease,
   mismatchedPackages,
@@ -81,5 +82,42 @@ describe('versions', () => {
     expect(imageTags('1.2.3')).toEqual(['1.2.3', '1.2', 'latest']);
     expect(isPrerelease('1.0.0-rc.1')).toBe(true);
     expect(imageTags('1.0.0-rc.1')).toEqual(['1.0.0-rc.1']);
+  });
+
+  it('numbers Android versions so each one installs over the one before', () => {
+    expect(androidVersionCode('0.11.0')).toBe(110_009);
+    expect(androidVersionCode('1.2.3')).toBe(10_020_039);
+    expect(androidVersionCode('1.0.0-rc.1')).toBe(10_000_000);
+    const order = [
+      '0.10.0',
+      '0.10.1',
+      '0.11.0-rc.1',
+      '0.11.0-rc.2',
+      '0.11.0-rc.9',
+      '0.11.0',
+      '0.11.1',
+      '0.12.0',
+      '0.999.999',
+      '1.0.0-rc.1',
+      '1.0.0',
+      '1.0.1',
+      '2.0.0',
+      '209.999.999',
+    ];
+    const codes = order.map(androidVersionCode);
+    expect(codes).toEqual([...codes].sort((a, b) => a - b));
+    expect(new Set(codes).size).toBe(codes.length);
+    // Within what Google Play would take too.
+    expect(androidVersionCode('209.999.999')).toBeLessThanOrEqual(2_100_000_000);
+  });
+
+  it('refuses versions Android could not number', () => {
+    for (const version of ['1.0.0-beta.1', '1.0.0-rc.0', '1.0.0-rc.10', '1.0.0-rc', '210.0.0']) {
+      expect(() => androidVersionCode(version)).toThrow(/Android can't number/);
+    }
+    expect(() => androidVersionCode('1.1000.0')).toThrow();
+    expect(() => androidVersionCode('1.0.1000')).toThrow();
+    const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
+    expect(androidVersionCode(version)).toBeGreaterThan(1);
   });
 });

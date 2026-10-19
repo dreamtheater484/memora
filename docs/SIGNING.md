@@ -1,14 +1,17 @@
-# Signing the desktop app
+# Signing the apps
 
 For maintainers. Windows and macOS trust apps that are **signed**: a certificate says who made the app, and that nobody changed it since. Unsigned, the app works the same, but the first start needs an extra step ([DESKTOP.md](DESKTOP.md#installing)), and on macOS the app can't update itself.
 
 Everything for signing is ready in the release workflow: it signs as soon as the secrets below are set in GitHub (**Settings → Secrets and variables → Actions**). Nothing else changes. Only a release (a version tag) uses them: a pull request's dry run never sees them, and builds the Mac app signed ad hoc, as an unsigned release is. Getting the certificates needs your identity, and on macOS a paid membership, so that part is yours.
+
+The Android app is different: it **must** be signed with one key of Memora's own, which you make once ([below](#android)). Until its secrets are set, a release fails rather than sign the app with another key.
 
 | System  | What it takes                                                                                                                                                                | Cost       |
 | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
 | Windows | The [Microsoft Store](#windows-the-microsoft-store): Microsoft signs Store apps itself. Or [SignPath Foundation](#windows-signpath-foundation) for the download from GitHub. | Free       |
 | macOS   | The [Apple Developer Program](#macos-the-apple-developer-program)                                                                                                            | $99 a year |
 | Ubuntu  | Nothing: Ubuntu doesn't ask for signed apps                                                                                                                                  | —          |
+| Android | [A key of Memora's own](#android), made once with `keytool`: a release needs it                                                                                              | Free       |
 
 ## Windows: the Microsoft Store
 
@@ -69,9 +72,80 @@ The only way to a Mac app that opens without a warning, and updates itself.
 
 From the next release on, the Mac app is signed, notarised by Apple, and updates itself. The workflow checks the signature (`codesign --verify`) before testing the app.
 
+## Android
+
+Android installs an APK over an installed app only when **the same key** signed both. So every release of Memora for Android is signed with one key, Memora's own, and it must stay the same for as long as Memora exists:
+
+- **Losing the key ends updates.** An APK signed with a new key won't install over the old one: everyone would have to uninstall Memora, which deletes the notes on the phone, and install it again. Google's [developer verification](ANDROID.md#googles-developer-verification-from-2027) also registers the app with this key, and without it, the app can't be registered.
+- **Anyone with the key and its password can make an "update" of Memora** that phones accept. Keep it to yourself, and outside the repository.
+
+The release workflow takes the key from four secrets. It fails without them, and never falls back to the debug key that pull requests and `main` build with (their APKs' names end in `-debug-key`).
+
+### Make the key, once
+
+`keytool` comes with Java (any JDK 17 or later, such as [Temurin](https://adoptium.net), or the one in Android Studio). In a folder **outside the repository**:
+
+```bash
+keytool -genkeypair -v -keystore memora-release.jks -storetype PKCS12 -alias memora -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Memora"
+```
+
+- It asks for a password: make a long one, in your password manager. In a PKCS12 keystore the key has the same password as the keystore.
+- `-validity 10000` is about 27 years: the key can't be renewed, only replaced.
+- The certificate's name is public (anyone can read it from the APK): `CN=Memora` keeps yours out of it.
+
+Note the certificate's fingerprint, the line `SHA256:` of:
+
+```bash
+keytool -list -v -keystore memora-release.jks -alias memora
+```
+
+### Keep it safe
+
+- Keep `memora-release.jks` in **two places**, such as your password manager (as an attachment, beside its password) and a USB stick in a drawer. A copy in GitHub's secrets doesn't count: nobody can read a secret back.
+- Never commit it. `.gitignore` leaves out `*.jks`, `*.keystore` and `*.p12`, in case one lands in the repository by mistake.
+
+### Add the secrets
+
+With the [GitHub CLI](https://cli.github.com), in the folder with the key (on Windows, in Git Bash):
+
+```bash
+base64 < memora-release.jks | gh secret set ANDROID_KEYSTORE_BASE64 --repo dreamtheater484/memora
+```
+
+```bash
+gh secret set ANDROID_KEYSTORE_PASSWORD --repo dreamtheater484/memora
+```
+
+```bash
+gh secret set ANDROID_KEY_ALIAS --repo dreamtheater484/memora --body memora
+```
+
+```bash
+gh secret set ANDROID_KEY_PASSWORD --repo dreamtheater484/memora
+```
+
+The two password commands ask for the value, so it stays out of your shell's history: enter the keystore's password both times. Then the fingerprint, as a **variable** (it's public): each release checks its APKs are signed with this key, not another one.
+
+```bash
+gh variable set ANDROID_CERT_SHA256 --repo dreamtheater484/memora --body "AB:CD:…"
+```
+
+| Secret or variable          | What                                                          |
+| --------------------------- | ------------------------------------------------------------- |
+| `ANDROID_KEYSTORE_BASE64`   | The keystore, `memora-release.jks`, as base64                 |
+| `ANDROID_KEYSTORE_PASSWORD` | Its password                                                  |
+| `ANDROID_KEY_ALIAS`         | The key's name in it: `memora`                                |
+| `ANDROID_KEY_PASSWORD`      | The key's password: the same as the keystore's                |
+| `ANDROID_CERT_SHA256`       | Variable: the certificate's SHA-256 fingerprint, from keytool |
+
+From the next release on, 0.11.0 the first, the APKs are signed with this key. That first one can't install over the trial app, which the build machine's key signed: [ANDROID.md](ANDROID.md#moving-from-the-trial) has the one-time reinstall.
+
+**A signed build on your own computer** (with the [Android SDK](https://developer.android.com/studio)): the same four values as environment variables, with `ANDROID_KEYSTORE_PATH` (the keystore's full path) in place of `ANDROID_KEYSTORE_BASE64`. Then `./gradlew apks` in `apps/android` ([its README](../apps/android/README.md)).
+
 ## Checking a release
 
 The release workflow shows what it did in the **Build the installers** step: electron-builder names the certificate it signed with, or says it skipped signing. On a computer:
 
 - **Windows:** right-click `Memora-Setup.exe` → **Properties → Digital Signatures**.
 - **macOS:** `spctl --assess --verbose /Applications/Memora.app` answers `accepted` and `source=Notarized Developer ID`.
+- **Android:** the Android job's **Check the APKs' version and key** step prints each APK's certificate and compares it with `ANDROID_CERT_SHA256`. With the Android SDK, `apksigner verify --print-certs Memora-x.y.z-arm64.apk` shows the same.
