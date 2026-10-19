@@ -9,7 +9,7 @@ A notebook for your own computer or your own server: notebooks with coloured sec
 |            | **Memora for your computer**                                                              | **Memora Server**                                            |
 | ---------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | For        | Everyone                                                                                  | Enthusiasts with Docker or a NAS                             |
-| Runs on    | Windows, macOS, Ubuntu                                                                    | Docker on Linux, Windows or macOS, or a Synology NAS         |
+| Runs on    | Windows, macOS, Ubuntu, and [Android phones](docs/ANDROID.md)                             | Docker on Linux, Windows or macOS, or a Synology NAS         |
 | Your notes | On that computer, or in sync on all your computers through your cloud storage             | On your server, in sync on every device, your phone included |
 | Installing | Download, open, done                                                                      | A compose file, and HTTPS for use away from home             |
 | Get it     | **[Download page](https://dreamtheater484.github.io/memora/)** · [Guide](docs/DESKTOP.md) | [Server guide](docs/SETUP.md)                                |
@@ -40,6 +40,10 @@ Both are the same Memora, from the same code and the same release. You can start
 ### On your computer
 
 Download Memora for Windows, macOS or Ubuntu from the [download page](https://dreamtheater484.github.io/memora/), and open it. [docs/DESKTOP.md](docs/DESKTOP.md) has the details.
+
+### On your Android phone
+
+Download `Memora-x.y.z-arm64.apk` from the [newest release](https://github.com/dreamtheater484/memora/releases/latest) on the phone, and open it. [docs/ANDROID.md](docs/ANDROID.md) has the details, and how to update.
 
 ### Run the server with Docker
 
@@ -86,6 +90,7 @@ The web app runs at `http://localhost:5173` and the API at `http://localhost:300
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md): scope, decisions, architecture, roadmap
 - [User guide](docs/USER_GUIDE.md): using Memora
 - [Memora for your computer](docs/DESKTOP.md): the desktop app, and [signing it](docs/SIGNING.md)
+- [Memora for Android](docs/ANDROID.md): installing and updating it on your phone
 - [Server guide](docs/SETUP.md): installing Memora Server with Docker
 - [Updating](docs/UPGRADE.md) and [troubleshooting](docs/TROUBLESHOOTING.md)
 - [Backups and restoring](docs/BACKUP_RESTORE.md): the schedule, encryption, Hyper Backup, restoring

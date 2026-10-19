@@ -2,7 +2,7 @@
 
 Memora as an app for Windows, macOS and Ubuntu: download it, open it, start writing. There's no Docker, no server and no account to set up. Your notes stay on your computer.
 
-Using more than one computer? Memora keeps their notes the same through a folder in your cloud storage: Google Drive, kDrive, Nextcloud, or any folder a sync app keeps up to date ([below](#sync-your-computers)). Want your notes on your phone too? That's [Memora Server](SETUP.md), which runs with Docker or on a NAS. You can start here and move to a server later ([below](#moving-to-memora-server)).
+Using more than one computer? Memora keeps their notes the same through a folder in your cloud storage: Google Drive, kDrive, Nextcloud, or any folder a sync app keeps up to date ([below](#sync-your-computers)). Want your notes on your phone too? On Android, [Memora for Android](ANDROID.md) joins the same sync through kDrive or Nextcloud. Other phones use [Memora Server](SETUP.md), which runs with Docker or on a NAS. You can start here and move to a server later ([below](#moving-to-memora-server)).
 
 ## Download
 
@@ -70,7 +70,7 @@ Memora works as described in the [user guide](USER_GUIDE.md). A few things diffe
 
 ## Sync your computers
 
-Use Memora on more than one computer, and keep the notes the same on all of them, through a folder in your cloud storage. No server is needed. Phones aren't included: they need [Memora Server](SETUP.md).
+Use Memora on more than one computer, and keep the notes the same on all of them, through a folder in your cloud storage. No server is needed. An Android phone can join through kDrive or WebDAV ([ANDROID.md](ANDROID.md#sync-with-your-computers)); other phones need [Memora Server](SETUP.md).
 
 ### How it works
 

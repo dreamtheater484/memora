@@ -1,6 +1,6 @@
-# Memora for Android (trial)
+# Memora for Android
 
-A trial of Memora on Android phones, with the same engine as everywhere else: Memora's own server and web app, run by Node.js inside the app. Nothing is forked or rewritten, as in the desktop app.
+Memora on Android phones, with the same engine as everywhere else: Memora's own server and web app, run by Node.js inside the app. Nothing is forked or rewritten, as in the desktop app. Installing and updating it: [docs/ANDROID.md](../../docs/ANDROID.md).
 
 ## How it fits together
 
@@ -13,10 +13,16 @@ A trial of Memora on Android phones, with the same engine as everywhere else: Me
   - Keeps sync's secrets sealed by Android's keystore.
 - **Sync** is through WebDAV (kDrive, Nextcloud). Google Drive and "a folder on this computer" don't apply here.
 
+## Versions and signing
+
+- **The version** is the root `package.json`'s, and the `versionCode` rises with it ([docs/RELEASING.md](../../docs/RELEASING.md#versions)), so each release installs over the one before.
+- **Releases are signed with Memora's own key**, from four environment variables ([docs/SIGNING.md](../../docs/SIGNING.md#android)): `ANDROID_KEYSTORE_BASE64` (or `ANDROID_KEYSTORE_PATH`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`.
+- **Without them**, the build is signed with the machine's debug key, and the APKs' names end in `-debug-key`: for testing, they install over no other build. With `-Pmemora.release=true`, as the release workflow builds, a missing key fails the build instead.
+
 ## Building
 
-The [Android workflow](../../.github/workflows/android.yml) does all of it. It builds Node.js, about an hour per processor type and cached afterwards. Then it builds the APKs and runs the trial on an emulator ([scripts/trial.sh](scripts/trial.sh)). By hand:
+The [Android workflow](../../.github/workflows/android.yml) does all of it: on pull requests that change the app or what it bundles, on `main`, and for each release. It builds Node.js, about an hour per processor type and cached afterwards. Then it builds the APKs, checks their version and key, and runs the app on an emulator ([scripts/trial.sh](scripts/trial.sh)): the start-up times, the memory used, screenshots, and whether the page sees the app go to the background and come back. By hand, with the Android SDK and NDK:
 
 1. `pnpm build` at the root, then `pnpm build && pnpm resources` in `apps/desktop`.
 2. Build Node.js and better-sqlite3 for `arm64` and `x86_64` with the scripts, into one folder.
-3. `scripts/stage.sh <NDK> <that folder>`, then `./gradlew assembleRelease` here.
+3. `scripts/stage.sh <that folder>`, then `./gradlew apks` here. The APKs are in `app/build/apks`: `Memora-<version>-arm64.apk` and `Memora-<version>-x86_64.apk`.

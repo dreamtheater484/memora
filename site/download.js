@@ -2,6 +2,8 @@
 // release's file (GitHub's releases/latest/download/<file> always resolves to it).
 (() => {
   const base = 'https://github.com/dreamtheater484/memora/releases/latest/download/';
+  // The APK's name has the version in it: Android phones get the newest release's page.
+  const release = 'https://github.com/dreamtheater484/memora/releases/latest';
   const systems = {
     windows: ['Download for Windows', 'Memora-Setup.exe', 'For Windows 10 and 11.'],
     mac: ['Download for macOS', 'Memora.dmg', 'For Intel and Apple Silicon Macs.'],
@@ -15,7 +17,9 @@
     navigator.platform ||
     navigator.userAgent
   ).toLowerCase();
-  const phone = /android|iphone|ipad|mobile/.test(navigator.userAgent.toLowerCase());
+  const agent = navigator.userAgent.toLowerCase();
+  const android = agent.includes('android');
+  const phone = /android|iphone|ipad|mobile/.test(agent);
   const system = phone
     ? null
     : hint.includes('win')
@@ -32,11 +36,15 @@
     button.textContent = label;
     button.href = base + file;
     note.textContent = `${detail} Other systems and ARM: All downloads.`;
+  } else if (android) {
+    button.textContent = 'Download for Android';
+    button.href = release;
+    note.textContent = 'On the release page, choose Memora-x.y.z-arm64.apk, then open it.';
   } else {
-    // A phone or tablet: the app is for computers; the list shows every download.
+    // An iPhone, an iPad or another system: the list shows every download.
     button.textContent = 'See the downloads';
     note.textContent =
-      'Memora for your computer runs on Windows, macOS and Ubuntu. On a phone, use Memora Server.';
+      'Memora runs on Windows, macOS, Ubuntu and Android. On an iPhone or iPad, use Memora Server.';
     document.getElementById('all-downloads').open = true;
   }
 })();
