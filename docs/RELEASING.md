@@ -32,7 +32,7 @@ So `0.11.0` is 110009, `1.0.0-rc.1` is 10000000, `1.0.0-rc.2` 10000001, and `1.0
    docker build -f docker/Dockerfile -t memora:local . && node scripts/check-image.mjs memora:local
    ```
 
-4. Open a pull request. Its **Release** run (a dry run: nothing is published) builds the desktop app on Windows, macOS and Ubuntu, installs it and tests it there, builds the Android app and runs it on an emulator, and builds and checks the images. Merge it once all of that and CI are green, and wait for CI on `main` to pass too.
+4. Open a pull request. Its **Release** run (a dry run: nothing is published) builds the desktop app on Windows, macOS and Ubuntu, installs it and tests it there, builds the Android app and runs it on an emulator, and builds and checks the images. Merge it once all of that and CI are green, and wait for CI on `main` to pass too. If the Android workflow runs on `main` too, wait for it as well: the release takes Node.js for Android from `main`'s cache ([below](#nodejs-for-android)).
 
    The Android app needs **Memora's signing key** in the repository's secrets ([SIGNING.md](SIGNING.md#android)): without it, the release stops at its first job. The dry run doesn't use it: its APKs are signed with the debug key, and named `…-debug-key.apk`.
 
@@ -60,3 +60,35 @@ So `0.11.0` is 110009, `1.0.0-rc.1` is 10000000, `1.0.0-rc.2` 10000001, and `1.0
 Then update your phone: download `Memora-x.y.z-arm64.apk` from the release page and open it ([ANDROID.md](ANDROID.md#updating)). It installs over the version before, notes included.
 
 If the workflow fails before publishing, fix the cause on `main`, delete the tag (`git push origin :vx.y.z` and `git tag -d vx.y.z`), and tag again. After publishing, don't move a tag: release a new patch version instead.
+
+## Node.js for Android
+
+The Android app runs Node.js built for Android, and building it takes 1.5 to 3 hours per processor type. The [Android workflow](../.github/workflows/android.yml) builds it only when its version (`NODE_ANDROID` in the workflow) or its recipe (`apps/android/scripts/build-node.sh`) changes, and caches it. A cache belongs to its branch: a release reads only `main`'s, and `main` can't read a pull request's. Twice a week, a run on `main` keeps its cache from expiring (GitHub drops a cache after 7 days unused).
+
+So after merging a pull request that built Node.js anew, `main` would build it again, which happens the first time too. Take the pull request's builds instead, before tagging:
+
+1. **Cancel `main`'s Android run**, which started building Node.js with the merge:
+
+   ```bash
+   gh run list --workflow android.yml --branch main --limit 1
+   ```
+
+   ```bash
+   gh run cancel <its id>
+   ```
+
+2. **Take the builds of a successful Android run** that built the same, such as the pull request's last one. Its builds are kept 7 days.
+
+   ```bash
+   gh workflow run android-node-seed.yml --ref main -f run=<that run's id>
+   ```
+
+   The [seed workflow](../.github/workflows/android-node-seed.yml) checks the run first: this repository's Android workflow (not a fork's), successful, with `main`'s Node.js version and `build-node.sh`. Then it puts that run's `node-android-arm64` and `node-android-x86_64` into `main`'s cache, unless the cache has them already. Wait for it to finish (`gh run watch`).
+
+3. **Run `main`'s Android run again:**
+
+   ```bash
+   gh run rerun <its id>
+   ```
+
+   Its Node.js jobs now find the cache and build nothing: the run takes about 15 minutes. Tag once it's green.

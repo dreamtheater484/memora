@@ -83,7 +83,8 @@ jobs:
       - uses: actions/checkout@v7
       # A new build only when the version or the recipe changes: one takes 1.5 to 3 hours. A
       # cache belongs to its branch, and a tag's run (the release) reads only main's: main
-      # builds it, and keeps it from expiring (the schedule above).
+      # builds it, or takes another run's build (android-node-seed.yml), and keeps it from
+      # expiring (the schedule above).
       - uses: actions/cache@v6
         id: cache
         with:
