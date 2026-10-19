@@ -23,7 +23,7 @@ import { initialShared, useSync, type Shared } from './status';
 import { blobOf, openStore, type LocalStore } from './store';
 import { kanbanEvent } from '../kanban/api';
 import { jobUpdated } from '../transfer/jobs';
-import { cloudSynced, cloudSyncStatus } from '../settings/cloudSync';
+import { cloudSynced, cloudSyncShown, cloudSyncStatus } from '../settings/cloudSync';
 
 /*
  * The sync engine of one tab (§9.6). Tabs of the same browser share the store and a
@@ -154,7 +154,13 @@ export class SyncEngine implements SenderHost, DocHost, LiveHost {
     document.addEventListener(
       'visibilitychange',
       () => {
-        if (document.visibilityState === 'hidden') this.flushAll();
+        if (document.visibilityState === 'hidden') {
+          this.flushAll();
+          return;
+        }
+        // Shown again: connected at once (which catches up), and the cloud folder synced.
+        this.live?.retryNow();
+        cloudSyncShown(this.queryClient);
       },
       { signal },
     );
@@ -245,7 +251,7 @@ export class SyncEngine implements SenderHost, DocHost, LiveHost {
         this.handle(message.event);
         break;
       case 'tree':
-        void this.queryClient.invalidateQueries({ queryKey: treeKey });
+        this.reloadTree();
         break;
       case 'presence':
         if (this.leader) {
@@ -461,7 +467,14 @@ export class SyncEngine implements SenderHost, DocHost, LiveHost {
     else this.options.dataId = dataId;
   }
 
+  /**
+   * Shows changed rows in the tree at once. A tree that waits to load again is left to that:
+   * setting its data would make it look current, so it would never load the rest of what
+   * changed. (Sync in the desktop app announces a tree change, then each page it brought in,
+   * often while Settings is open and nothing shows the tree.)
+   */
   private mergeTree(changes: TreeChanges) {
+    if (this.queryClient.getQueryState(treeKey)?.isInvalidated) return;
     this.queryClient.setQueryData<Tree>(treeKey, (tree) => tree && mergeChanges(tree, changes));
   }
 
@@ -721,8 +734,20 @@ export class SyncEngine implements SenderHost, DocHost, LiveHost {
   }
 
   catchUp(): void {
-    void this.queryClient.invalidateQueries({ queryKey: treeKey });
+    this.reloadTree();
     this.post({ t: 'tree' });
+  }
+
+  /**
+   * Loads the tree again, then the open pages it shows changed: their events may have been
+   * missed while there was no connection (Memora in the background, say).
+   */
+  private reloadTree() {
+    void this.queryClient.invalidateQueries({ queryKey: treeKey }).then(() => {
+      for (const page of this.queryClient.getQueryData<Tree>(treeKey)?.pages ?? []) {
+        this.docs.get(page.id)?.seen(page.revision);
+      }
+    });
   }
 
   signedOut(): void {
