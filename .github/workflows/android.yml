@@ -2,7 +2,8 @@ name: Android
 
 # The trial of Memora for Android (apps/android): Node.js built for Android from the official
 # source, Memora's own server and web app inside an Android app, run on an emulator. It reports
-# the APK sizes, the start-up times and the memory used, with screenshots.
+# the APK sizes, the start-up times and the memory used, with screenshots, and checks that the
+# page sees the app go to the background and come back.
 
 on:
   push:
@@ -118,6 +119,10 @@ jobs:
         with:
           name: memora-android-apks
           path: apks
+      # For scripts/page-visibility.mjs, which needs Node.js 22 or later for its WebSocket.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
       - name: KVM for the emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

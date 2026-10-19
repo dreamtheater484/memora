@@ -1,11 +1,13 @@
 #!/bin/bash
 # The trial on a running emulator or phone (adb): installs the APK, starts Memora twice (the
 # first start unpacks the engine), and reports the times, the memory used and screenshots.
+# Then it sends Memora to the background and back, and fails unless the page saw both.
 #
 #   trial.sh <APK> <output dir>
 set -uo pipefail
 apk=$1
 out=$2
+here=$(dirname "$0")
 pkg=io.github.dreamtheater484.memora
 mkdir -p "$out"
 report=$out/report.txt
@@ -39,16 +41,58 @@ start() {
   local pid
   pid=$(adb shell ps -A -o PID,ARGS | grep libnode.so | grep -v grep | awk '{print $1}' | head -1)
   if [ -n "$pid" ]; then
-    say "engine (Node.js): $(adb shell cat /proc/$pid/smaps_rollup | grep -E '^Pss:' | awk '{print $2 " kB PSS"}')"
+    say "engine (Node.js): $(adb shell cat "/proc/$pid/smaps_rollup" | grep -E '^Pss:' | awk '{print $2 " kB PSS"}')"
   else
     say "engine (Node.js): not running"
   fi
+}
+
+# Memora syncs and reconnects as soon as its page is shown again (visibilitychange), so the
+# WebView has to tell the page when the app goes to the background and when it's back. The page
+# is read over the WebView's DevTools socket (MainActivity enables debugging).
+probe() { node "$here/page-visibility.mjs" "$devtools" "$1" 2>&1; }
+
+# Waits up to 10 s for the page to become $1, and prints what it is then.
+await_visibility() {
+  local state
+  for _ in $(seq 1 10); do
+    sleep 1
+    state=$(probe state)
+    [ "$state" = "$1" ] && break
+  done
+  echo "$state"
+}
+
+visibility() {
+  say "== visibility: Home, then Memora again"
+  local app before background front events
+  app=$(adb shell pidof $pkg | tr -d '\r' | awk '{print $1}')
+  devtools=$(adb forward tcp:0 "localabstract:webview_devtools_remote_$app")
+  before=$(probe watch)
+  adb shell input keyevent KEYCODE_HOME
+  background=$(await_visibility hidden)
+  adb shell am start -W -n $pkg/.MainActivity > /dev/null
+  front=$(await_visibility visible)
+  events=$(probe events)
+  adb forward --remove "tcp:$devtools"
+  say "before: $before"
+  say "in the background: $background"
+  say "back in front: $front"
+  say "visibilitychange events: $events"
+  [ "$before $background $front $events" = "visible hidden visible hidden,visible" ]
 }
 
 start first
 adb shell am force-stop $pkg
 sleep 2
 start second
+if visibility; then
+  say "-- the page saw Memora go to the background and come back"
+else
+  failed=1
+  say "-- FAILED: expected visible, hidden, visible, and the events hidden,visible"
+fi
 say "-- on the phone after use: $(adb shell du -sh /data/data/$pkg | cut -f1) of data (the unpacked engine included)"
 adb shell cat /data/data/$pkg/files/logs/memora.log > "$out/memora.log" 2>/dev/null
 adb logcat -d > "$out/logcat.txt"
+exit "${failed:-0}"
