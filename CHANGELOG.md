@@ -4,6 +4,8 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-19
+
 ### Added
 
 - **Memora for Android.** The same Memora on your phone, with your notes on it, in sync with your computers through kDrive or another WebDAV folder. From this version on, each release has an APK for it, `Memora-x.y.z-arm64.apk`: install it from the release page, and update by installing the next one over it, notes included. Coming from the trial app? It takes one reinstall. All of it is in [ANDROID.md](docs/ANDROID.md).
@@ -240,7 +242,8 @@ The first release: a public beta. Everything planned for 1.0 is in; what's left 
 - Setup guides for Synology, Linux and Windows, with three ways to get HTTPS.
 - `memora-admin` inside the container for lost passwords, lost phones, backups and restores.
 
-[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/dreamtheater484/memora/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/dreamtheater484/memora/compare/v0.9.7...v0.10.0
 [0.9.7]: https://github.com/dreamtheater484/memora/compare/v0.9.6...v0.9.7
 [0.9.6]: https://github.com/dreamtheater484/memora/compare/v0.9.5...v0.9.6
