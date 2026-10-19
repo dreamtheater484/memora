@@ -1,18 +1,18 @@
 # Memora
 
-A notebook for your own computer or your own server: notebooks with coloured section tabs and page lists, first-class Markdown, a Word-like rich editor and built-in Kanban boards, in one app. It is designed to look great on a phone, a laptop and an ultra-wide monitor.
+A notebook for your own computer, your Android phone or your own server: notebooks with coloured section tabs and page lists, first-class Markdown, a Word-like rich editor and built-in Kanban boards, in one app. It is designed to look great on a phone, a laptop and an ultra-wide monitor.
 
-> **Version 0.9: a public beta.** Everything planned for 1.0 is in and tested; 1.0 follows after time in real use. What's in it: [CHANGELOG.md](CHANGELOG.md).
+> **A public beta.** Everything planned for 1.0 is in and tested; 1.0 follows after time in real use. The newest version is on the [releases page](https://github.com/dreamtheater484/memora/releases/latest), and what changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Get Memora
 
-|            | **Memora for your computer**                                                              | **Memora Server**                                            |
-| ---------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| For        | Everyone                                                                                  | Enthusiasts with Docker or a NAS                             |
-| Runs on    | Windows, macOS, Ubuntu, and [Android phones](docs/ANDROID.md)                             | Docker on Linux, Windows or macOS, or a Synology NAS         |
-| Your notes | On that computer, or in sync on all your computers through your cloud storage             | On your server, in sync on every device, your phone included |
-| Installing | Download, open, done                                                                      | A compose file, and HTTPS for use away from home             |
-| Get it     | **[Download page](https://dreamtheater484.github.io/memora/)** · [Guide](docs/DESKTOP.md) | [Server guide](docs/SETUP.md)                                |
+|            | **The Memora app**                                                                                                                    | **Memora Server**                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| For        | Everyone                                                                                                                              | Enthusiasts with Docker or a NAS                             |
+| Runs on    | Windows, macOS, Ubuntu and Android                                                                                                    | Docker on Linux, Windows or macOS, or a Synology NAS         |
+| Your notes | On your device, or in sync on all your computers and Android phones through your cloud storage                                        | On your server, in sync on every device, your phone included |
+| Installing | Download, open, done                                                                                                                  | A compose file, and HTTPS for use away from home             |
+| Get it     | **[Download page](https://dreamtheater484.github.io/memora/)** · [Computer guide](docs/DESKTOP.md) · [Android guide](docs/ANDROID.md) | [Server guide](docs/SETUP.md)                                |
 
 Both are the same Memora, from the same code and the same release. You can start on your computer and move to a server later: export once, import once.
 
@@ -28,8 +28,8 @@ Both are the same Memora, from the same code and the same release. You can start
 - **Kanban:** projects with boards, swimlanes, WIP limits and cards that drag with a mouse, a finger or the keyboard. Any note links to any card.
 - **Every screen:** panes with tabs on wide and ultra-wide monitors, a phone layout, and an installable app.
 - **Open formats:** Markdown, Word, HTML, PDF, and a documented `.memora` archive, in and out.
-- **Your computers in sync:** the desktop app keeps several computers the same through one folder in Google Drive, kDrive or Nextcloud, end-to-end encrypted, without a server.
-- **Yours:** an app on your computer, or one small Docker container on a NAS or any Docker host, with one SQLite file. No telemetry, nothing loaded from other sites, two-step verification on the server, and a [security review](docs/SECURITY_REVIEW.md).
+- **Your devices in sync:** the app keeps your computers and Android phones the same through one folder in your cloud storage (kDrive or Nextcloud on all of them, Google Drive on computers), end-to-end encrypted, without a server.
+- **Yours:** an app on your computer or phone, or one small Docker container on a NAS or any Docker host, with one SQLite file. No telemetry, nothing loaded from other sites, two-step verification on the server, and a [security review](docs/SECURITY_REVIEW.md).
 
 | Kanban boards                                                    | Dark theme                                                 | Phones                                             |
 | ---------------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------- |

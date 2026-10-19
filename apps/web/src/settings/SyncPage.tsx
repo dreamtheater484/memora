@@ -165,7 +165,8 @@ function Setup({ status }: { status: SyncStatus }) {
             there.
           </Point>
           <Point icon={<Laptop />}>
-            For your computers (Windows, macOS, Ubuntu). For phones, use Memora Server.
+            For your computers (Windows, macOS, Ubuntu) and Android phones. On a phone, choose
+            kDrive or another WebDAV server.
           </Point>
         </ul>
         <fieldset className="flex flex-col gap-2">
