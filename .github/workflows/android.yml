@@ -61,7 +61,9 @@ permissions:
 concurrency:
   # The workflow's name is the caller's when the release calls this one: its own group, then.
   group: android-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # A newer run waits rather than cancel this one: a cancelled Node.js build (hours, when it
+  # isn't cached) saves no cache, and the newer run would start it again.
+  cancel-in-progress: false
 
 env:
   NODE_ANDROID: 24.21.0
@@ -79,7 +81,7 @@ jobs:
         arch: [arm64, x86_64]
     steps:
       - uses: actions/checkout@v7
-      # A new build only when the version or the recipe changes: one takes about an hour. A
+      # A new build only when the version or the recipe changes: one takes 1.5 to 3 hours. A
       # cache belongs to its branch, and a tag's run (the release) reads only main's: main
       # builds it, and keeps it from expiring (the schedule above).
       - uses: actions/cache@v6

@@ -15,7 +15,7 @@ From the newest [release on GitHub](https://github.com/dreamtheater484/memora/re
 
 `x.y.z` is the version, such as `0.11.0`: the first release with an APK. Beside each APK, a `.sha256` file holds its checksum.
 
-**What it needs:** Android 8.0 or later, in its 64-bit version, as nearly every phone has. A few low-cost phones with Android Go run a 32-bit Android only, and can't run Memora.
+**What it needs:** Android 8.0 or later, in its 64-bit version, as nearly every phone has. A few low-cost phones with Android Go run a 32-bit Android only, and can't run Memora. The APK is about 30 MB. Installed and started once, Memora takes about 130 MB of the phone's storage, plus room for your notes, and about 150 MB of memory while it's open.
 
 ## Installing
 

@@ -21,7 +21,7 @@ Memora on Android phones, with the same engine as everywhere else: Memora's own 
 
 ## Building
 
-The [Android workflow](../../.github/workflows/android.yml) does all of it: on pull requests that change the app or what it bundles, on `main`, and for each release. It builds Node.js, about an hour per processor type and cached afterwards. Then it builds the APKs, checks their version and key, and runs the app on an emulator ([scripts/trial.sh](scripts/trial.sh)): the start-up times, the memory used, screenshots, and whether the page sees the app go to the background and come back. By hand, with the Android SDK and NDK:
+The [Android workflow](../../.github/workflows/android.yml) does all of it: on pull requests that change the app or what it bundles, on `main`, and for each release. It builds Node.js, 1.5 to 3 hours per processor type and cached afterwards. Then it builds the APKs, checks their version and key, and runs the app on an emulator ([scripts/trial.sh](scripts/trial.sh)): the start-up times, the memory used, screenshots, and whether the page sees the app go to the background and come back. By hand, with the Android SDK and NDK:
 
 1. `pnpm build` at the root, then `pnpm build && pnpm resources` in `apps/desktop`.
 2. Build Node.js and better-sqlite3 for `arm64` and `x86_64` with the scripts, into one folder.

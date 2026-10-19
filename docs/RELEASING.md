@@ -44,7 +44,7 @@ So `0.11.0` is 110009, `1.0.0-rc.1` is 10000000, `1.0.0-rc.2` 10000001, and `1.0
 
 6. Watch the **Release** workflow. It checks that the tag, the packages and the changelog agree, and that CI passed for that commit on `main`. It then:
    - builds the desktop app on Windows, macOS and Ubuntu (amd64 and arm64), signed once the signing secrets are set ([SIGNING.md](SIGNING.md)), then tests the app, installs the installer as people will, and tests that too;
-   - builds the Android app ([android.yml](../.github/workflows/android.yml)) signed with Memora's key, checks each APK's version and key, and runs the x86_64 one on an emulator. Node.js for Android takes about an hour to build, so the release uses the one `main` built and cached; the Android workflow keeps that cache from expiring;
+   - builds the Android app ([android.yml](../.github/workflows/android.yml)) signed with Memora's key, checks each APK's version and key, and runs the x86_64 one on an emulator. Node.js for Android takes hours to build, so the release uses the one `main` built and cached; the Android workflow keeps that cache from expiring;
    - builds and smoke-tests both architectures of the image, checks the images and lists their contents (SPDX);
    - tags the images: `x.y.z`, `x.y` and `latest`, or only its own tag for a pre-release;
    - creates the GitHub release with the changelog's notes, the installers, the update files (`latest*.yml`) the desktop app checks, and the APKs with their checksums: `Memora-x.y.z-arm64.apk` for phones and `Memora-x.y.z-x86_64.apk`, each with a `.sha256`.
