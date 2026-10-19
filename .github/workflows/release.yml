@@ -5,8 +5,10 @@ name: Release
 #   on its own system, signed once the signing secrets are set (docs/SIGNING.md);
 # - images on GHCR for amd64 and arm64, tagged `0.9.0`, `0.9` and `latest` (a pre-release such
 #   as `1.0.0-rc.1` gets its own tag only);
+# - Memora for Android: APKs for phones (arm64) and x86_64, signed with Memora's own key
+#   (docs/SIGNING.md#android), built and tested on an emulator by android.yml;
 # - a software bill of materials (SPDX) for each architecture;
-# - a GitHub release with the installers and the notes from CHANGELOG.md.
+# - a GitHub release with the installers, the APKs and the notes from CHANGELOG.md.
 # Pull requests that change how releases are made run all of it except publishing.
 
 on:
@@ -21,6 +23,7 @@ on:
       - scripts/licenses.mjs
       - scripts/release-notes.mjs
       - apps/desktop/**
+      - .github/workflows/android.yml
 
 permissions:
   contents: read
@@ -82,6 +85,24 @@ jobs:
             --json conclusion,status --jq '[.[] | select(.status == "completed")][0].conclusion')"
           [ "$conclusion" = success ] ||
             { echo "::error::CI on main has not passed for $GITHUB_SHA (${conclusion:-no run})"; exit 1; }
+      # Without it the Android app can't be released: an APK signed with any other key, the
+      # debug key included, wouldn't install over the one before. Checked here, before any build.
+      - name: Memora's Android key is set
+        if: env.PUBLISH == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          missing=()
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          [ "${#missing[@]}" -eq 0 ] || {
+            echo "::error::Secrets not set: ${missing[*]}. The Android app is released signed with Memora's key (docs/SIGNING.md#android), never with the debug key."
+            exit 1
+          }
       - name: Release notes
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -105,6 +126,8 @@ jobs:
             echo "- Other Linux: [Memora-x86_64.AppImage]($files/Memora-x86_64.AppImage), [Memora-arm64.AppImage]($files/Memora-arm64.AppImage)"
             echo
             echo "Installing, and the first start: [DESKTOP.md]($docs/DESKTOP.md)."
+            echo
+            echo "**Memora for Android**, for phones: [Memora-$VERSION-arm64.apk]($files/Memora-$VERSION-arm64.apk) ([SHA-256]($files/Memora-$VERSION-arm64.apk.sha256)). For a Chromebook or an emulator: [Memora-$VERSION-x86_64.apk]($files/Memora-$VERSION-x86_64.apk). Installing, and updating with the next APK: [ANDROID.md]($docs/ANDROID.md)."
             echo
             echo "**Memora Server**, for Docker and a NAS: $images. New here? Read [SETUP.md]($docs/SETUP.md). Updating? Read [UPGRADE.md]($docs/UPGRADE.md)."
             echo
@@ -369,10 +392,24 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  android:
+    name: Android
+    needs: prepare
+    # Built and tested as on every change (android.yml), but signed with Memora's key: a
+    # release's only. A pull request's dry run gets the debug key, and its APKs' names say so.
+    uses: ./.github/workflows/android.yml
+    with:
+      release: ${{ github.event_name == 'push' }}
+    secrets:
+      ANDROID_KEYSTORE_BASE64: ${{ github.event_name == 'push' && secrets.ANDROID_KEYSTORE_BASE64 || '' }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ github.event_name == 'push' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
+      ANDROID_KEY_ALIAS: ${{ github.event_name == 'push' && secrets.ANDROID_KEY_ALIAS || '' }}
+      ANDROID_KEY_PASSWORD: ${{ github.event_name == 'push' && secrets.ANDROID_KEY_PASSWORD || '' }}
+
   publish:
     name: Publish ${{ needs.prepare.outputs.version }}
     if: github.event_name == 'push'
-    needs: [prepare, build, desktop]
+    needs: [prepare, build, desktop, android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -393,6 +430,11 @@ jobs:
           path: release
           pattern: installers-*
           merge-multiple: true
+      # The APKs and their checksums: Memora-x.y.z-arm64.apk(.sha256), Memora-x.y.z-x86_64.apk(.sha256).
+      - uses: actions/download-artifact@v8
+        with:
+          path: release
+          name: memora-android
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
