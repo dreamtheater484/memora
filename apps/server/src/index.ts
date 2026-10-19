@@ -93,8 +93,14 @@ async function main(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     app.log.info({ signal }, signal === 'restart' ? 'restarting' : 'shutting down');
+    const started = performance.now();
     await app.close();
+    const closed = performance.now();
     db.close(); // checkpoints the WAL so memora.db is self-contained on disk
+    app.log.info(
+      { closeMs: Math.round(closed - started), databaseMs: Math.round(performance.now() - closed) },
+      'stopped',
+    );
     // A restart ends with a code the container's restart policy acts on (EX_TEMPFAIL).
     process.exit(signal === 'restart' ? RESTART_EXIT_CODE : 0);
   };

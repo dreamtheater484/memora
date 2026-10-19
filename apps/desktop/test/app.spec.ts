@@ -1,4 +1,5 @@
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -128,7 +129,12 @@ test('opens signed in, keeps the notes, and closes cleanly', async () => {
   ({ app, page } = await launch());
   expect(await notebooks(page)).toContain('From the desktop');
   expect(new URL(page.url()).origin).toBe(origin);
+  // Closing doesn't wait on a connection opened and never used, as browsers keep spare ones:
+  // Memora would be ended after 10 s, with its database left open.
+  const spare = connect(Number(new URL(origin).port), '127.0.0.1');
+  await new Promise((resolve, reject) => spare.once('connect', resolve).once('error', reject));
   await app.close();
+  spare.destroy();
 
   // Closed cleanly: the database is whole on disk, without a write-ahead log left over.
   expect(existsSync(path.join(userData, 'Data', 'memora.db'))).toBe(true);

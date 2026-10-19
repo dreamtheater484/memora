@@ -24,6 +24,7 @@ import type { SqliteDatabase } from './db/client';
 import { dataIdOf } from './db/meta';
 import { ApiError } from './errors';
 import { EventHub } from './events/hub';
+import { closeConnectionsPromptly } from './http/closing';
 import { NotesService } from './notes/service';
 import { TemplatesService } from './notes/templates';
 import { createOrm, createRepos } from './repo';
@@ -71,6 +72,8 @@ export interface AppOptions {
   secretStore?: SecretStore;
   /** The system's folder picker, through the desktop app. */
   pickFolder?: () => Promise<string | null>;
+  /** How long closing waits for connections still open; tests shorten it. */
+  closeGraceMs?: number;
   /** Tests: Google's addresses, WebDAV over http on this computer, runs started by hand. */
   syncTesting?: {
     googleEndpoints?: GoogleEndpoints;
@@ -95,6 +98,11 @@ const notFoundBody = { error: { code: 'not_found', message: 'Not found' } };
 const MAINTENANCE_INTERVAL_MS = 6 * 3_600_000;
 const AUDIT_MAX_AGE_MS = 365 * 24 * 3_600_000;
 const AUDIT_MAX_ROWS = 50_000;
+/**
+ * Closing waits this long for connections still open (http/closing.ts). With sync's last send
+ * (at most 5 s) it stays under the 10 s the desktop app and `docker stop` give Memora.
+ */
+const CLOSE_GRACE_MS = 3_000;
 
 export async function buildApp({
   config,
@@ -108,6 +116,7 @@ export async function buildApp({
   secretKey,
   secretStore,
   pickFolder,
+  closeGraceMs = CLOSE_GRACE_MS,
   syncTesting,
 }: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({
@@ -135,6 +144,7 @@ export async function buildApp({
         : config.trustProxy,
     bodyLimit: 1024 * 1024,
   });
+  closeConnectionsPromptly(app, closeGraceMs);
 
   const orm = createOrm(db);
   const repos = createRepos(orm, now);
