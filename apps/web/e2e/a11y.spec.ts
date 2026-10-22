@@ -49,6 +49,8 @@ test('Tab walks every region with visible, named stops and no trap', async ({ pa
   api.notes.settings.ui.navPinned = true;
   await open(page, '/p/q4', api);
   await expect(page.getByRole('main')).not.toBeEmpty();
+  // The navigation is loaded a moment after the page (AppShell).
+  await expect(page.getByRole('navigation', { name: 'Navigation' })).toBeVisible();
   await fromTheTop(page);
   const seen: { name: string; region: string }[] = [];
   for (let i = 0; i < 150; i++) {

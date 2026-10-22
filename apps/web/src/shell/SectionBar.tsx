@@ -28,7 +28,7 @@ import { useCommands } from './commands';
 import { useCurrent, useGo } from './location';
 import { DropIndicator, InlineRename, NotebookTile } from './parts';
 import { useNavDocked } from './navigation';
-import { SectionMenuItems } from './Sidebar';
+import { SectionMenuItems } from './NavMenu';
 import { useShell } from './store';
 import { useFileDrop } from '../transfer/drop';
 

@@ -61,7 +61,6 @@ import { PageList } from './PageList';
 import { ContainerList, NotebookList } from './PhoneViews';
 import { shortcutKeys, useShortcuts } from './shortcuts';
 import { useNavDocked, useToggleNavigation } from './navigation';
-import { Sidebar } from './Sidebar';
 import { useShell } from './store';
 import { SyncBanner } from './SyncStatus';
 import { TopBar } from './TopBar';
@@ -91,6 +90,10 @@ const COLUMNS = {
 const TrashView = lazy(() => import('../history/TrashView'));
 const SearchView = lazy(() => import('../search/SearchView'));
 const BoardView = lazy(() => import('../kanban/BoardView'));
+// The navigation stays closed until asked for (pinned, it opens with the page): fetched just
+// after the page, so the first slide-in needn't wait.
+const loadSidebar = () => import('./Sidebar');
+const Sidebar = lazy(() => loadSidebar().then((m) => ({ default: m.Sidebar })));
 
 function BottomNav({ current }: { current: Current }) {
   const go = useGo();
@@ -531,6 +534,10 @@ export function AppShell() {
   }, [sectionId, pageId, level]);
 
   useEffect(() => {
+    void loadSidebar();
+  }, []);
+
+  useEffect(() => {
     const onHide = () => {
       if (document.visibilityState === 'hidden') flushUiState();
     };
@@ -659,7 +666,9 @@ export function AppShell() {
         {docked && (
           <div className="relative hidden min-h-0 @desktop:block">
             <div className={cn(panel, 'h-full')}>
-              <Sidebar />
+              <Suspense fallback={null}>
+                <Sidebar />
+              </Suspense>
             </div>
             <ColumnResizer
               label="Navigation width"
@@ -716,7 +725,9 @@ export function AppShell() {
 
       <Sheet open={navOpen && !docked} onOpenChange={shell.setNavOpen}>
         <SheetContent side="left" title="Navigation">
-          <Sidebar />
+          <Suspense fallback={null}>
+            <Sidebar />
+          </Suspense>
         </SheetContent>
       </Sheet>
       <Sheet
