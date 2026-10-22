@@ -4,6 +4,8 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-22
+
 ### Changed
 
 - **A simpler layout, like a binder.** The open notebook's sections are the tabs along the top, the open one filled with its colour, and the section's pages are listed on the right. The navigation (notebooks, boards, Inbox) slides in when you need it: click the notebook's name before the tabs, the panel button at the top left, or press `Alt+M`. Pin it to keep it open beside your notes. The breadcrumb at the top is gone, and on tablets the icon rail makes way for the same sliding navigation.
@@ -252,7 +254,8 @@ The first release: a public beta. Everything planned for 1.0 is in; what's left 
 - Setup guides for Synology, Linux and Windows, with three ways to get HTTPS.
 - `memora-admin` inside the container for lost passwords, lost phones, backups and restores.
 
-[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/dreamtheater484/memora/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/dreamtheater484/memora/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/dreamtheater484/memora/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/dreamtheater484/memora/compare/v0.9.7...v0.10.0
 [0.9.7]: https://github.com/dreamtheater484/memora/compare/v0.9.6...v0.9.7
