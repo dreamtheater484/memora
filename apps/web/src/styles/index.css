@@ -47,6 +47,7 @@
   --color-sec-soft: var(--sec-soft);
   --color-sec-softer: var(--sec-softer);
   --color-sec-ink: var(--sec-ink);
+  --color-sec-strong: var(--sec-strong);
   --color-code: var(--code-bg);
 
   --shadow-card: var(--shadow-card);

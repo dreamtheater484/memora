@@ -1,36 +1,22 @@
-import { COLOR_IDS, type ColorId, type NotebookIcon, type Place } from '@memora/shared';
+import type { ColorId, NotebookIcon } from '@memora/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
-  ArrowDown,
-  ArrowUp,
   Folder,
-  FolderInput,
-  FolderPlus,
   Inbox,
   LayoutTemplate,
-  PanelLeft,
-  Palette,
-  Pencil,
+  Pin,
+  PinOff,
   Plus,
   Search,
   Settings,
   SquareKanban,
-  Share2,
-  SquarePlus,
-  Star,
-  StarOff,
   Trash2,
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type HTMLAttributes, type ReactNode } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
   ContextMenuTrigger,
   IconButton,
   Kbd,
@@ -40,21 +26,18 @@ import {
 import { sectionHeading } from '../components/ui/styles';
 import { cn } from '../lib/cn';
 import { dropSpot, startDrag, type DragKind } from '../lib/dnd';
-import { shiftBefore, type NotesIndex } from '../notes/model';
-import { isFavorite, toggleFavorite } from '../notes/places';
+import { DESKTOP_QUERY, useMediaQuery } from '../lib/useMediaQuery';
+import type { NotesIndex } from '../notes/model';
 import { saveUiState, useNotesActions, useUiState } from '../notes/queries';
-import { hueStyle, sectionColor } from '../theme/sections';
+import { hueStyle } from '../theme/sections';
 import { BoardsNav } from '../kanban/BoardsNav';
-import { chooseSectionTemplate, pickTemplate } from '../templates/templates';
-import { openBoards, useProjects } from '../kanban/projects';
 import { useCommands } from './commands';
-import { isNotesLevel, useCurrent, useGo } from './location';
+import { useCurrent, useGo } from './location';
+import { NavMenu, type MenuTarget, type NavKind } from './NavMenu';
 import { DropIndicator, InlineRename, MoreButton, NotebookTile } from './parts';
 import { FavoritePlaces, RecentPlaces } from './Places';
 import { shortcutKeys } from './shortcuts';
-import { useShell, type RenameWhere } from './store';
-
-type NavKind = 'notebook' | 'group' | 'section' | 'project' | 'board';
+import { useShell } from './store';
 
 interface NavNode extends TreeNode {
   kind: NavKind;
@@ -102,7 +85,8 @@ function notebookNodes(index: NotesIndex): NavNode[] {
   }));
 }
 
-function NavRow({ node }: { node: NavNode }) {
+/** `onPath`: the notebook or section group that holds the open section. */
+function NavRow({ node, onPath }: { node: NavNode; onPath: boolean }) {
   const renaming = useShell((s) =>
     s.renaming?.where === 'nav' && s.renaming.id === node.id ? s.renaming : null,
   );
@@ -132,7 +116,7 @@ function NavRow({ node }: { node: NavNode }) {
           }}
         />
       ) : (
-        <span className="truncate">{node.label}</span>
+        <span className={cn('truncate', onPath && 'font-semibold text-fg')}>{node.label}</span>
       )}
       {MENU_NOUN[node.kind] && !renaming && (
         <MoreButton
@@ -197,264 +181,29 @@ function Row({
   );
 }
 
-export interface MenuTarget {
-  kind: NavKind;
-  id: string;
-}
-
-/** Right-click (or long-press) menu for the notebook, group or section under the pointer. */
-export function NavMenu({
-  target,
-  where = 'nav',
-}: {
-  target: MenuTarget | null;
-  where?: RenameWhere;
-}) {
-  const current = useCurrent();
-  const { index } = current;
-  const commands = useCommands();
-  const actions = useNotesActions();
-  const go = useGo();
-  const shell = useShell.getState;
-  if (!target) return null;
-
-  if (target.kind === 'notebook') {
-    const nb = index.notebook.get(target.id);
-    if (!nb) return null;
-    const up = shiftBefore(index.notebooks, nb.id, -1);
-    const down = shiftBefore(index.notebooks, nb.id, 1);
-    return (
-      <>
-        <ContextMenuItem
-          icon={<SquarePlus />}
-          onSelect={() => void commands.newSection(nb.id, null, where)}
-        >
-          New section
-        </ContextMenuItem>
-        <ContextMenuItem
-          icon={<FolderPlus />}
-          onSelect={() => void commands.newGroup(nb.id, null, where)}
-        >
-          New section group
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <FavoriteItem place={{ type: 'notebook', id: nb.id }} />
-        <ContextMenuItem icon={<Pencil />} onSelect={() => commands.editNotebook(nb.id)}>
-          Rename, colour and icon…
-        </ContextMenuItem>
-        <ContextMenuItem
-          icon={<ArrowUp />}
-          disabled={!up}
-          onSelect={() => up && void actions.moveNotebook(nb.id, up.beforeId)}
-        >
-          Move up
-        </ContextMenuItem>
-        <ContextMenuItem
-          icon={<ArrowDown />}
-          disabled={!down}
-          onSelect={() => down && void actions.moveNotebook(nb.id, down.beforeId)}
-        >
-          Move down
-        </ContextMenuItem>
-        <ContextMenuItem
-          icon={<Share2 />}
-          onSelect={() => shell().openDialog({ kind: 'export', scope: 'notebook', id: nb.id })}
-        >
-          Export…
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem icon={<Trash2 />} danger onSelect={() => commands.deleteNotebook(nb.id)}>
-          Delete notebook
-        </ContextMenuItem>
-      </>
-    );
-  }
-
-  if (target.kind === 'group') {
-    const group = index.group.get(target.id);
-    if (!group) return null;
-    return (
-      <>
-        <ContextMenuItem
-          icon={<SquarePlus />}
-          onSelect={() => void commands.newSection(group.notebookId, group.id, where)}
-        >
-          New section
-        </ContextMenuItem>
-        <ContextMenuItem
-          icon={<FolderPlus />}
-          onSelect={() => void commands.newGroup(group.notebookId, group.id, where)}
-        >
-          New section group
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem
-          icon={<Pencil />}
-          onSelect={() => {
-            if (where === 'list') go.group(group.id);
-            shell().setRenaming({ kind: 'group', id: group.id, where });
-          }}
-        >
-          Rename
-        </ContextMenuItem>
-        <ContextMenuItem
-          icon={<FolderInput />}
-          onSelect={() => shell().openDialog({ kind: 'move', type: 'group', ids: [group.id] })}
-        >
-          Move to…
-        </ContextMenuItem>
-        <ContextMenuItem
-          icon={<Share2 />}
-          onSelect={() => shell().openDialog({ kind: 'export', scope: 'group', id: group.id })}
-        >
-          Export…
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem icon={<Trash2 />} danger onSelect={() => commands.deleteGroup(group.id)}>
-          Delete section group
-        </ContextMenuItem>
-      </>
-    );
-  }
-
-  if (target.kind === 'section') {
-    const section = index.section.get(target.id);
-    if (!section) return null;
-    return <SectionMenuItems sectionId={section.id} where={where} />;
-  }
-  return null;
-}
-
-/** Stars or unstars a section or notebook (§9.9). */
-function FavoriteItem({ place }: { place: Place }) {
+/** Keeps the navigation open beside the notes, or lets it slide away again. */
+function PinButton() {
   const queryClient = useQueryClient();
-  const ui = useUiState();
-  const on = isFavorite(ui.favorites ?? [], place);
+  const pinned = !!useUiState().navPinned;
   return (
-    <ContextMenuItem
-      icon={on ? <StarOff /> : <Star />}
-      onSelect={() => toggleFavorite(queryClient, ui, place)}
-    >
-      {on ? 'Remove from favourites' : 'Add to favourites'}
-    </ContextMenuItem>
+    <IconButton
+      label="Keep the navigation open"
+      icon={pinned ? <PinOff /> : <Pin />}
+      size="sm"
+      aria-pressed={pinned}
+      onClick={() => {
+        // Closed either way: docked, or, unpinned, not sliding back in on its own.
+        useShell.getState().setNavOpen(false);
+        saveUiState(queryClient, { navPinned: !pinned });
+      }}
+    />
   );
 }
 
-/** Actions for a section, shared by its navigation row and its tab. */
-export function SectionMenuItems({ sectionId, where }: { sectionId: string; where: RenameWhere }) {
-  const { index } = useCurrent();
-  const commands = useCommands();
-  const actions = useNotesActions();
-  const go = useGo();
-  const section = index.section.get(sectionId);
-  if (!section) return null;
-  const siblings = section.notebookId ? index.sectionsIn(section.notebookId, section.groupId) : [];
-  const up = shiftBefore(siblings, section.id, -1);
-  const down = shiftBefore(siblings, section.id, 1);
-  const move = (to: { beforeId: string | null } | null) =>
-    to &&
-    section.notebookId &&
-    void actions.moveSection(section.id, {
-      notebookId: section.notebookId,
-      groupId: section.groupId,
-      beforeId: to.beforeId,
-    });
-  return (
-    <>
-      <ContextMenuItem
-        icon={<SquarePlus />}
-        onSelect={() => void commands.newPage({ sectionId: section.id })}
-      >
-        New page
-      </ContextMenuItem>
-      <ContextMenuItem
-        icon={<LayoutTemplate />}
-        onSelect={() =>
-          pickTemplate(
-            (template) => void commands.newPage({ sectionId: section.id, template }),
-            'New page from a template',
-          )
-        }
-      >
-        New page from a template…
-      </ContextMenuItem>
-      <FavoriteItem place={{ type: 'section', id: section.id }} />
-      {!section.isInbox && (
-        <ContextMenuItem
-          icon={<Pencil />}
-          shortcut="F2"
-          onSelect={() => {
-            go.section(section.id);
-            useShell.getState().setRenaming({ kind: 'section', id: section.id, where });
-          }}
-        >
-          Rename
-        </ContextMenuItem>
-      )}
-      <ContextMenuSub>
-        <ContextMenuSubTrigger icon={<Palette />}>Colour</ContextMenuSubTrigger>
-        <ContextMenuSubContent>
-          {COLOR_IDS.map((color) => (
-            <ContextMenuItem
-              key={color}
-              icon={
-                <span
-                  aria-hidden
-                  className="hue size-3 rounded-full bg-sec"
-                  style={hueStyle(color)}
-                />
-              }
-              onSelect={() => void actions.updateSection(section.id, { color })}
-              className={cn(section.color === color && 'font-semibold')}
-            >
-              {sectionColor(color).name}
-              {section.color === color ? ' (current)' : ''}
-            </ContextMenuItem>
-          ))}
-        </ContextMenuSubContent>
-      </ContextMenuSub>
-      <ContextMenuItem icon={<LayoutTemplate />} onSelect={() => chooseSectionTemplate(section.id)}>
-        Default template…
-      </ContextMenuItem>
-      <ContextMenuItem
-        icon={<Share2 />}
-        onSelect={() =>
-          useShell.getState().openDialog({ kind: 'export', scope: 'section', id: section.id })
-        }
-      >
-        Export…
-      </ContextMenuItem>
-      {!section.isInbox && (
-        <>
-          <ContextMenuItem
-            icon={<FolderInput />}
-            onSelect={() =>
-              useShell.getState().openDialog({ kind: 'move', type: 'section', ids: [section.id] })
-            }
-          >
-            Move to…
-          </ContextMenuItem>
-          <ContextMenuItem icon={<ArrowUp />} disabled={!up} onSelect={() => move(up)}>
-            {where === 'tabs' ? 'Move left' : 'Move up'}
-          </ContextMenuItem>
-          <ContextMenuItem icon={<ArrowDown />} disabled={!down} onSelect={() => move(down)}>
-            {where === 'tabs' ? 'Move right' : 'Move down'}
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem
-            icon={<Trash2 />}
-            danger
-            onSelect={() => commands.deleteSection(section.id)}
-          >
-            Delete section
-          </ContextMenuItem>
-        </>
-      )}
-    </>
-  );
-}
-
-/** Navigation: quick links, notebooks with section groups, boards, and the footer. */
+/**
+ * Navigation: quick links, notebooks with section groups, boards, and the footer. It slides in
+ * over the notes, or stays open beside them when pinned (desktop widths).
+ */
 export function Sidebar() {
   const current = useCurrent();
   const { index, level, section, path } = current;
@@ -464,6 +213,7 @@ export function Sidebar() {
   const queryClient = useQueryClient();
   const ui = useUiState();
   const setPaletteOpen = useShell((s) => s.setPaletteOpen);
+  const desktop = useMediaQuery(DESKTOP_QUERY);
   const [menuTarget, setMenuTarget] = useState<MenuTarget | null>(null);
 
   const nodes = useMemo(() => notebookNodes(index), [index]);
@@ -480,7 +230,14 @@ export function Sidebar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sectionId]);
 
-  const selected = level === 'board' ? null : (section?.id ?? null);
+  const selected = level === 'board' || section?.isInbox ? null : (section?.id ?? null);
+  // The notebook and section groups around the open section stand out. When one of them is
+  // folded, the outermost folded one is highlighted in the section's place.
+  const around = useMemo(
+    () => (selected && path?.notebook ? [path.notebook.id, ...path.groups.map((g) => g.id)] : []),
+    [selected, path],
+  );
+  const standIn = around.find((id) => !expanded.has(id)) ?? null;
 
   const dragItem = (node: NavNode) => {
     const kind: DragKind | undefined =
@@ -493,13 +250,18 @@ export function Sidebar() {
   return (
     <nav aria-label="Navigation" className="flex h-full min-h-0 flex-col">
       <div data-drop-scroll className="min-h-0 flex-1 overflow-auto px-2 pt-2.5 pb-3">
-        <Row
-          icon={<Search />}
-          onClick={() => setPaletteOpen(true)}
-          trailing={<Kbd>{shortcutKeys('palette')}</Kbd>}
-        >
-          Search
-        </Row>
+        <div className="flex items-center gap-1">
+          <div className="min-w-0 flex-1">
+            <Row
+              icon={<Search />}
+              onClick={() => setPaletteOpen(true)}
+              trailing={<Kbd>{shortcutKeys('palette')}</Kbd>}
+            >
+              Search
+            </Row>
+          </div>
+          {desktop && <PinButton />}
+        </div>
         <div className="relative" {...dropSpot('sec', index.inbox.id)}>
           <Row
             icon={<Inbox />}
@@ -545,11 +307,12 @@ export function Sidebar() {
                 <PageTree
                   label="Notebooks"
                   nodes={nodes}
-                  selectedId={section?.isInbox ? null : selected}
+                  selectedId={selected}
+                  isSelected={(n) => n.id === selected || n.id === standIn}
                   expanded={expanded}
                   onExpandedChange={(next) => saveUiState(queryClient, { expanded: [...next] })}
                   onSelect={(n) => go.section(n.id)}
-                  renderRow={(node) => <NavRow node={node} />}
+                  renderRow={(node) => <NavRow node={node} onPath={around.includes(node.id)} />}
                   rowProps={(node) =>
                     ({
                       className: 'group/nav',
@@ -584,84 +347,6 @@ export function Sidebar() {
           Settings
         </Row>
       </div>
-    </nav>
-  );
-}
-
-/** Tablet navigation: one button per notebook, plus the full navigation as a drawer. */
-export function Rail() {
-  const { index, notebook, level } = useCurrent();
-  const projects = useProjects();
-  const go = useGo();
-  const navigate = useNavigate();
-  const { setNavOpen, setPaletteOpen } = useShell();
-  return (
-    <nav
-      aria-label="Notebooks"
-      className="flex h-full flex-col items-center gap-1.5 overflow-y-auto py-3"
-    >
-      <IconButton
-        label="Show all notebooks and sections"
-        icon={<PanelLeft />}
-        tooltipSide="right"
-        onClick={() => setNavOpen(true)}
-      />
-      <IconButton
-        label="Inbox"
-        icon={<Inbox />}
-        tooltipSide="right"
-        active={isNotesLevel(level) && !notebook}
-        onClick={() => go.section(index.inbox.id)}
-      />
-      <span aria-hidden className="my-1 h-px w-6 shrink-0 bg-line" />
-      {index.notebooks.map((nb) => {
-        const on = isNotesLevel(level) && nb.id === notebook?.id;
-        return (
-          <button
-            key={nb.id}
-            type="button"
-            title={nb.name}
-            aria-label={nb.name}
-            aria-current={on || undefined}
-            onClick={() => go.notebook(nb.id)}
-            style={hueStyle(nb.color)}
-            className={cn(
-              'hue grid size-9 shrink-0 place-items-center rounded-[11px]',
-              on ? 'bg-sec text-on-accent' : 'bg-sec-soft text-sec-ink',
-            )}
-          >
-            <NotebookTile icon={nb.icon} className="bg-transparent text-current [&>svg]:size-4" />
-          </button>
-        );
-      })}
-      <span aria-hidden className="my-1 h-px w-6 shrink-0 bg-line" />
-      <IconButton
-        label="Boards"
-        icon={<SquareKanban />}
-        active={level === 'board'}
-        tooltipSide="right"
-        onClick={() => openBoards(projects, go)}
-      />
-      <IconButton
-        label="Search"
-        icon={<Search />}
-        tooltipSide="right"
-        onClick={() => setPaletteOpen(true)}
-      />
-      <span className="flex-1" />
-      <IconButton
-        label="Recycle bin"
-        icon={<Trash2 />}
-        tooltipSide="right"
-        active={level === 'trash'}
-        onClick={go.trash}
-      />
-      <IconButton
-        label="Settings"
-        icon={<Settings />}
-        tooltipSide="right"
-        onClick={() => void navigate({ to: '/settings/account' })}
-      />
     </nav>
   );
 }

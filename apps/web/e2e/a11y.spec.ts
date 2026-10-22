@@ -44,8 +44,13 @@ test('the first Tab offers a way past the bars to the content', async ({ page })
 });
 
 test('Tab walks every region with visible, named stops and no trap', async ({ page }) => {
-  await open(page, '/p/q4');
+  // Pinned open, so the walk passes through the navigation and the edges that resize it.
+  const api = new FakeApi();
+  api.notes.settings.ui.navPinned = true;
+  await open(page, '/p/q4', api);
   await expect(page.getByRole('main')).not.toBeEmpty();
+  // The navigation is loaded a moment after the page (AppShell).
+  await expect(page.getByRole('navigation', { name: 'Navigation' })).toBeVisible();
   await fromTheTop(page);
   const seen: { name: string; region: string }[] = [];
   for (let i = 0; i < 150; i++) {
@@ -86,6 +91,10 @@ test('Tab walks every region with visible, named stops and no trap', async ({ pa
   expect(seen.length).toBeGreaterThan(20);
   for (const region of ['header', 'Navigation', 'Editor', 'Pages']) {
     expect([...regions], `the keyboard never reached ${region}`).toContain(region);
+  }
+  const names = seen.map((s) => s.name);
+  for (const edge of ['Navigation width', 'Page list width']) {
+    expect(names, `the keyboard never reached ${edge}`).toContain(edge);
   }
 });
 

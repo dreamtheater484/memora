@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { FakeApi, NOW, expectNoA11yViolations, fontsReady } from './helpers';
+import { FakeApi, NOW, expectNoA11yViolations, fontsReady, showNavigation } from './helpers';
 
 /*
  * Version history, the recycle bin and backups (Phase 7, §9.7, §9.14): reading, comparing,
@@ -140,7 +140,7 @@ test.describe('the recycle bin', () => {
     api.notes.respond('POST', '/api/v1/pages/delete', { ids: ['openq'] });
     await open(page, '/p/q4', api);
 
-    await page.getByRole('navigation', { name: 'Navigation' }).getByText('Recycle bin').click();
+    await (await showNavigation(page)).getByText('Recycle bin').click();
     await expect(page).toHaveURL(/\/trash$/);
     const list = page.getByRole('list', { name: 'Deleted items' });
     await expect(list.getByRole('listitem')).toHaveCount(3);

@@ -7,8 +7,8 @@ import { useNotesActions } from '../notes/queries';
 import { hueStyle } from '../theme/sections';
 import { useCommands } from './commands';
 import { useCurrent, useGo, type Current } from './location';
+import { NavMenu, type MenuTarget } from './NavMenu';
 import { InlineRename, MoreButton, NotebookTile } from './parts';
-import { NavMenu, type MenuTarget } from './Sidebar';
 import { useShell } from './store';
 
 /*

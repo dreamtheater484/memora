@@ -4,13 +4,14 @@ import {
   ArrowLeft,
   ArrowRight,
   BookOpen,
-  ChevronRight,
   FilePlus,
   Keyboard,
   LogOut,
   Menu as MenuIcon,
   Monitor,
   Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
   PanelRight,
   Search,
   Settings,
@@ -41,6 +42,7 @@ import { useCommands } from './commands';
 import { useProjects } from '../kanban/projects';
 import { isNotesLevel, useCurrent, useGo, type Current } from './location';
 import { shortcutKeys } from './shortcuts';
+import { useNavDocked, useToggleNavigation } from './navigation';
 import { useShell } from './store';
 import { CloudSyncIndicator, GlobalSaveIndicator } from './SyncStatus';
 import { LayoutMenu } from '../workspace/LayoutMenu';
@@ -51,56 +53,6 @@ function useBoardOf(boardId: string | null) {
   const data = useProjects();
   const board = data.boards.find((b) => b.id === boardId);
   return { project: data.projects.find((p) => p.id === board?.projectId), board };
-}
-
-function Crumbs() {
-  const current = useCurrent();
-  const go = useGo();
-  const boardOf = useBoardOf(current.boardId);
-  let parts: { label: string; onClick?: () => void }[];
-  if (current.level === 'board') {
-    const { project, board } = boardOf;
-    parts = [{ label: project?.name ?? '' }, { label: board?.name ?? '' }];
-  } else if (current.path) {
-    const { notebook, groups, section } = current.path;
-    parts = [
-      ...(notebook ? [{ label: notebook.name, onClick: () => go.notebook(notebook.id) }] : []),
-      ...groups.map((g) => ({ label: g.name, onClick: () => go.group(g.id) })),
-      { label: section.name, onClick: () => go.section(section.id) },
-    ];
-  } else parts = [];
-  return (
-    <nav
-      aria-label="Location"
-      className="ml-1 hidden min-w-0 items-center gap-1 overflow-hidden border-l border-line pl-2.5 text-sm whitespace-nowrap text-fg-2 @desktop:flex"
-    >
-      <ol className="flex min-w-0 items-center gap-1">
-        {parts.map((p, i) => {
-          const last = i === parts.length - 1;
-          return (
-            <li key={i} className="flex min-w-0 items-center gap-1">
-              {i > 0 && <ChevronRight aria-hidden className="size-3.5 shrink-0 text-fg-3" />}
-              {last ? (
-                <b aria-current="location" className="truncate font-semibold text-fg">
-                  {p.label}
-                </b>
-              ) : p.onClick ? (
-                <button
-                  type="button"
-                  onClick={p.onClick}
-                  className="truncate rounded-xs hover:text-fg"
-                >
-                  {p.label}
-                </button>
-              ) : (
-                <span className="truncate">{p.label}</span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
-  );
 }
 
 /** Where "back" goes on a phone: one level up the drill-down. */
@@ -241,6 +193,8 @@ export function TopBar() {
   const current = useCurrent();
   const go = useGo();
   const commands = useCommands();
+  const docked = useNavDocked();
+  const toggleNavigation = useToggleNavigation();
   const { setNavOpen, setPagesOpen, setPaletteOpen } = useShell();
   const back = parentOf(current, go);
   const notes = isNotesLevel(current.level);
@@ -254,6 +208,14 @@ export function TopBar() {
         ) : (
           <IconButton label="Navigation" icon={<MenuIcon />} onClick={() => setNavOpen(true)} />
         )}
+      </span>
+      <span className="hidden @tablet:contents">
+        <IconButton
+          label={docked ? 'Hide navigation' : 'Show navigation'}
+          icon={docked ? <PanelLeftClose /> : <PanelLeftOpen />}
+          shortcut={shortcutKeys('navigation')}
+          onClick={toggleNavigation}
+        />
       </span>
       <div className="hidden shrink-0 items-center gap-2 font-display text-lg font-semibold tracking-tight @tablet:flex">
         <Logo />
@@ -277,7 +239,6 @@ export function TopBar() {
             onClick={() => window.history.forward()}
           />
         </span>
-        <Crumbs />
         <PhoneTitle />
       </div>
       <button

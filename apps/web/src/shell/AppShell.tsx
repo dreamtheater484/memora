@@ -1,4 +1,4 @@
-import type { Projects, UiState } from '@memora/shared';
+import { APP_NAME, type Projects, type UiState } from '@memora/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
@@ -23,7 +23,15 @@ import {
   Sun,
   Trash2,
 } from 'lucide-react';
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import { CommandPalette, Sheet, SheetContent, toast, type PaletteItem } from '../components/ui';
 import { cn } from '../lib/cn';
 import { useDnd } from '../lib/dnd';
@@ -35,6 +43,7 @@ import { rememberOpened, toggleFullWidth, useRecent } from '../notes/places';
 import { flushUiState, saveUiState, useUiState } from '../notes/queries';
 import { applyAccent, hueStyle } from '../theme/sections';
 import { useTheme } from '../theme/theme';
+import { ColumnResizer } from './ColumnResizer';
 import { useCommands, type Commands } from './commands';
 import { cardByKey, projectsQuery } from '../kanban/api';
 import { OPEN_CARD_EVENT, useCardKeys } from '../kanban/keys';
@@ -46,22 +55,45 @@ import { WorkspaceRow } from '../workspace/Workspace';
 import { ShellDialogs } from './dialogs';
 import { useDropRules } from './dropRules';
 import { Inspector } from './Inspector';
-import { isNotesLevel, useCurrent, useGo, type Current } from './location';
+import { isNotesLevel, useCurrent, useGo, windowTitle, type Current } from './location';
 import { NotesPane } from './NotesPane';
 import { PageList } from './PageList';
 import { ContainerList, NotebookList } from './PhoneViews';
 import { shortcutKeys, useShortcuts } from './shortcuts';
-import { Rail, Sidebar } from './Sidebar';
+import { useNavDocked, useToggleNavigation } from './navigation';
 import { useShell } from './store';
 import { SyncBanner } from './SyncStatus';
 import { TopBar } from './TopBar';
 
 const panel = 'glass min-h-0 overflow-hidden rounded-xl';
 
+/*
+ * The shell's columns from desktop widths up: the pinned navigation, the page list (on either
+ * side) and the inspector around the notes. The navigation and the page list take the widths
+ * dragged (--nav-w, --list-w), at most a quarter and 30 % of the window, so the notes keep
+ * most of it; the notes take the rest.
+ */
+const COLUMNS = {
+  dockedAlone:
+    '@desktop:grid-cols-[min(var(--nav-w,15.5rem),25cqw)_minmax(0,1fr)] @wide:grid-cols-[min(var(--nav-w,16.5rem),25cqw)_minmax(0,1fr)] @ultra:grid-cols-[min(var(--nav-w,17.5rem),25cqw)_minmax(0,1fr)]',
+  dockedLeft:
+    '@desktop:grid-cols-[min(var(--nav-w,15.5rem),25cqw)_min(var(--list-w,17rem),30cqw)_minmax(0,1fr)] @wide:grid-cols-[min(var(--nav-w,16.5rem),25cqw)_min(var(--list-w,18rem),30cqw)_minmax(0,1fr)_18.75rem] @ultra:grid-cols-[min(var(--nav-w,17.5rem),25cqw)_min(var(--list-w,18.75rem),30cqw)_minmax(0,1fr)_20rem]',
+  dockedRight:
+    '@desktop:grid-cols-[min(var(--nav-w,15.5rem),25cqw)_minmax(0,1fr)_min(var(--list-w,17rem),30cqw)] @wide:grid-cols-[min(var(--nav-w,16.5rem),25cqw)_minmax(0,1fr)_min(var(--list-w,18rem),30cqw)_18.75rem] @ultra:grid-cols-[min(var(--nav-w,17.5rem),25cqw)_minmax(0,1fr)_min(var(--list-w,18.75rem),30cqw)_20rem]',
+  alone: '',
+  left: '@desktop:grid-cols-[min(var(--list-w,17rem),30cqw)_minmax(0,1fr)] @wide:grid-cols-[min(var(--list-w,18rem),30cqw)_minmax(0,1fr)_18.75rem] @ultra:grid-cols-[min(var(--list-w,18.75rem),30cqw)_minmax(0,1fr)_20rem]',
+  right:
+    '@desktop:grid-cols-[minmax(0,1fr)_min(var(--list-w,17rem),30cqw)] @wide:grid-cols-[minmax(0,1fr)_min(var(--list-w,18rem),30cqw)_18.75rem] @ultra:grid-cols-[minmax(0,1fr)_min(var(--list-w,18.75rem),30cqw)_20rem]',
+};
+
 // The recycle bin is opened now and then: loaded when it is.
 const TrashView = lazy(() => import('../history/TrashView'));
 const SearchView = lazy(() => import('../search/SearchView'));
 const BoardView = lazy(() => import('../kanban/BoardView'));
+// The navigation stays closed until asked for (pinned, it opens with the page): fetched just
+// after the page, so the first slide-in needn't wait.
+const loadSidebar = () => import('./Sidebar');
+const Sidebar = lazy(() => loadSidebar().then((m) => ({ default: m.Sidebar })));
 
 function BottomNav({ current }: { current: Current }) {
   const go = useGo();
@@ -442,9 +474,10 @@ function usePaletteItems(current: Current, commands: Commands, query: string): P
 
 /**
  * The responsive app shell (§9.12 of the plan). Columns appear as the window grows: phone
- * (one level at a time and a bottom bar), tablet (rail), desktop (sidebar and page list), wide
- * (inspector) and ultra-wide (a second editor pane). Layout follows container queries on the
- * shell itself.
+ * (one level at a time and a bottom bar), tablet (section tabs, the page list slides in),
+ * desktop (page list), wide (inspector) and ultra-wide (a second editor pane). The navigation
+ * slides in over the notes, like a notebook's list of notebooks; on desktop widths it can be
+ * pinned open as a column of its own. Layout follows container queries on the shell itself.
  */
 export function AppShell() {
   const shell = useShell();
@@ -457,6 +490,8 @@ export function AppShell() {
   const ui = useUiState();
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const tablet = useMediaQuery('(min-width: 40rem)');
+  const docked = useNavDocked();
+  const toggleNavigation = useToggleNavigation();
   const [paletteQuery, setPaletteQuery] = useState('');
   const paletteItems = usePaletteItems(current, commands, paletteQuery);
   useDropRules(commands);
@@ -467,12 +502,10 @@ export function AppShell() {
   // Panes beside the main one on wide screens (§9.12).
   const boardsKnown = useQuery(projectsQuery).status !== 'pending';
   const { cls, ws } = useWorkspace(boardsKnown ? firstBoardId(projects) : undefined);
-  const accent =
-    level === 'board'
-      ? projects.projects.find(
-          (p) => p.id === projects.boards.find((b) => b.id === current.boardId)?.projectId,
-        )?.color
-      : section?.color;
+  const board =
+    level === 'board' ? projects.boards.find((b) => b.id === current.boardId) : undefined;
+  const boardProject = board && projects.projects.find((p) => p.id === board.projectId);
+  const accent = level === 'board' ? boardProject?.color : section?.color;
   useEffect(() => {
     if (accent) applyAccent(accent);
   }, [accent]);
@@ -499,6 +532,10 @@ export function AppShell() {
   useEffect(() => {
     useShell.setState({ navOpen: false, pagesOpen: false });
   }, [sectionId, pageId, level]);
+
+  useEffect(() => {
+    void loadSidebar();
+  }, []);
 
   useEffect(() => {
     const onHide = () => {
@@ -528,6 +565,7 @@ export function AppShell() {
     'next-page': () => commands.stepPage(1),
     'prev-section': () => commands.stepSection(-1),
     'next-section': () => commands.stepSection(1),
+    navigation: toggleNavigation,
     'split-pane': () => {
       if (cls) splitRight(cls, specOfMain(page?.id, current.boardId));
       else toast({ title: 'Panes side by side need a wider window.' });
@@ -537,6 +575,22 @@ export function AppShell() {
   const notes = isNotesLevel(level);
   const phone = !tablet;
   const left = ui.pageListSide === 'left';
+
+  // The window's title names the page and where it is; leaving the notes (Settings) resets it.
+  const title = windowTitle(
+    current,
+    board ? { name: board.name, project: boardProject?.name } : null,
+    phone,
+  );
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
+  useEffect(
+    () => () => {
+      document.title = APP_NAME;
+    },
+    [],
+  );
 
   let main: ReactNode;
   if (level === 'trash' || level === 'search') {
@@ -557,8 +611,22 @@ export function AppShell() {
 
   const showPageList = notes && !!section;
   const pageListPanel = (
-    <div className={cn(panel, 'hidden @desktop:block')}>{desktop && <PageList />}</div>
+    <div className="relative hidden min-h-0 @desktop:block">
+      <div className={cn(panel, 'h-full')}>{desktop && <PageList />}</div>
+      <ColumnResizer
+        label="Page list width"
+        edge={left ? 'right' : 'left'}
+        cssVar="--list-w"
+        min={200}
+        maxShare={0.3}
+        onResize={(width) => saveUiState(queryClient, { pageListWidth: width })}
+      />
+    </div>
   );
+  const widths = {
+    '--nav-w': ui.navWidth ? `${ui.navWidth}px` : undefined,
+    '--list-w': ui.pageListWidth ? `${ui.pageListWidth}px` : undefined,
+  } as CSSProperties;
 
   return (
     <div className="aurora-bg @container flex h-full flex-col">
@@ -578,20 +646,40 @@ export function AppShell() {
       <div
         className={cn(
           'grid min-h-0 flex-1 gap-2.5 px-2 pb-2 @tablet:px-2.5 @tablet:pb-2.5',
-          'grid-cols-[minmax(0,1fr)] @tablet:grid-cols-[4rem_minmax(0,1fr)]',
-          !showPageList
-            ? '@desktop:grid-cols-[15.5rem_minmax(0,1fr)] @wide:grid-cols-[16.5rem_minmax(0,1fr)] @ultra:grid-cols-[17.5rem_minmax(0,1fr)]'
-            : left
-              ? '@desktop:grid-cols-[15.5rem_17rem_minmax(0,1fr)] @wide:grid-cols-[16.5rem_18rem_minmax(0,1fr)_18.75rem] @ultra:grid-cols-[17.5rem_18.75rem_minmax(0,1fr)_20rem]'
-              : '@desktop:grid-cols-[15.5rem_minmax(0,1fr)_17rem] @wide:grid-cols-[16.5rem_minmax(0,1fr)_18rem_18.75rem] @ultra:grid-cols-[17.5rem_minmax(0,1fr)_18.75rem_20rem]',
+          'grid-cols-[minmax(0,1fr)]',
+          COLUMNS[
+            docked
+              ? !showPageList
+                ? 'dockedAlone'
+                : left
+                  ? 'dockedLeft'
+                  : 'dockedRight'
+              : !showPageList
+                ? 'alone'
+                : left
+                  ? 'left'
+                  : 'right'
+          ],
         )}
+        style={widths}
       >
-        <div className={cn(panel, 'hidden @tablet:block @desktop:hidden')}>
-          <Rail />
-        </div>
-        <div className={cn(panel, 'hidden @desktop:block')}>
-          <Sidebar />
-        </div>
+        {docked && (
+          <div className="relative hidden min-h-0 @desktop:block">
+            <div className={cn(panel, 'h-full')}>
+              <Suspense fallback={null}>
+                <Sidebar />
+              </Suspense>
+            </div>
+            <ColumnResizer
+              label="Navigation width"
+              edge="right"
+              cssVar="--nav-w"
+              min={200}
+              maxShare={0.25}
+              onResize={(width) => saveUiState(queryClient, { navWidth: width })}
+            />
+          </div>
+        )}
         {showPageList && left && pageListPanel}
         {cls && ws && ws.panes.length > 0 ? (
           <WorkspaceRow
@@ -635,9 +723,11 @@ export function AppShell() {
         </button>
       )}
 
-      <Sheet open={navOpen && !desktop} onOpenChange={shell.setNavOpen}>
+      <Sheet open={navOpen && !docked} onOpenChange={shell.setNavOpen}>
         <SheetContent side="left" title="Navigation">
-          <Sidebar />
+          <Suspense fallback={null}>
+            <Sidebar />
+          </Suspense>
         </SheetContent>
       </Sheet>
       <Sheet

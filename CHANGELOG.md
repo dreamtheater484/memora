@@ -4,6 +4,12 @@ What changed in each Memora release. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- **A simpler layout, like a binder.** The open notebook's sections are the tabs along the top, the open one filled with its colour, and the section's pages are listed on the right. The navigation (notebooks, boards, Inbox) slides in when you need it: click the notebook's name before the tabs, the panel button at the top left, or press `Alt+M`. Pin it to keep it open beside your notes. The breadcrumb at the top is gone, and on tablets the icon rail makes way for the same sliding navigation.
+- **Drag the widths** of the navigation, the page and the page list. Double-click an edge for the default width.
+- The window's title names the page, its section and its notebook.
+
 ### Fixed
 
 - **Settings → Sync** no longer says that phones need Memora Server: Memora for Android syncs through kDrive or another WebDAV server.

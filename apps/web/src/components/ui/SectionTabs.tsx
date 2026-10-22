@@ -3,6 +3,7 @@ import { Fragment, useEffect, useRef, type KeyboardEvent, type ReactNode } from 
 import { cn } from '../../lib/cn';
 import { hueStyle, type SectionColorId } from '../../theme/sections';
 import { IconButton } from './IconButton';
+import { sectionTabClass, sectionTabsLine } from './styles';
 
 export interface SectionTab {
   id: string;
@@ -26,6 +27,16 @@ export interface SectionTabsProps {
   className?: string;
 }
 
+/** The tab's colour dot; on the open tab, in the tab's text colour. */
+export function SectionTabDot({ selected }: { selected: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={cn('size-2 shrink-0 rounded-full', selected ? 'bg-current opacity-70' : 'bg-sec')}
+    />
+  );
+}
+
 /**
  * Coloured section tabs along the top of the page.
  * Arrow keys move between tabs and select them; Home and End jump to the ends.
@@ -42,6 +53,7 @@ export function SectionTabs({
 }: SectionTabsProps) {
   const refs = useRef(new Map<string, HTMLButtonElement>());
   const focusable = value && sections.some((s) => s.id === value) ? value : sections[0]?.id;
+  const open = sections.find((s) => s.id === value);
 
   // Keep the selected tab visible when the row scrolls.
   useEffect(() => {
@@ -64,8 +76,10 @@ export function SectionTabs({
 
   return (
     <div
+      style={open ? hueStyle(open.color) : undefined}
       className={cn(
-        'flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+        'flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+        open ? sectionTabsLine : 'items-center',
         className,
       )}
     >
@@ -74,14 +88,17 @@ export function SectionTabs({
         role="tablist"
         aria-label={label}
         aria-orientation="horizontal"
-        className="flex items-center gap-1"
+        className="flex items-end gap-1"
       >
         {sections.map((s, i) => {
           const selected = s.id === value;
           return (
             <Fragment key={s.id}>
               {s.divider && i > 0 && (
-                <span aria-hidden className="mx-1.5 h-[18px] w-px shrink-0 bg-line-strong" />
+                <span
+                  aria-hidden
+                  className="mx-1.5 h-[18px] w-px shrink-0 self-center bg-line-strong"
+                />
               )}
               <button
                 ref={(el) => {
@@ -97,22 +114,25 @@ export function SectionTabs({
                 onClick={() => onValueChange(s.id)}
                 onKeyDown={(e) => onKeyDown(e, i)}
                 style={hueStyle(s.color)}
-                className={cn(
-                  'hue inline-flex h-8 shrink-0 items-center gap-2 rounded-full px-3 text-base font-medium whitespace-nowrap',
-                  'transition-[background-color,color,box-shadow] duration-(--dur-fast)',
-                  selected
-                    ? 'bg-sec-soft font-semibold text-sec-ink shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--sec)_40%,transparent)]'
-                    : 'text-fg-2 hover:bg-hover hover:text-fg',
-                )}
+                className={sectionTabClass(selected)}
               >
-                <span aria-hidden className="size-2 shrink-0 rounded-full bg-sec" />
+                <SectionTabDot selected={selected} />
                 {s.name}
               </button>
             </Fragment>
           );
         })}
       </div>
-      {onAdd && <IconButton label="New section" icon={<Plus />} size="sm" onClick={onAdd} round />}
+      {onAdd && (
+        <IconButton
+          label="New section"
+          icon={<Plus />}
+          size="sm"
+          onClick={onAdd}
+          round
+          className="self-center"
+        />
+      )}
     </div>
   );
 }

@@ -15,6 +15,9 @@ import {
   MenuSubContent,
   MenuSubTrigger,
   MenuTrigger,
+  SectionTabDot,
+  sectionTabClass,
+  sectionTabsLine,
 } from '../components/ui';
 import { cn } from '../lib/cn';
 import { dropSpot, startDrag } from '../lib/dnd';
@@ -23,21 +26,11 @@ import { useNotesActions } from '../notes/queries';
 import { hueStyle } from '../theme/sections';
 import { useCommands } from './commands';
 import { useCurrent, useGo } from './location';
-import { DropIndicator, InlineRename } from './parts';
-import { SectionMenuItems } from './Sidebar';
+import { DropIndicator, InlineRename, NotebookTile } from './parts';
+import { useNavDocked } from './navigation';
+import { SectionMenuItems } from './NavMenu';
 import { useShell } from './store';
 import { useFileDrop } from '../transfer/drop';
-
-const tabClass = (selected: boolean) =>
-  cn(
-    'hue relative inline-flex h-8 shrink-0 items-center gap-2 rounded-full px-3 text-base font-medium whitespace-nowrap',
-    'transition-[background-color,color,box-shadow] duration-(--dur-fast)',
-    selected
-      ? 'bg-sec-soft font-semibold text-sec-ink shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--sec)_40%,transparent)]'
-      : 'text-fg-2 hover:bg-hover hover:text-fg',
-  );
-
-const Dot = () => <span aria-hidden className="size-2 shrink-0 rounded-full bg-sec" />;
 
 /** A group's sections and subgroups, as menu items. */
 function GroupMenuItems({
@@ -105,7 +98,7 @@ function GroupTab({ group }: { group: SectionGroup }) {
   );
   if (renaming && section) {
     return (
-      <span className={cn(tabClass(true), 'pr-1.5')} style={hueStyle(color)}>
+      <span className={cn(sectionTabClass(true), 'pr-1.5')} style={hueStyle(color)}>
         <Folder className="size-3.5 shrink-0" />
         {group.name}
         <span className="font-normal">›</span>
@@ -138,7 +131,7 @@ function GroupTab({ group }: { group: SectionGroup }) {
               ? `${group.name}, section group, showing ${section.name}`
               : `${group.name}, section group`
           }
-          className={tabClass(inside)}
+          className={sectionTabClass(inside)}
         >
           <Folder className="size-3.5 shrink-0" />
           {group.name}
@@ -218,13 +211,15 @@ function OverflowMenu({
 }
 
 /**
- * Coloured section tabs along the top: the notebook's own sections, then its
- * section groups as tabs that open a menu. Arrow keys move between the section tabs; drag a
- * tab to reorder it, or onto the navigation to move it elsewhere.
+ * Coloured section tabs along the top, after the notebook's name: the notebook's own sections,
+ * then its section groups as tabs that open a menu. Arrow keys move between the section tabs;
+ * drag a tab to reorder it, or onto the navigation to move it elsewhere. The notebook's name
+ * slides the navigation in, to switch notebooks; pinned open, the navigation names it instead.
  */
 export function SectionBar({ panelId }: { panelId: string }) {
   const current = useCurrent();
   const { index, notebook, section } = current;
+  const docked = useNavDocked();
   const go = useGo();
   const commands = useCommands();
   const actions = useNotesActions();
@@ -284,8 +279,30 @@ export function SectionBar({ panelId }: { panelId: string }) {
   return (
     <div
       data-section-tabs
-      className="flex shrink-0 items-center gap-1 px-2 pt-2 @tablet:px-3.5 @tablet:pt-3"
+      style={section ? hueStyle(section.color) : undefined}
+      className={cn(
+        'flex shrink-0 gap-1 px-2 pt-2 @tablet:px-3.5 @tablet:pt-3',
+        section ? sectionTabsLine : 'items-center',
+      )}
     >
+      {!docked && (
+        // Phones go to the notebooks a level up instead.
+        <span className="hidden @tablet:contents">
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            aria-label={notebook ? `${notebook.name}, show all notebooks` : 'Show all notebooks'}
+            onClick={() => useShell.getState().setNavOpen(true)}
+            style={notebook ? hueStyle(notebook.color) : undefined}
+            className="hue flex h-8 max-w-[13rem] shrink-0 items-center gap-2 self-center rounded-md px-1.5 text-base font-semibold whitespace-nowrap text-fg hover:bg-hover"
+          >
+            {notebook && <NotebookTile icon={notebook.icon} />}
+            <span className="truncate">{notebook?.name ?? 'Notebooks'}</span>
+            <ChevronDown aria-hidden className="size-3.5 shrink-0 opacity-70" />
+          </button>
+          <span aria-hidden className="mx-1.5 h-[18px] w-px shrink-0 self-center bg-line-strong" />
+        </span>
+      )}
       <ContextMenu onOpenChange={(open) => !open && setMenuTarget(null)}>
         <ContextMenuTrigger asChild>
           <div
@@ -297,13 +314,13 @@ export function SectionBar({ panelId }: { panelId: string }) {
               if (!tab) return e.preventDefault();
               setMenuTarget(tab.dataset.tabId!);
             }}
-            className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="flex min-w-0 items-end gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
             <div
               role="tablist"
               aria-label="Sections"
               aria-orientation="horizontal"
-              className="flex items-center gap-1"
+              className="flex items-end gap-1"
               {...drop.handlers}
             >
               {sections.map((s, i) => {
@@ -312,10 +329,10 @@ export function SectionBar({ panelId }: { panelId: string }) {
                   return (
                     <span
                       key={s.id}
-                      className={cn(tabClass(true), 'pr-1.5')}
+                      className={cn(sectionTabClass(true), 'pr-1.5')}
                       style={hueStyle(s.color)}
                     >
-                      <Dot />
+                      <SectionTabDot selected />
                       <InlineRename
                         value={s.name}
                         label="Section name"
@@ -355,9 +372,16 @@ export function SectionBar({ panelId }: { panelId: string }) {
                       startDrag(e, () => ({ kind: 'section', ids: [s.id], label: s.name }))
                     }
                     style={hueStyle(s.color)}
-                    className={cn(tabClass(selected), drop.target === s.id && 'ring-2 ring-sec')}
+                    className={cn(
+                      sectionTabClass(selected),
+                      drop.target === s.id && 'ring-2 ring-sec',
+                    )}
                   >
-                    {s.isInbox ? <Inbox className="size-3.5 shrink-0" /> : <Dot />}
+                    {s.isInbox ? (
+                      <Inbox className="size-3.5 shrink-0" />
+                    ) : (
+                      <SectionTabDot selected={selected} />
+                    )}
                     {s.name}
                     <DropIndicator kind="tab" id={s.id} axis="x" />
                   </button>
@@ -365,7 +389,10 @@ export function SectionBar({ panelId }: { panelId: string }) {
               })}
             </div>
             {groups.length > 0 && (
-              <span aria-hidden className="mx-1.5 h-[18px] w-px shrink-0 bg-line-strong" />
+              <span
+                aria-hidden
+                className="mx-1.5 h-[18px] w-px shrink-0 self-center bg-line-strong"
+              />
             )}
             {groups.map((g) => (
               <GroupTab key={g.id} group={g} />
@@ -377,7 +404,7 @@ export function SectionBar({ panelId }: { panelId: string }) {
         </ContextMenuContent>
       </ContextMenu>
       {!inbox && notebook && (
-        <>
+        <span className="flex shrink-0 items-center gap-1 self-center">
           <IconButton
             label="New section"
             icon={<Plus />}
@@ -395,7 +422,7 @@ export function SectionBar({ panelId }: { panelId: string }) {
             />
           </span>
           {overflowing && <OverflowMenu index={index} notebookId={notebook.id} currentId={value} />}
-        </>
+        </span>
       )}
     </div>
   );

@@ -369,6 +369,11 @@ export const uiStateSchema = z
     /** Expanded notebooks and section groups in the navigation. */
     expanded: z.array(idSchema).max(2000),
     pageListSide: z.enum(PAGE_LIST_SIDES),
+    /** The navigation stays open beside the notes on wide enough screens, instead of sliding in. */
+    navPinned: z.boolean(),
+    /** Widths of the pinned navigation and the page list in pixels, as dragged; null: the default. */
+    navWidth: z.number().int().min(160).max(1600).nullable(),
+    pageListWidth: z.number().int().min(160).max(1600).nullable(),
     /** Favourites, in the order shown. */
     favorites: z.array(place).max(MAX_FAVORITES),
     /** Recently opened, newest first. */

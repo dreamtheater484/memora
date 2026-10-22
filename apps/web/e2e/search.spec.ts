@@ -184,7 +184,10 @@ test.describe('favourites, recent pages and going back', () => {
   test('stars pages into the sidebar, lists recent ones and goes back and forth', async ({
     page,
   }) => {
-    await open(page, '/p/q4');
+    // Pinned open, so it stays in view while pages change.
+    const api = new FakeApi();
+    api.notes.settings.ui.navPinned = true;
+    await open(page, '/p/q4', api);
     await page.getByRole('button', { name: 'Add to favourites' }).click();
     const nav = page.getByRole('navigation', { name: 'Navigation' });
     await expect(nav.getByRole('list', { name: 'Favourites' })).toContainText('Q4 roadmap');
