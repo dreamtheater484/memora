@@ -25,7 +25,8 @@ export type ShortcutId =
   | 'search'
   | 'back'
   | 'forward'
-  | 'split-pane';
+  | 'split-pane'
+  | 'navigation';
 
 /**
  * Where a shortcut works: anywhere (even while typing), anywhere but in a text field, or only
@@ -95,6 +96,14 @@ export const SHORTCUTS: readonly Shortcut[] = [
     group: 'Moving around',
     scope: 'app',
     match: (e) => e.altKey && !mod(e) && !e.shiftKey && e.key === 'ArrowRight',
+  },
+  {
+    id: 'navigation',
+    keys: 'Alt M',
+    label: 'Show or hide the navigation: notebooks, boards, Inbox',
+    group: 'General',
+    scope: 'app',
+    match: (e) => e.altKey && !mod(e) && !e.shiftKey && letter(e, 'M'),
   },
   {
     id: 'quick-note',

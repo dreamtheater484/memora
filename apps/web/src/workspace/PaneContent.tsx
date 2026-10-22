@@ -12,9 +12,9 @@ import { searchQuery } from '../search/api';
 import { Backlinks } from '../shell/Inspector';
 import { useCurrent, useGo } from '../shell/location';
 import { PageBody, PageSaveIndicator } from '../shell/PageEditor';
+import { PageLocation } from '../shell/PageLocation';
 import { useShell } from '../shell/store';
 import { usePageDoc } from '../sync/hooks';
-import { hueStyle } from '../theme/sections';
 import type { PaneTab } from './model';
 
 /*
@@ -72,7 +72,6 @@ function PagePane({ pageId }: { pageId: string }) {
   const { index } = useCurrent();
   const go = useGo();
   const page = index.page.get(pageId);
-  const section = page ? index.section.get(page.sectionId) : undefined;
   const doc = usePageDoc(page?.id ?? null);
   if (!page) {
     return (
@@ -90,18 +89,10 @@ function PagePane({ pageId }: { pageId: string }) {
           <h2 className="truncate font-display text-[1.6rem] leading-tight font-semibold tracking-tight">
             {page.title || 'Untitled page'}
           </h2>
-          <p className="flex items-center gap-2 text-sm text-fg-3">
-            {section && (
-              <span
-                className="hue inline-flex items-center gap-1.5"
-                style={hueStyle(section.color)}
-              >
-                <span aria-hidden className="size-2 rounded-full bg-sec" />
-                {section.name}
-              </span>
-            )}
-            <span>· edited {formatRelative(page.updatedAt)}</span>
-          </p>
+          <div className="flex min-w-0 items-center gap-2 text-sm text-fg-3">
+            <PageLocation page={page} />
+            <span className="shrink-0">· edited {formatRelative(page.updatedAt)}</span>
+          </div>
         </div>
         <PageSaveIndicator page={page} doc={doc} compact />
         <IconButton

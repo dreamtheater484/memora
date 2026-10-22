@@ -22,8 +22,12 @@ This guide is for everyone who uses Memora, on a computer or through a server. I
 
 ![A Markdown page in the notes, with the notebooks on the left, section tabs along the top and the page list on the right](images/notes.png)
 
-- **Notebooks** are listed on the left, each with a colour and an icon. A new notebook comes with a first section, so there is always somewhere to write. Drag notebooks to reorder them. For rename, colour and delete, right-click a notebook (or long-press it), or use its **…** button, which appears when you point at it (always, on touch screens).
-- **Sections** are the coloured tabs along the top. Drag a tab to reorder it, or onto another notebook to move it; double-click to rename. When the tabs don't fit, an overflow menu lists them all.
+Like a binder: the open notebook's sections are the tabs along the top, the open section's pages are listed on the right, and the page fills the rest.
+
+- **The navigation** lists your notebooks, boards, Inbox, favourites and recent pages. It slides in from the left when you click the notebook's name before the section tabs, the panel button at the top left, or press `Alt+M`, and slides away once you choose a section. To keep it open beside your notes, pin it with the pin at its top; the panel button or `Alt+M` hides it again. While it is open, the notebook and section group that hold the open section are in bold (highlighted, when you fold them).
+- **Widths**: drag the edge between the navigation, the page and the page list to make them wider or narrower (or focus the edge and use the arrow keys). Double-click an edge for the default width.
+- **Notebooks** each have a colour and an icon. A new notebook comes with a first section, so there is always somewhere to write. Drag notebooks to reorder them. For rename, colour and delete, right-click a notebook (or long-press it), or use its **…** button, which appears when you point at it (always, on touch screens).
+- **Sections** are the coloured tabs along the top, after the notebook's name. The open one is filled with its colour, which runs on in a line under the tabs. Drag a tab to reorder it, or onto another notebook to move it; double-click to rename. When the tabs don't fit, an overflow menu lists them all.
 - **Section groups** gather sections under one tab, and nest up to four levels. The group's tab shows where you are ("Clients › Acme") and opens a menu of its sections.
 - **Pages** are listed beside the page, with the start of their text and when they changed. A page can have subpages, three levels deep.
   - Drag pages to reorder them, or onto a section tab to move them there.
@@ -33,7 +37,7 @@ This guide is for everyone who uses Memora, on a computer or through a server. I
 - **The Inbox** is a section of your own for things to sort out later. **Quick note** (`Ctrl/Cmd+Alt+N`, or the pen button on phones) starts a new page there from anywhere.
 - **Right-click** (or long-press) anything for its menu. Notebooks, section groups and sections also have a **…** button for it. Every menu item has a keyboard shortcut too, and `?` lists them all.
 
-Memora remembers where you were: the last section, the last page in each section, and what was expanded. It opens there again, on any of your devices.
+Memora remembers where you were: the last section, the last page in each section, and what was expanded. It opens there again, on any of your devices. The window's title names the page, its section and its notebook.
 
 On a **phone**, each level has a screen of its own: notebooks, then sections, then pages, then the page. The back button goes up a level, and the pen button starts a quick note.
 
@@ -285,6 +289,7 @@ The first account is the administrator. Administrators manage accounts and the s
 | `Ctrl/Cmd+K`            | Command palette: open a page or run a command (`Ctrl/Cmd+P` in a Markdown page) |
 | `Ctrl/Cmd+Shift+F`      | Search all pages (in a Markdown table: format the table)                        |
 | `Ctrl/Cmd+Alt+N`        | Quick note to the Inbox                                                         |
+| `Alt+M`                 | Show or hide the navigation: notebooks, boards, Inbox                           |
 | `Alt+N` / `Alt+Shift+N` | New page / new subpage                                                          |
 | `F2`                    | Rename                                                                          |
 | `Ctrl/Cmd+Alt+M`        | Move or copy                                                                    |

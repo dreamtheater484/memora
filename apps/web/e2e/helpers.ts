@@ -791,7 +791,18 @@ export async function openShell(page: Page, theme: Theme, api = new FakeApi()) {
   await expect(page.getByRole('banner').getByText('Saved', { exact: true })).toBeAttached();
   // The page's editor loads on its own; nothing is still loading in the shot.
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+  // Nor is a Markdown preview, which its worker renders a moment later (later still on a busy
+  // machine, with several panes loading).
+  await expect(page.locator('.markdown-body:not([data-rendered])')).toHaveCount(0);
   await fontsReady(page);
+}
+
+/** Slides in the navigation (notebooks, boards, the Inbox), which is hidden beside the notes. */
+export async function showNavigation(page: Page) {
+  await page.getByRole('banner').getByRole('button', { name: 'Show navigation' }).click();
+  const nav = page.getByRole('navigation', { name: 'Navigation' });
+  await expect(nav).toBeVisible();
+  return nav;
 }
 
 /** Fails with a readable list when axe finds WCAG A/AA problems. */

@@ -9,9 +9,10 @@ import {
   FolderPlus,
   Inbox,
   LayoutTemplate,
-  PanelLeft,
   Palette,
   Pencil,
+  Pin,
+  PinOff,
   Plus,
   Search,
   Settings,
@@ -40,15 +41,15 @@ import {
 import { sectionHeading } from '../components/ui/styles';
 import { cn } from '../lib/cn';
 import { dropSpot, startDrag, type DragKind } from '../lib/dnd';
+import { DESKTOP_QUERY, useMediaQuery } from '../lib/useMediaQuery';
 import { shiftBefore, type NotesIndex } from '../notes/model';
 import { isFavorite, toggleFavorite } from '../notes/places';
 import { saveUiState, useNotesActions, useUiState } from '../notes/queries';
 import { hueStyle, sectionColor } from '../theme/sections';
 import { BoardsNav } from '../kanban/BoardsNav';
 import { chooseSectionTemplate, pickTemplate } from '../templates/templates';
-import { openBoards, useProjects } from '../kanban/projects';
 import { useCommands } from './commands';
-import { isNotesLevel, useCurrent, useGo } from './location';
+import { useCurrent, useGo } from './location';
 import { DropIndicator, InlineRename, MoreButton, NotebookTile } from './parts';
 import { FavoritePlaces, RecentPlaces } from './Places';
 import { shortcutKeys } from './shortcuts';
@@ -102,7 +103,8 @@ function notebookNodes(index: NotesIndex): NavNode[] {
   }));
 }
 
-function NavRow({ node }: { node: NavNode }) {
+/** `onPath`: the notebook or section group that holds the open section. */
+function NavRow({ node, onPath }: { node: NavNode; onPath: boolean }) {
   const renaming = useShell((s) =>
     s.renaming?.where === 'nav' && s.renaming.id === node.id ? s.renaming : null,
   );
@@ -132,7 +134,7 @@ function NavRow({ node }: { node: NavNode }) {
           }}
         />
       ) : (
-        <span className="truncate">{node.label}</span>
+        <span className={cn('truncate', onPath && 'font-semibold text-fg')}>{node.label}</span>
       )}
       {MENU_NOUN[node.kind] && !renaming && (
         <MoreButton
@@ -454,7 +456,29 @@ export function SectionMenuItems({ sectionId, where }: { sectionId: string; wher
   );
 }
 
-/** Navigation: quick links, notebooks with section groups, boards, and the footer. */
+/** Keeps the navigation open beside the notes, or lets it slide away again. */
+function PinButton() {
+  const queryClient = useQueryClient();
+  const pinned = !!useUiState().navPinned;
+  return (
+    <IconButton
+      label="Keep the navigation open"
+      icon={pinned ? <PinOff /> : <Pin />}
+      size="sm"
+      aria-pressed={pinned}
+      onClick={() => {
+        // Closed either way: docked, or, unpinned, not sliding back in on its own.
+        useShell.getState().setNavOpen(false);
+        saveUiState(queryClient, { navPinned: !pinned });
+      }}
+    />
+  );
+}
+
+/**
+ * Navigation: quick links, notebooks with section groups, boards, and the footer. It slides in
+ * over the notes, or stays open beside them when pinned (desktop widths).
+ */
 export function Sidebar() {
   const current = useCurrent();
   const { index, level, section, path } = current;
@@ -464,6 +488,7 @@ export function Sidebar() {
   const queryClient = useQueryClient();
   const ui = useUiState();
   const setPaletteOpen = useShell((s) => s.setPaletteOpen);
+  const desktop = useMediaQuery(DESKTOP_QUERY);
   const [menuTarget, setMenuTarget] = useState<MenuTarget | null>(null);
 
   const nodes = useMemo(() => notebookNodes(index), [index]);
@@ -480,7 +505,14 @@ export function Sidebar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sectionId]);
 
-  const selected = level === 'board' ? null : (section?.id ?? null);
+  const selected = level === 'board' || section?.isInbox ? null : (section?.id ?? null);
+  // The notebook and section groups around the open section stand out. When one of them is
+  // folded, the outermost folded one is highlighted in the section's place.
+  const around = useMemo(
+    () => (selected && path?.notebook ? [path.notebook.id, ...path.groups.map((g) => g.id)] : []),
+    [selected, path],
+  );
+  const standIn = around.find((id) => !expanded.has(id)) ?? null;
 
   const dragItem = (node: NavNode) => {
     const kind: DragKind | undefined =
@@ -493,13 +525,18 @@ export function Sidebar() {
   return (
     <nav aria-label="Navigation" className="flex h-full min-h-0 flex-col">
       <div data-drop-scroll className="min-h-0 flex-1 overflow-auto px-2 pt-2.5 pb-3">
-        <Row
-          icon={<Search />}
-          onClick={() => setPaletteOpen(true)}
-          trailing={<Kbd>{shortcutKeys('palette')}</Kbd>}
-        >
-          Search
-        </Row>
+        <div className="flex items-center gap-1">
+          <div className="min-w-0 flex-1">
+            <Row
+              icon={<Search />}
+              onClick={() => setPaletteOpen(true)}
+              trailing={<Kbd>{shortcutKeys('palette')}</Kbd>}
+            >
+              Search
+            </Row>
+          </div>
+          {desktop && <PinButton />}
+        </div>
         <div className="relative" {...dropSpot('sec', index.inbox.id)}>
           <Row
             icon={<Inbox />}
@@ -545,11 +582,12 @@ export function Sidebar() {
                 <PageTree
                   label="Notebooks"
                   nodes={nodes}
-                  selectedId={section?.isInbox ? null : selected}
+                  selectedId={selected}
+                  isSelected={(n) => n.id === selected || n.id === standIn}
                   expanded={expanded}
                   onExpandedChange={(next) => saveUiState(queryClient, { expanded: [...next] })}
                   onSelect={(n) => go.section(n.id)}
-                  renderRow={(node) => <NavRow node={node} />}
+                  renderRow={(node) => <NavRow node={node} onPath={around.includes(node.id)} />}
                   rowProps={(node) =>
                     ({
                       className: 'group/nav',
@@ -584,84 +622,6 @@ export function Sidebar() {
           Settings
         </Row>
       </div>
-    </nav>
-  );
-}
-
-/** Tablet navigation: one button per notebook, plus the full navigation as a drawer. */
-export function Rail() {
-  const { index, notebook, level } = useCurrent();
-  const projects = useProjects();
-  const go = useGo();
-  const navigate = useNavigate();
-  const { setNavOpen, setPaletteOpen } = useShell();
-  return (
-    <nav
-      aria-label="Notebooks"
-      className="flex h-full flex-col items-center gap-1.5 overflow-y-auto py-3"
-    >
-      <IconButton
-        label="Show all notebooks and sections"
-        icon={<PanelLeft />}
-        tooltipSide="right"
-        onClick={() => setNavOpen(true)}
-      />
-      <IconButton
-        label="Inbox"
-        icon={<Inbox />}
-        tooltipSide="right"
-        active={isNotesLevel(level) && !notebook}
-        onClick={() => go.section(index.inbox.id)}
-      />
-      <span aria-hidden className="my-1 h-px w-6 shrink-0 bg-line" />
-      {index.notebooks.map((nb) => {
-        const on = isNotesLevel(level) && nb.id === notebook?.id;
-        return (
-          <button
-            key={nb.id}
-            type="button"
-            title={nb.name}
-            aria-label={nb.name}
-            aria-current={on || undefined}
-            onClick={() => go.notebook(nb.id)}
-            style={hueStyle(nb.color)}
-            className={cn(
-              'hue grid size-9 shrink-0 place-items-center rounded-[11px]',
-              on ? 'bg-sec text-on-accent' : 'bg-sec-soft text-sec-ink',
-            )}
-          >
-            <NotebookTile icon={nb.icon} className="bg-transparent text-current [&>svg]:size-4" />
-          </button>
-        );
-      })}
-      <span aria-hidden className="my-1 h-px w-6 shrink-0 bg-line" />
-      <IconButton
-        label="Boards"
-        icon={<SquareKanban />}
-        active={level === 'board'}
-        tooltipSide="right"
-        onClick={() => openBoards(projects, go)}
-      />
-      <IconButton
-        label="Search"
-        icon={<Search />}
-        tooltipSide="right"
-        onClick={() => setPaletteOpen(true)}
-      />
-      <span className="flex-1" />
-      <IconButton
-        label="Recycle bin"
-        icon={<Trash2 />}
-        tooltipSide="right"
-        active={level === 'trash'}
-        onClick={go.trash}
-      />
-      <IconButton
-        label="Settings"
-        icon={<Settings />}
-        tooltipSide="right"
-        onClick={() => void navigate({ to: '/settings/account' })}
-      />
     </nav>
   );
 }

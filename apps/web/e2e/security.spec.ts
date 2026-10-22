@@ -176,7 +176,7 @@ test.describe('setting it up', () => {
     await page.getByRole('checkbox').click();
     await page.getByRole('button', { name: 'Continue to Memora' }).click();
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('navigation', { name: 'Navigation' })).toBeVisible();
+    await expect(page.getByRole('tablist', { name: 'Sections' })).toBeVisible();
   });
 });
 
@@ -199,7 +199,7 @@ test('required while signed in: the set-up comes first, without logging out', as
   const api = new FakeApi({ user: MEMBER });
   await api.install(page);
   await page.goto('/p/q4');
-  await expect(page.getByRole('navigation', { name: 'Navigation' })).toBeVisible();
+  await expect(page.getByRole('tablist', { name: 'Sections' })).toBeVisible();
   await expect.poll(() => api.requests.some((r) => r.path === '/api/v1/tree')).toBe(true);
 
   // An administrator requires it: the server closes the live channel.
@@ -214,7 +214,7 @@ test('required while signed in: the set-up comes first, without logging out', as
   await page.getByRole('button', { name: 'Turn on' }).click();
   await page.getByRole('checkbox').click();
   await page.getByRole('button', { name: 'Continue to Memora' }).click();
-  await expect(page.getByRole('navigation', { name: 'Navigation' })).toBeVisible();
+  await expect(page.getByRole('tablist', { name: 'Sections' })).toBeVisible();
 });
 
 test.describe('administrators', () => {

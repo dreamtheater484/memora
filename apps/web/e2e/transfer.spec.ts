@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
-import { FakeApi, NOW, expectNoA11yViolations, fontsReady } from './helpers';
+import { FakeApi, NOW, expectNoA11yViolations, fontsReady, showNavigation } from './helpers';
 
 /*
  * Import and export (Phase 9, §9.10): exports as server jobs and in the browser, the print
@@ -63,8 +63,9 @@ test.describe('export', () => {
 
   test('a notebook as an encrypted archive, with its history', async ({ page }) => {
     const api = await open(page, '/p/q4');
-    await page
-      .getByRole('navigation', { name: 'Navigation' })
+    await (
+      await showNavigation(page)
+    )
       .getByRole('treeitem', { name: 'Work', exact: true })
       .getByText('Work', { exact: true })
       .first()

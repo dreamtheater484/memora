@@ -133,8 +133,10 @@
 
 /*
  * Section colours. Any element with class "hue" and an inline --h (hue) and
- * optional --c (chroma factor) gets its own --sec, --sec-soft, --sec-softer and
- * --sec-ink. See src/theme/sections.ts for the 12 named colours.
+ * optional --c (chroma factor) gets its own --sec, --sec-soft, --sec-softer,
+ * --sec-ink and --sec-strong. See src/theme/sections.ts for the 12 named colours.
+ * --sec-strong fills what carries text in --on-accent (the open section's tab): darker
+ * than --sec in light mode, so white text on it stays readable (WCAG AA).
  */
 .hue {
   --c: 1;
@@ -153,5 +155,9 @@
   --sec-ink: light-dark(
     oklch(0.42 calc(0.11 * var(--c)) var(--h)),
     oklch(0.88 calc(0.07 * var(--c)) var(--h))
+  );
+  --sec-strong: light-dark(
+    oklch(0.52 calc(0.14 * var(--c)) var(--h)),
+    oklch(0.74 calc(0.13 * var(--c)) var(--h))
   );
 }

@@ -1,4 +1,11 @@
-import type { Notebook, PageMeta, Section, SectionGroup, UiState } from '@memora/shared';
+import {
+  APP_NAME,
+  type Notebook,
+  type PageMeta,
+  type Section,
+  type SectionGroup,
+  type UiState,
+} from '@memora/shared';
 import { useNavigate, useParams, useRouterState } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import type { NotesIndex, SectionPath } from '../notes/model';
@@ -111,6 +118,36 @@ export function resolveCurrent(index: NotesIndex, ui: UiState, params: Params): 
   const first = index.notebooks[0];
   const section = remembered ?? (first ? firstSection(index, first.id) : null) ?? index.inbox;
   return withSection('home', section);
+}
+
+/**
+ * The window's title, for the browser tab, the taskbar and history: what the main pane shows,
+ * then where that is, most specific first, so a title cut short still names the page.
+ * `drillDown` is for phones, which show one level at a time.
+ */
+export function windowTitle(
+  current: Current,
+  board: { name: string; project?: string } | null,
+  drillDown = false,
+): string {
+  const { level, notebook, group, section, page } = current;
+  let parts: (string | undefined)[];
+  if (current.missing) parts = ['Not found'];
+  else if (level === 'board') parts = [board?.name, board?.project];
+  else if (level === 'trash') parts = ['Recycle bin'];
+  else if (level === 'search') parts = ['Search'];
+  else if (drillDown && level === 'home') parts = [];
+  else if (drillDown && level === 'notebook') parts = [notebook?.name];
+  else if (drillDown && level === 'group') parts = [group?.name, notebook?.name];
+  else {
+    const showsPage = !!page && (!drillDown || level === 'page');
+    parts = [
+      showsPage ? page.title || 'Untitled page' : undefined,
+      section?.isInbox ? 'Inbox' : section?.name,
+      notebook?.name,
+    ];
+  }
+  return [parts.filter(Boolean).join(' · '), APP_NAME].filter(Boolean).join(' — ');
 }
 
 export function useCurrent(): Current {

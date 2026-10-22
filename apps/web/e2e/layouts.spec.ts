@@ -34,7 +34,11 @@ async function expectLayout(page: Page, layout: Layout) {
   const inspector = page.getByRole('complementary', { name: 'Page details' });
   await expect(page.getByRole('main')).toBeVisible();
   await expect(nav).toBeVisible({ visible: layout === 'phone' });
-  await expect(sidebar).toBeVisible({ visible: layout !== 'phone' && layout !== 'tablet' });
+  // The navigation slides in when asked for, at every size.
+  await expect(sidebar).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Show navigation' })).toBeVisible({
+    visible: layout !== 'phone',
+  });
   await expect(inspector).toBeVisible({ visible: layout === 'wide' || layout === 'ultra' });
   await expect(page.getByRole('region', { name: 'Pane 2', exact: true })).toBeVisible({
     visible: layout === 'ultra',

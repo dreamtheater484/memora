@@ -75,7 +75,9 @@ test.describe('projects and boards', () => {
   test('a new project starts with a board; more boards, renaming and archiving', async ({
     page,
   }) => {
-    const api = await open(page, '/p/q4');
+    const pinned = new FakeApi();
+    pinned.notes.settings.ui.navPinned = true;
+    const api = await open(page, '/p/q4', pinned);
     await page.getByRole('button', { name: 'New project' }).click();
     const dialog = page.getByRole('dialog', { name: 'New project' });
     await dialog.getByLabel('Name').fill('Mobile app');

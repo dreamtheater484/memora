@@ -1,6 +1,14 @@
 import type { TreeChanges } from '@memora/shared';
-import { expect, test, type Page } from '@playwright/test';
-import { ADMIN, FakeApi, NOW, THEMES, expectNoA11yViolations, openShell } from './helpers';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import {
+  ADMIN,
+  FakeApi,
+  NOW,
+  THEMES,
+  expectNoA11yViolations,
+  openShell,
+  showNavigation,
+} from './helpers';
 import { FakeNotes } from './notes';
 
 // The three sizes from the mockups plus the wide breakpoint (§9.12).
@@ -55,6 +63,83 @@ test.describe('behaviour', () => {
       page.getByRole('button', { name: 'Admin, section group, showing Archive' }),
     ).toBeVisible();
     await expect(page).toHaveURL(/\/s\/archive$/);
+  });
+
+  test('the navigation slides in from the notebook’s name, and stays open when pinned', async ({
+    page,
+  }) => {
+    await openShell(page, 'light');
+    await expect(page).toHaveTitle('Q4 roadmap · Roadmap · Work — Memora');
+    const nav = page.getByRole('navigation', { name: 'Navigation' });
+    await expect(nav).toBeHidden();
+
+    // The notebook's name slides it in; choosing a section slides it out again.
+    await page.getByRole('button', { name: 'Work, show all notebooks' }).click();
+    await nav.getByRole('treeitem', { name: 'Research', exact: true }).click();
+    await expect(nav).toBeHidden();
+    await expect(page.getByRole('tab', { name: 'Research' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(page).toHaveTitle('Competitor notes · Research · Work — Memora');
+
+    // Pinned, it stays beside the notes, and the notebook's name leaves the tabs.
+    await page.keyboard.press('Alt+m');
+    await nav.getByRole('button', { name: 'Keep the navigation open' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await nav.getByRole('treeitem', { name: 'Roadmap', exact: true }).click();
+    await expect(title(page)).toHaveText('Q4 roadmap');
+    await expect(nav).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Work, show all notebooks' })).toHaveCount(0);
+
+    // Folded, the notebook is highlighted in the open section's place.
+    const work = nav.getByRole('treeitem', { name: /^Work/ });
+    const row = work.locator('> div');
+    await expect(row).not.toHaveClass(/bg-active/);
+    await row.click();
+    await expect(work).toHaveAttribute('aria-expanded', 'false');
+    await expect(row).toHaveClass(/bg-active/);
+
+    // The top bar hides it again.
+    await page.getByRole('banner').getByRole('button', { name: 'Hide navigation' }).click();
+    await expect(nav).toBeHidden();
+  });
+
+  test('the edges beside the page drag to new widths, which are kept', async ({ page }) => {
+    const api = new FakeApi();
+    api.notes.settings.ui.navPinned = true;
+    await openShell(page, 'light', api);
+    const width = async (locator: Locator) => (await locator.boundingBox())!.width;
+    const drag = async (edge: Locator, by: number) => {
+      const box = (await edge.boundingBox())!;
+      const y = box.y + box.height / 2;
+      await page.mouse.move(box.x + box.width / 2, y);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width / 2 + by, y, { steps: 4 });
+      await page.mouse.up();
+    };
+
+    // The navigation's edge is on its right: dragging right widens it.
+    const nav = page.getByRole('navigation', { name: 'Navigation' });
+    const navEdge = page.getByRole('separator', { name: 'Navigation width' });
+    const navBefore = await width(nav);
+    await drag(navEdge, 80);
+    await expect.poll(() => width(nav)).toBeCloseTo(navBefore + 80, -1);
+    await expect.poll(() => api.notes.settings.ui.navWidth).toBeGreaterThan(navBefore + 70);
+
+    // The page list's is on its left: dragging left widens it, the arrow keys move it too.
+    const list = page.getByRole('complementary', { name: 'Pages', exact: true });
+    const listEdge = page.getByRole('separator', { name: 'Page list width' });
+    const listBefore = await width(list);
+    await drag(listEdge, -60);
+    await expect.poll(() => width(list)).toBeCloseTo(listBefore + 60, -1);
+    await listEdge.press('ArrowRight');
+    await expect.poll(() => width(list)).toBeCloseTo(listBefore + 44, -1);
+
+    // A double-click goes back to the default width.
+    await navEdge.dblclick();
+    await expect.poll(() => width(nav)).toBeCloseTo(navBefore, -1);
+    await expect.poll(() => api.notes.settings.ui.navWidth).toBeNull();
   });
 
   test('Ctrl K opens search, and a result opens its page', async ({ page }) => {
@@ -115,7 +200,7 @@ test.describe('behaviour', () => {
   }) => {
     const api = new FakeApi();
     await openShell(page, 'light', api);
-    const nav = page.getByRole('navigation', { name: 'Navigation' });
+    const nav = await showNavigation(page);
     const work = nav.getByRole('treeitem', { name: 'Work', exact: true });
     await work.getByText('Work', { exact: true }).first().hover();
     // Hidden from assistive technology (the row's menu key opens the same menu), so by label.
@@ -158,7 +243,7 @@ test.describe('behaviour', () => {
     await page.evaluate(() => (window as unknown as { relayed: Promise<void> }).relayed);
 
     await page.getByRole('link', { name: 'Notes' }).click();
-    const nav = page.getByRole('navigation', { name: 'Navigation' });
+    const nav = await showNavigation(page);
     await expect(nav.getByRole('treeitem', { name: 'Travel', exact: true })).toBeVisible();
   });
 
