@@ -19,8 +19,8 @@
     "yazl": "^3.3.1"
   },
   "devDependencies": {
-    "@fastify/static": "^10.1.6",
-    "@fastify/websocket": "^11.3.4",
+    "@fastify/static": "^10.1.8",
+    "@fastify/websocket": "^11.3.5",
     "@memora/shared": "workspace:*",
     "@types/better-sqlite3": "^9.6.0",
     "@types/ws": "^8.18.2",
@@ -29,8 +29,8 @@
     "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.4",
     "esbuild": "^0.28.2",
-    "fastify": "^5.12.5",
+    "fastify": "^5.12.7",
     "tsx": "^4.23.15",
-    "zod": "^4.6.6"
+    "zod": "^4.6.7"
   }
 }
